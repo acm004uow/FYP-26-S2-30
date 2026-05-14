@@ -1,0 +1,35 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; background: #f5f7fb; color: #172033; }
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+.page { padding: 28px; max-width: 1200px; margin: auto; }
+.card { background: white; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px; box-shadow: 0 4px 14px rgba(0,0,0,.04); margin-bottom: 16px; }
+.grid { display: grid; gap: 16px; }
+.grid2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.input { width: 100%; padding: 11px 12px; border: 1px solid #cfd6e4; border-radius: 10px; background: white; }
+.btn { border: 0; border-radius: 10px; padding: 10px 14px; background: #2563eb; color: white; cursor: pointer; font-weight: 600; }
+.btn.secondary { background: #475569; }
+.btn.danger { background: #dc2626; }
+.btn.success { background: #16a34a; }
+.btn.warning { background: #f59e0b; color: #111827; }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.nav { display:flex; gap: 12px; flex-wrap: wrap; padding: 14px 24px; background:#0f172a; color:white; align-items:center; }
+.nav a { padding: 8px 10px; border-radius: 8px; background: rgba(255,255,255,.08); }
+.nav .brand { font-weight: 800; margin-right:auto; background:transparent; }
+.badge { display:inline-block; border-radius:999px; padding: 4px 9px; background:#eef2ff; color:#3730a3; font-size: 12px; font-weight:700; }
+.badge.pending { background:#fef3c7; color:#92400e; }
+.badge.approved, .badge.completed, .badge.active { background:#dcfce7; color:#166534; }
+.badge.rejected, .badge.cancelled, .badge.suspended { background:#fee2e2; color:#991b1b; }
+.badge.in_progress { background:#dbeafe; color:#1d4ed8; }
+table { width:100%; border-collapse: collapse; background:white; }
+th,td { padding: 12px; border-bottom: 1px solid #e5e7eb; text-align:left; vertical-align: top; }
+th { background:#f8fafc; }
+.small { font-size: 13px; color:#64748b; }
+.title { margin: 0 0 14px; }
+.error { color:#b91c1c; font-weight:700; }
+.ok { color:#15803d; font-weight:700; }
+.auth-switch { margin: 16px 0 0; color:#475569; text-align:center; }
+.auth-switch a { color:#2563eb; font-weight:700; }
+.field-label { display:grid; gap:8px; color:#334155; font-weight:700; }
+.field-error { color:#b91c1c; font-size:13px; font-weight:700; margin:-8px 0 0; }
