@@ -34,16 +34,34 @@ export default function Nav({ role = "manager" }) {
   const [showChatbot, setShowChatbot] = useState(false);
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
-    loadProfile();
+    let channel;
+    async function initNav() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await loadProfile(user);
+      await loadUnreadNotifications(user.id);
+      channel = supabase
+        .channel(`nav_notifications_${user.id}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => loadUnreadNotifications(user.id))
+        .subscribe();
+    }
+    initNav();
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
-  async function loadProfile() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  async function loadProfile(user) {
     const { data } = await supabase.from("profiles").select("full_name,email").eq("id", user.id).maybeSingle();
     setProfile(data || { full_name: user.user_metadata?.full_name, email: user.email });
+  }
+
+  async function loadUnreadNotifications(userId) {
+    const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_read", false);
+    setUnreadNotifications(count || 0);
   }
 
   const profileName = profile?.full_name || profile?.email || "User";
@@ -72,7 +90,7 @@ export default function Nav({ role = "manager" }) {
     <>
       <nav className="nav">
         <Link className="brand" href="/login">Smart Task Allocation</Link>
-        {(links[role] || []).map(([label, href]) => <Link key={href} href={href}>{label}</Link>)}
+        {(links[role] || []).map(([label, href]) => <Link key={href} href={href}>{label}{href.includes("notifications") && unreadNotifications > 0 && <span className="nav-badge">{unreadNotifications}</span>}</Link>)}
         <div className="nav-profile-wrap">
           <button className="nav-profile" title={profileName} onClick={() => setShowProfileMenu(!showProfileMenu)}>
             <span>{fallbackInitials}</span>
