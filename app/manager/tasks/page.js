@@ -19,10 +19,20 @@ export default function ManagerTasksPage(){
  }
  async function viewRecs(task){ const {data}=await supabase.from("task_recommendations").select("*, staff_profiles(*)").eq("task_id",task.id).order("score",{ascending:false}); if(!data?.length) return generate(task); setRecs({...recs,[task.id]:data.map(r=>({staff_id:r.staff_id,staff_name:r.staff_profiles?.staff_name,score:r.score,reason:r.reason}))}); }
  async function approve(task, staffId){
-   await supabase.from("task_requests").update({status:"approved", assigned_staff_id:staffId, updated_at:new Date().toISOString()}).eq("id",task.id);
+   const {error:updateError}=await supabase.from("task_requests").update({status:"approved", assigned_staff_id:staffId, updated_at:new Date().toISOString()}).eq("id",task.id);
+   if(updateError)return alert(updateError.message);
    const {data:staff}=await supabase.from("staff_profiles").select("*").eq("id",staffId).single();
-   if(staff){ await supabase.from("staff_profiles").update({current_workload:Number(staff.current_workload||0)+1, weekly_working_hours:Number(staff.weekly_working_hours||0)+Number(task.estimated_hours||0)}).eq("id",staffId); if(staff.user_id) await supabase.from("notifications").insert({user_id:staff.user_id,title:"New task assignment",message:`You have been assigned: ${task.title}`}); }
-   if(task.created_by) await supabase.from("notifications").insert({user_id:task.created_by,title:"Task approved",message:`Your task request '${task.title}' was approved.`});
+   if(staff){
+     await supabase.from("staff_profiles").update({current_workload:Number(staff.current_workload||0)+1, weekly_working_hours:Number(staff.weekly_working_hours||0)+Number(task.estimated_hours||0)}).eq("id",staffId);
+     if(staff.user_id){
+       const {error:staffNotificationError}=await supabase.from("notifications").insert({user_id:staff.user_id,title:"New task assignment",message:`You have been assigned: ${task.title}`});
+       if(staffNotificationError)return alert(staffNotificationError.message);
+     }
+   }
+   if(task.created_by){
+     const {error:deptNotificationError}=await supabase.from("notifications").insert({user_id:task.created_by,title:"Task approved",message:`Your task request '${task.title}' was approved and assigned to ${staff?.staff_name || "a staff member"}.`});
+     if(deptNotificationError)return alert(deptNotificationError.message);
+   }
    await supabase.from("audit_logs").insert({action:"approve_task_request",details:task.title}); load();
  }
  async function reject(task){ const reason=prompt("Reason for rejection?", "Incomplete or not feasible"); await supabase.from("task_requests").update({status:"rejected", rejection_reason:reason}).eq("id",task.id); if(task.created_by) await supabase.from("notifications").insert({user_id:task.created_by,title:"Task rejected",message:`Your task request '${task.title}' was rejected. ${reason||""}`}); await supabase.from("audit_logs").insert({action:"reject_task_request",details:task.title}); load(); }
