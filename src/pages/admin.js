@@ -9,6 +9,8 @@ export default function AdminPanel() {
   const [auditLogs, setAuditLogs] = useState([])
   const [showReset, setShowReset] = useState(null)
   const [showCreate, setShowCreate] = useState(null)
+  const [createForm, setCreateForm] = useState({ full_name: '', email: '', password: '', role: 'manager' })
+  const [resetPassword, setResetPassword] = useState('')
   const [params, setParams] = useState({ workloadThreshold: 3, proximityRadius: 10, priorityWeights: 10 })
   const [message, setMessage] = useState('')
 
@@ -43,13 +45,13 @@ export default function AdminPanel() {
     loadAdminData()
   }, [])
 
-  const handleCreate = async (role) => {
-    const full_name = prompt(`Enter ${roleLabel(role)} full name`)
-    if (!full_name) return
-    const email = prompt(`Enter ${roleLabel(role)} email`)
-    if (!email) return
-    const password = prompt('Enter temporary password')
-    if (!password) return
+  const handleCreate = async (event) => {
+    event.preventDefault()
+    const { full_name, email, password, role } = createForm
+    if (!full_name || !email || !password || !role) {
+      setMessage('Please fill in name, email, password, and role.')
+      return
+    }
 
     const response = await fetch('/api/admin/create-user', {
       method: 'POST',
@@ -59,6 +61,7 @@ export default function AdminPanel() {
     const result = await response.json()
     setMessage(response.ok ? 'User account created in Supabase.' : result.error)
     if (response.ok) await loadAdminData()
+    if (response.ok) setCreateForm({ full_name: '', email: '', password: '', role: 'manager' })
     setShowCreate(null)
   }
 
@@ -70,16 +73,20 @@ export default function AdminPanel() {
     await loadAdminData()
   }
 
-  const handleReset = async (user) => {
-    const new_password = prompt(`Enter new temporary password for ${user.email}`)
-    if (!new_password) return
+  const handleReset = async (event) => {
+    event.preventDefault()
+    if (!resetPassword) {
+      setMessage('Please enter a new temporary password.')
+      return
+    }
     const response = await fetch('/api/admin/reset-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: user.id, new_password }),
+      body: JSON.stringify({ user_id: showReset.id, new_password: resetPassword }),
     })
     const result = await response.json()
-    setMessage(response.ok ? `Password reset for ${user.email}.` : result.error)
+    setMessage(response.ok ? `Password reset for ${showReset.email}.` : result.error)
+    setResetPassword('')
     setShowReset(null)
   }
 
@@ -114,7 +121,7 @@ export default function AdminPanel() {
                   <div><p className="font-medium text-sm">{u.full_name}</p><p className="text-xs text-gray-500">{u.email} - {roleLabel(u.role)}</p></div>
                   <div className="flex items-center gap-2">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${u.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{u.status}</span>
-                    <button onClick={() => setShowReset(u)} className="text-blue-500 text-xs">Reset</button>
+                    <button onClick={() => { setShowReset(u); setResetPassword('') }} className="text-blue-500 text-xs">Reset</button>
                     <button onClick={() => handleDeactivate(u.id, u.status)} className="text-red-500 text-xs">{u.status === 'active' ? 'Deactivate' : 'Activate'}</button>
                   </div>
                 </div>
@@ -158,24 +165,49 @@ export default function AdminPanel() {
 
       {showReset && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-sm w-full p-6">
+          <form onSubmit={handleReset} className="bg-white rounded-xl max-w-sm w-full p-6">
             <h3 className="text-lg font-semibold">Reset Password</h3>
-            <p className="text-sm my-4">Reset password for {showReset.email}?</p>
-            <div className="flex gap-2"><button onClick={() => handleReset(showReset)} className="flex-1 bg-blue-500 text-white py-2 rounded-lg">Reset</button><button onClick={() => setShowReset(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancel</button></div>
-          </div>
+            <p className="text-sm my-4">Enter a new temporary password for {showReset.email}.</p>
+            <input
+              type="password"
+              value={resetPassword}
+              onChange={e => setResetPassword(e.target.value)}
+              className="mb-4 w-full rounded-lg border p-2 text-sm"
+              placeholder="New temporary password"
+            />
+            <div className="flex gap-2"><button type="submit" className="flex-1 bg-blue-500 text-white py-2 rounded-lg">Reset</button><button type="button" onClick={() => setShowReset(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancel</button></div>
+          </form>
         </div>
       )}
 
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-sm w-full p-6">
-            <div className="flex justify-between"><h3 className="text-lg font-semibold">Create User Account</h3><button onClick={() => setShowCreate(null)}><X /></button></div>
+          <form onSubmit={handleCreate} className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex justify-between"><h3 className="text-lg font-semibold">Create User Account</h3><button type="button" onClick={() => setShowCreate(null)}><X /></button></div>
             <div className="space-y-3 mt-4">
-              <button onClick={() => handleCreate('manager')} className="w-full border p-2 rounded-lg text-left flex items-center gap-2"><UserPlus className="w-4 h-4" /> Create Manager Account</button>
-              <button onClick={() => handleCreate('department_staff')} className="w-full border p-2 rounded-lg text-left flex items-center gap-2"><UserPlus className="w-4 h-4" /> Create Department Staff Account</button>
-              <button onClick={() => handleCreate('staff_member')} className="w-full border p-2 rounded-lg text-left flex items-center gap-2"><UserPlus className="w-4 h-4" /> Create Staff Member Account</button>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Role</label>
+                <select value={createForm.role} onChange={e => setCreateForm({ ...createForm, role: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
+                  <option value="manager">Manager</option>
+                  <option value="department_staff">Department Staff</option>
+                  <option value="staff_member">Staff Member</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Full Name</label>
+                <input value={createForm.full_name} onChange={e => setCreateForm({ ...createForm, full_name: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Enter full name" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Email</label>
+                <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="name@example.com" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Temporary Password</label>
+                <input type="password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Create temporary password" />
+              </div>
+              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Create Account</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </Layout>

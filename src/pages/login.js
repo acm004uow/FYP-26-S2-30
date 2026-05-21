@@ -8,7 +8,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [role, setRole] = useState('manager')
   const [form, setForm] = useState({ email: '', password: '' })
-  const [signupForm, setSignupForm] = useState({ fullName: '', email: '', password: '' })
+  const [signupForm, setSignupForm] = useState({ fullName: '', businessName: '', email: '', password: '' })
   const [verificationCode, setVerificationCode] = useState('')
   const [signupStep, setSignupStep] = useState('details')
   const [showSignup, setShowSignup] = useState(false)
@@ -36,6 +36,17 @@ export default function LoginPage() {
     admin: 'system_admin',
   }
 
+  const ensureProfile = async (accessToken, fallbackRole) => {
+    const response = await fetch('/api/auth/ensure-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: accessToken, fallback_role: fallbackRole }),
+    })
+    const result = await response.json()
+    if (!response.ok) return { data: null, error: result.error || 'Profile could not be created.' }
+    return { data: result.profile, error: null }
+  }
+
   const handleLogin = async (e) => {
     e.preventDefault()
     setError('')
@@ -60,15 +71,19 @@ export default function LoginPage() {
       return
     }
 
-    const { data: profile, error: profileError } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role,status')
       .eq('id', data.user.id)
       .single()
 
     if (profileError || !profile) {
-      setError('Account profile was not found.')
-      return
+      const { data: createdProfile, error: createProfileError } = await ensureProfile(data.session?.access_token, selectedRoleMap[role])
+      if (createProfileError) {
+        setError(`Account profile was not found and could not be created: ${createProfileError}`)
+        return
+      }
+      profile = createdProfile
     }
 
     if (profile.status !== 'active') {
@@ -90,8 +105,8 @@ export default function LoginPage() {
     setError('')
     setMessage('')
 
-    if (!signupForm.fullName || !signupForm.email || !signupForm.password) {
-      setError('Please fill in name, email, and password.')
+    if (!signupForm.fullName || !signupForm.businessName || !signupForm.email || !signupForm.password) {
+      setError('Please fill in name, business name, email, and password.')
       return
     }
 
@@ -101,6 +116,7 @@ export default function LoginPage() {
       options: {
         data: {
           full_name: signupForm.fullName,
+          business_name: signupForm.businessName,
           role: 'system_admin',
         },
       },
@@ -131,7 +147,7 @@ export default function LoginPage() {
       return
     }
 
-    const { error: verifyError } = await supabase.auth.verifyOtp({
+    const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
       email: signupForm.email,
       token: verificationCode,
       type: 'signup',
@@ -142,13 +158,21 @@ export default function LoginPage() {
       return
     }
 
+    if (verifyData.session?.access_token) {
+      const { error: profileError } = await ensureProfile(verifyData.session.access_token, 'system_admin')
+      if (profileError) {
+        setError(`Email verified, but profile could not be created: ${profileError}`)
+        return
+      }
+    }
+
     await supabase.from('audit_logs').insert({
       action: 'verify_system_admin_signup',
       details: signupForm.email,
     })
 
     setForm({ email: signupForm.email, password: signupForm.password })
-    setSignupForm({ fullName: '', email: '', password: '' })
+    setSignupForm({ fullName: '', businessName: '', email: '', password: '' })
     setVerificationCode('')
     setSignupStep('details')
     setShowSignup(false)
@@ -288,7 +312,7 @@ export default function LoginPage() {
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Create System Admin</h3>
-                <p className="text-sm text-gray-500">Use this if your admin account does not exist yet.</p>
+                <p className="text-sm text-gray-500">Register your SME and create the first admin account.</p>
               </div>
               <button
                 type="button"
@@ -308,6 +332,15 @@ export default function LoginPage() {
                     onChange={e => setSignupForm({ ...signupForm, fullName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
                     placeholder="Enter your full name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Business / SME Name</label>
+                  <input
+                    value={signupForm.businessName}
+                    onChange={e => setSignupForm({ ...signupForm, businessName: e.target.value })}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
+                    placeholder="Enter your business name"
                   />
                 </div>
                 <div>

@@ -9,6 +9,7 @@ export default function ManagerUserAccounts() {
   const [modal, setModal] = useState({ open: false, editing: null, viewing: null })
   const [suspendTarget, setSuspendTarget] = useState(null)
   const [message, setMessage] = useState('')
+  const [temporaryPassword, setTemporaryPassword] = useState('')
 
   const toUiRole = (role) => role === 'staff_member' ? 'staffMember' : role === 'department_staff' ? 'department' : role
   const toDbRole = (role) => role === 'staffMember' ? 'staff_member' : role === 'department' ? 'department_staff' : role
@@ -35,6 +36,7 @@ export default function ManagerUserAccounts() {
 
   const handleCreate = () => {
     setModal({ open: true, editing: { id: null, username: '', email: '', role: 'staffMember', linkedStaff: '', status: 'Active' }, viewing: null })
+    setTemporaryPassword('')
   }
 
   const handleEdit = (user) => {
@@ -56,18 +58,21 @@ export default function ManagerUserAccounts() {
       }).eq('id', data.id)
       setMessage(error ? error.message : 'User account updated.')
     } else {
-      const password = prompt('Enter temporary password for this user')
-      if (!password) return
+      if (!temporaryPassword) {
+        setMessage('Please enter a temporary password.')
+        return
+      }
       const response = await fetch('/api/admin/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ full_name: data.username, email: data.email, password, role: toDbRole(data.role) }),
+        body: JSON.stringify({ full_name: data.username, email: data.email, password: temporaryPassword, role: toDbRole(data.role) }),
       })
       const result = await response.json()
       setMessage(response.ok ? 'User account created.' : result.error)
     }
     await supabase.from('audit_logs').insert({ action: data.id ? 'update_user_account' : 'create_user_account', details: data.email })
     await loadUsers()
+    setTemporaryPassword('')
     setModal({ open: false, editing: null, viewing: null })
   }
 
@@ -220,6 +225,16 @@ export default function ManagerUserAccounts() {
                   <option value="department">Department Staff</option>
                   <option value="manager">Manager</option>
                 </select>
+                {!modal.editing?.id && (
+                  <input
+                    type="password"
+                    value={temporaryPassword}
+                    onChange={e => setTemporaryPassword(e.target.value)}
+                    placeholder="Temporary Password"
+                    className="w-full border rounded-lg p-3 my-2 text-sm"
+                    required
+                  />
+                )}
                 <input name="linkedStaff" defaultValue={modal.editing?.linkedStaff} placeholder="Linked Staff Name" className="w-full border rounded-lg p-3 my-2 text-sm" />
                 <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-3 rounded-lg font-medium mt-2">{modal.editing?.id ? 'Update' : 'Create'} Account</button>
               </form>

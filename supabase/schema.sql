@@ -10,6 +10,7 @@ create type task_status as enum ('pending', 'approved', 'rejected', 'in_progress
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null,
+  business_name text,
   email text not null unique,
   role user_role not null,
   status text default 'active',
@@ -188,13 +189,15 @@ as $$
 declare
   requested_role user_role;
   requested_name text;
+  requested_business_name text;
 begin
   requested_role := coalesce((new.raw_user_meta_data ->> 'role')::user_role, 'staff_member'::user_role);
 
   requested_name := coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), new.email);
+  requested_business_name := nullif(new.raw_user_meta_data ->> 'business_name', '');
 
-  insert into public.profiles (id, full_name, email, role, status)
-  values (new.id, requested_name, new.email, requested_role, 'active')
+  insert into public.profiles (id, full_name, business_name, email, role, status)
+  values (new.id, requested_name, requested_business_name, new.email, requested_role, 'active')
   on conflict (id) do nothing;
 
   if requested_role = 'staff_member' then
