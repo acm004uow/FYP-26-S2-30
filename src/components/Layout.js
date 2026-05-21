@@ -110,7 +110,11 @@ export default function Layout({ children, role = 'manager' }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [businessName, setBusinessName] = useState('Smart Task Allocation')
+  const [profileInfo, setProfileInfo] = useState(null)
   const notificationRef = useRef(null)
+  const profileRef = useRef(null)
   const nav = navMap[role] || navMap.manager
 
   const addNotification = (message) => {
@@ -120,26 +124,47 @@ export default function Layout({ children, role = 'manager' }) {
   }
 
   useEffect(() => {
-    async function loadNotifications() {
+    async function loadSessionData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const { data } = await supabase
+
+      const [{ data: profile }, { data: notificationRows }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('full_name,email,role,business_name')
+          .eq('id', user.id)
+          .single(),
+        supabase
         .from('notifications')
         .select('id,message,created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(10)
-      setNotifications((data || []).map(item => ({
+          .limit(10),
+      ])
+
+      const resolvedProfile = profile || {
+        full_name: user.user_metadata?.full_name || user.email,
+        email: user.email,
+        role,
+        business_name: user.user_metadata?.business_name || '',
+      }
+
+      setProfileInfo(resolvedProfile)
+      if (resolvedProfile.business_name) setBusinessName(resolvedProfile.business_name)
+      setNotifications((notificationRows || []).map(item => ({
         id: item.id,
         message: item.message,
         time: new Date(item.created_at).toLocaleString(),
       })))
     }
 
-    loadNotifications()
+    loadSessionData()
     const handleClickOutside = (e) => {
       if (notificationRef.current && !notificationRef.current.contains(e.target)) {
         setShowNotifications(false)
+      }
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setShowProfileMenu(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -147,6 +172,21 @@ export default function Layout({ children, role = 'manager' }) {
   }, [])
 
   const roleDisplay = { manager: 'Manager', department: 'Department Staff', staffMember: 'Staff Member', admin: 'System Admin' }[role]
+  const profileRoleDisplay = {
+    manager: 'Manager',
+    department_staff: 'Department Staff',
+    department: 'Department Staff',
+    staff_member: 'Staff Member',
+    staffMember: 'Staff Member',
+    system_admin: 'System Admin',
+    admin: 'System Admin',
+  }[profileInfo?.role || role] || roleDisplay
+  const profileInitials = (profileInfo?.full_name || profileInfo?.email || 'User')
+    .split(/[ @.]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || 'U'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -161,7 +201,7 @@ export default function Layout({ children, role = 'manager' }) {
                 <LayoutDashboard className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-base font-semibold text-gray-800 hidden sm:block">Smart Task Allocation</h1>
+                <h1 className="text-base font-semibold text-gray-800 hidden sm:block">{businessName}</h1>
                 <p className="text-xs text-gray-400 hidden sm:block">{roleDisplay}</p>
               </div>
             </div>
@@ -210,14 +250,51 @@ export default function Layout({ children, role = 'manager' }) {
                   </div>
                 )}
               </div>
-              <button onClick={async () => {
-                await supabase.auth.signOut()
-                router.push('/login')
-              }}
-                className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg transition text-sm font-medium">
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
+
+              <div className="relative" ref={profileRef}>
+                <button
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-green-500 text-sm font-semibold text-white shadow-sm hover:shadow-md transition"
+                  aria-label="Open profile menu"
+                >
+                  {profileInitials}
+                </button>
+                {showProfileMenu && (
+                  <div className="absolute right-0 mt-2 w-72 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg z-50">
+                    <div className="p-4 border-b border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-green-500 text-sm font-semibold text-white">
+                          {profileInitials}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-800">{profileInfo?.full_name || 'User'}</p>
+                          <p className="truncate text-xs text-gray-500">{profileInfo?.email || 'No email'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2 p-4 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-400">Business</p>
+                        <p className="font-medium text-gray-800">{profileInfo?.business_name || businessName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">Role</p>
+                        <p className="font-medium text-gray-800">{profileRoleDisplay}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        await supabase.auth.signOut()
+                        router.push('/login')
+                      }}
+                      className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
