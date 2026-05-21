@@ -191,10 +191,6 @@ declare
 begin
   requested_role := coalesce((new.raw_user_meta_data ->> 'role')::user_role, 'staff_member'::user_role);
 
-  if requested_role = 'system_admin' then
-    requested_role := 'staff_member'::user_role;
-  end if;
-
   requested_name := coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), new.email);
 
   insert into public.profiles (id, full_name, email, role, status)

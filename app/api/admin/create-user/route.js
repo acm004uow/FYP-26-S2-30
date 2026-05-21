@@ -9,7 +9,7 @@ export async function POST(request) {
     const { data, error } = await supabase.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name, role } });
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     const user = data.user;
-    const { error: profileError } = await supabase.from("profiles").insert({ id: user.id, email, full_name, role, status: "active" });
+    const { error: profileError } = await supabase.from("profiles").upsert({ id: user.id, email, full_name, role, status: "active" });
     if (profileError) return NextResponse.json({ error: profileError.message }, { status: 400 });
     if (role === "staff_member") {
       await supabase.from("staff_profiles").insert({ user_id: user.id, staff_name: full_name, email, skills: [], status: "active" });
