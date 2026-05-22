@@ -1,108 +1,26 @@
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, ClipboardList, Users, LogOut, Menu, X, MessageCircle, Send, Bot, User, X as XIcon, FileText, Settings, Bell, UserCog } from 'lucide-react'
+import { Bell, LayoutDashboard, LogOut, Menu, X } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
+import Chatbot from './Chatbot'
+import { navMap } from '../config/navigation'
 
-// Chatbot (same as before – keep fully functional)
-function getBotResponse(userInput, role) {
-  const input = userInput.toLowerCase()
-  if (role === 'manager') {
-    if (input.includes('report')) return "Open Reports to generate the latest task and staff metrics from Supabase."
-    if (input.includes('allocation')) return "Open Task Requests to review the latest pending allocations."
-    return "I can help with reports, task requests, or staff overview."
-  }
-  if (role === 'department') {
-    if (input.includes('task')) return "Open My Tasks to view your latest submitted requests."
-    if (input.includes('available')) return "Staff availability is managed from the live staff profiles."
-    return "Create a new task request or check your submitted tasks."
-  }
-  if (role === 'staffMember') {
-    if (input.includes('task')) return "Open My Tasks to view your current assignments."
-    if (input.includes('availability')) return "Use Toggle Status to update your live availability."
-    return "I can help with tasks, availability, or performance grade."
-  }
-  if (role === 'admin') {
-    return "Manage users, view security logs, audit logs, or configure parameters."
-  }
-  return "How can I help?"
+const roleDisplayMap = {
+  manager: 'Manager',
+  department: 'Department Staff',
+  staffMember: 'Staff Member',
+  admin: 'System Admin',
 }
 
-function Chatbot({ role, addNotification }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState([{
-    role: 'bot',
-    content: `Hello! I'm your AI assistant for ${role === 'staffMember' ? 'Staff Member' : role}.`,
-    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }])
-  const [input, setInput] = useState('')
-
-  const handleSend = () => {
-    if (!input.trim()) return
-    const userMsg = { role: 'user', content: input, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-    setMessages(prev => [...prev, userMsg])
-    setInput('')
-    setTimeout(() => {
-      const reply = getBotResponse(input, role)
-      setMessages(prev => [...prev, { role: 'bot', content: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
-      if (addNotification) addNotification(`Chatbot: ${reply.substring(0, 50)}...`)
-    }, 500)
-  }
-
-  return (
-    <>
-      {!isOpen && (
-        <button onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-blue-500 to-green-500 text-white rounded-full shadow-lg hover:shadow-xl transition flex items-center justify-center z-50">
-          <MessageCircle className="w-6 h-6" />
-        </button>
-      )}
-      {isOpen && (
-        <div className="fixed bottom-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-2xl flex flex-col z-50" style={{ height: '500px' }}>
-          <div className="bg-gradient-to-r from-blue-500 to-green-500 text-white p-4 rounded-t-2xl flex justify-between items-center">
-            <div className="flex items-center gap-2"><Bot className="w-5 h-5" /><h3 className="font-medium">AI Assistant</h3></div>
-            <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-lg"><XIcon className="w-5 h-5" /></button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role === 'bot' && <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-full flex items-center justify-center"><Bot className="w-4 h-4 text-white" /></div>}
-                <div className={`px-4 py-2 rounded-2xl max-w-xs text-sm whitespace-pre-line ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800'}`}>{msg.content}</div>
-                {msg.role === 'user' && <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center"><User className="w-4 h-4 text-gray-600" /></div>}
-              </div>
-            ))}
-          </div>
-          <div className="p-4 border-t">
-            <div className="flex gap-2">
-              <input value={input} onChange={e => setInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && handleSend()} placeholder="Type..." className="flex-1 px-4 py-2 border rounded-lg text-sm" />
-              <button onClick={handleSend} className="bg-gradient-to-r from-blue-500 to-green-500 text-white p-2 rounded-lg"><Send className="w-5 h-5" /></button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
-
-// Navigation for each role
-const navMap = {
-  manager: [
-    { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
-    { name: 'Staff Profiles', path: '/staff', icon: Users },
-    { name: 'User Accounts', path: '/manager-user-accounts', icon: UserCog },
-    { name: 'Task Requests', path: '/manager-task-requests', icon: ClipboardList },
-    { name: 'Reports', path: '/manager-reports', icon: FileText },
-  ],
-  department: [
-    { name: 'My Tasks', path: '/department', icon: ClipboardList },
-    { name: 'New Request', path: '/tasks/create?role=dept', icon: ClipboardList },
-  ],
-  staffMember: [
-    { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
-  ],
-  admin: [
-    { name: 'Admin Panel', path: '/admin', icon: Settings },
-  ]
+const profileRoleDisplayMap = {
+  manager: 'Manager',
+  department_staff: 'Department Staff',
+  department: 'Department Staff',
+  staff_member: 'Staff Member',
+  staffMember: 'Staff Member',
+  system_admin: 'System Admin',
+  admin: 'System Admin',
 }
 
 export default function Layout({ children, role = 'manager' }) {
@@ -120,7 +38,6 @@ export default function Layout({ children, role = 'manager' }) {
   const addNotification = (message) => {
     const newNotif = { id: Date.now(), message, time: new Date().toLocaleTimeString() }
     setNotifications(prev => [newNotif, ...prev].slice(0, 10))
-    // Auto-hide dropdown after 3 seconds? No, keep until user closes.
   }
 
   useEffect(() => {
@@ -135,10 +52,10 @@ export default function Layout({ children, role = 'manager' }) {
           .eq('id', user.id)
           .single(),
         supabase
-        .from('notifications')
-        .select('id,message,created_at')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+          .from('notifications')
+          .select('id,message,created_at')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
           .limit(10),
       ])
 
@@ -159,28 +76,22 @@ export default function Layout({ children, role = 'manager' }) {
     }
 
     loadSessionData()
-    const handleClickOutside = (e) => {
-      if (notificationRef.current && !notificationRef.current.contains(e.target)) {
+
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setShowNotifications(false)
       }
-      if (profileRef.current && !profileRef.current.contains(e.target)) {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
         setShowProfileMenu(false)
       }
     }
+
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [role])
 
-  const roleDisplay = { manager: 'Manager', department: 'Department Staff', staffMember: 'Staff Member', admin: 'System Admin' }[role]
-  const profileRoleDisplay = {
-    manager: 'Manager',
-    department_staff: 'Department Staff',
-    department: 'Department Staff',
-    staff_member: 'Staff Member',
-    staffMember: 'Staff Member',
-    system_admin: 'System Admin',
-    admin: 'System Admin',
-  }[profileInfo?.role || role] || roleDisplay
+  const roleDisplay = roleDisplayMap[role]
+  const profileRoleDisplay = profileRoleDisplayMap[profileInfo?.role || role] || roleDisplay
   const profileInitials = (profileInfo?.full_name || profileInfo?.email || 'User')
     .split(/[ @.]/)
     .filter(Boolean)
@@ -205,6 +116,7 @@ export default function Layout({ children, role = 'manager' }) {
                 <p className="text-xs text-gray-400 hidden sm:block">{roleDisplay}</p>
               </div>
             </div>
+
             <div className="hidden lg:flex items-center gap-1">
               {nav.map(item => (
                 <Link key={item.path} href={item.path}
@@ -214,12 +126,13 @@ export default function Layout({ children, role = 'manager' }) {
                 </Link>
               ))}
             </div>
+
             <div className="flex items-center gap-2">
-              {/* Notification Bell */}
               <div className="relative" ref={notificationRef}>
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
                   className="relative p-2 rounded-lg hover:bg-gray-100 transition"
+                  aria-label="Open notifications"
                 >
                   <Bell className="w-5 h-5 text-gray-600" />
                   {notifications.length > 0 && (
@@ -298,6 +211,7 @@ export default function Layout({ children, role = 'manager' }) {
             </div>
           </div>
         </div>
+
         {mobileOpen && (
           <div className="lg:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-1">
             {nav.map(item => (
@@ -311,6 +225,7 @@ export default function Layout({ children, role = 'manager' }) {
           </div>
         )}
       </nav>
+
       <main>{children}</main>
       <Chatbot role={role} addNotification={addNotification} />
     </div>
