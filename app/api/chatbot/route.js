@@ -1,0 +1,101 @@
+import { NextResponse } from "next/server";
+
+const roleNames = {
+  manager: "Manager",
+  department: "Department Staff",
+  staffMember: "Staff Member",
+  admin: "System Admin",
+};
+
+const roleContext = {
+  manager: "Managers review task requests, assign staff, view staff profiles, manage user accounts, and generate operational reports.",
+  department: "Department staff create task requests, mark urgent work, track request status, cancel pending requests, and view completion history.",
+  staffMember: "Staff members view assigned tasks, update availability, start work, complete tasks, upload proof, and check feedback.",
+  admin: "System admins manage accounts, reset passwords, monitor security logs, review audit logs, and tune global allocation parameters.",
+};
+
+const normalizeRole = (role) => ({
+  system_admin: "admin",
+  staff_member: "staffMember",
+  department_staff: "department",
+}[role] || role || "manager");
+
+const cleanHistory = (messages = []) => messages
+  .filter(message => ["user", "bot"].includes(message.role) && message.content)
+  .slice(-8)
+  .map(message => ({
+    role: message.role === "bot" ? "model" : "user",
+    parts: [{ text: String(message.content).slice(0, 1000) }],
+  }));
+
+export async function POST(request) {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "GEMINI_API_KEY is not configured." }, { status: 500 });
+    }
+
+    const { message, role, history } = await request.json();
+    const userMessage = String(message || "").trim();
+    if (!userMessage) {
+      return NextResponse.json({ error: "Message is required." }, { status: 400 });
+    }
+
+    const normalizedRole = normalizeRole(role);
+    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const contents = cleanHistory(history);
+    contents.push({ role: "user", parts: [{ text: userMessage }] });
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{
+            text: [
+              "You are the Smart Task Allocation assistant.",
+              `Current user role: ${roleNames[normalizedRole] || normalizedRole}.`,
+              roleContext[normalizedRole] || roleContext.manager,
+              "Answer in a helpful, concise way for this web app.",
+              "Do not invent live database values. If the user asks for exact current records, tell them where to check in the app.",
+              "Mention navigation targets only if they exist: Admin Panel, User Accounts, Security Logs, Audit Logs, Global Parameters, Staff Profiles, Task Requests, Reports, My Tasks, New Request.",
+              "Keep replies under 90 words unless the user asks for detail.",
+            ].join(" "),
+          }],
+        },
+        contents,
+        generationConfig: {
+          temperature: 0.35,
+          maxOutputTokens: 300,
+        },
+      }),
+    });
+    clearTimeout(timeoutId);
+
+    const data = await response.json();
+    if (!response.ok) {
+      return NextResponse.json({ error: data.error?.message || "Gemini request failed." }, { status: response.status });
+    }
+
+    const reply = data.candidates?.[0]?.content?.parts
+      ?.map(part => part.text || "")
+      .join("")
+      .trim();
+
+    if (!reply) {
+      return NextResponse.json({ error: "Gemini returned an empty reply." }, { status: 502 });
+    }
+
+    return NextResponse.json({ reply });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return NextResponse.json({ error: "Gemini request timed out. Check your network connection, API key, and model name." }, { status: 504 });
+    }
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
