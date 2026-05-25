@@ -5,7 +5,7 @@ import { supabase } from '../../../../lib/supabaseClient'
 import AuditLogsPanel from '../audit-logs/AuditLogsPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
 import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
-import UserAccountsPanel from '../users/UserAccountsPanel'
+import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 
 export default function AdminPanel() {
   const [users, setUsers] = useState([])
@@ -13,19 +13,23 @@ export default function AdminPanel() {
   const [auditLogs, setAuditLogs] = useState([])
   const [showReset, setShowReset] = useState(null)
   const [showCreate, setShowCreate] = useState(null)
+  const [statusChangeUser, setStatusChangeUser] = useState(null)
   const [createForm, setCreateForm] = useState({ full_name: '', email: '', password: '', role: 'manager' })
   const [resetPassword, setResetPassword] = useState('')
   const [params, setParams] = useState({ workloadThreshold: 3, proximityRadius: 10, priorityWeights: 10 })
   const [message, setMessage] = useState('')
+  const [currentUserId, setCurrentUserId] = useState('')
 
   const loadAdminData = async () => {
-    const [{ data: profiles }, { data: security }, { data: audit }, { data: systemParams }] = await Promise.all([
+    const [{ data: { user } }, { data: profiles }, { data: security }, { data: audit }, { data: systemParams }] = await Promise.all([
+      supabase.auth.getUser(),
       supabase.from('profiles').select('id,full_name,email,role,status,created_at').order('created_at', { ascending: false }),
       supabase.from('security_logs').select('id,email,event_type,details,created_at').order('created_at', { ascending: false }).limit(20),
       supabase.from('audit_logs').select('id,action,details,created_at,profiles(email)').order('created_at', { ascending: false }).limit(20),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
     ])
 
+    setCurrentUserId(user?.id || '')
     setUsers(profiles || [])
     setSecurityLogs(security || [])
     setAuditLogs(audit || [])
@@ -36,6 +40,32 @@ export default function AdminPanel() {
         priorityWeights: systemParams.performance_weight,
       })
     }
+  }
+
+  const updateUserAccess = async ({ userId, role, status }) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setMessage('Your admin session has expired. Please log in again.')
+      return false
+    }
+
+    const response = await fetch('/api/admin/update-role', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ user_id: userId, role, status }),
+    })
+    const result = await response.json()
+    const successMessage = status === 'inactive'
+      ? 'User account deactivated. The user can no longer access the system.'
+      : status === 'active'
+        ? 'User account reactivated.'
+        : 'User access updated.'
+    setMessage(response.ok ? successMessage : result.error)
+    if (response.ok) await loadAdminData()
+    return response.ok
   }
 
   useEffect(() => {
@@ -62,12 +92,19 @@ export default function AdminPanel() {
     setShowCreate(null)
   }
 
-  const handleDeactivate = async (id, status) => {
-    const nextStatus = status === 'active' ? 'inactive' : 'active'
-    const { error } = await supabase.from('profiles').update({ status: nextStatus }).eq('id', id)
-    await supabase.from('audit_logs').insert({ user_id: id, action: 'update_user_status', details: `Status changed to ${nextStatus}` })
-    setMessage(error ? error.message : `Account ${nextStatus}.`)
-    await loadAdminData()
+  const handleRoleChange = async (id, role) => {
+    await updateUserAccess({ userId: id, role })
+  }
+
+  const handleToggleStatus = (user) => {
+    setStatusChangeUser(user)
+  }
+
+  const confirmStatusChange = async () => {
+    if (!statusChangeUser) return
+    const nextStatus = statusChangeUser.status === 'active' ? 'inactive' : 'active'
+    const ok = await updateUserAccess({ userId: statusChangeUser.id, status: nextStatus })
+    if (ok) setStatusChangeUser(null)
   }
 
   const handleReset = async (event) => {
@@ -111,7 +148,9 @@ export default function AdminPanel() {
             users={users}
             onAddUser={() => setShowCreate(true)}
             onResetUser={(user) => { setShowReset(user); setResetPassword('') }}
-            onToggleStatus={handleDeactivate}
+            onChangeRole={handleRoleChange}
+            onToggleStatus={handleToggleStatus}
+            currentUserId={currentUserId}
           />
           <SecurityLogsPanel logs={securityLogs} />
           <AuditLogsPanel logs={auditLogs} />
@@ -136,6 +175,38 @@ export default function AdminPanel() {
         </div>
       )}
 
+      {statusChangeUser && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex justify-between gap-4">
+              <h3 className="text-lg font-semibold">
+                {statusChangeUser.status === 'active' ? 'Deactivate User Account' : 'Reactivate User Account'}
+              </h3>
+              <button type="button" onClick={() => setStatusChangeUser(null)} aria-label="Close"><X /></button>
+            </div>
+            <p className="mt-4 text-sm text-gray-600">
+              {statusChangeUser.status === 'active'
+                ? `${statusChangeUser.full_name} will be signed out on their next protected page load and blocked from future logins.`
+                : `${statusChangeUser.full_name} will be allowed to access the system again with their existing role.`}
+            </p>
+            <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm">
+              <p className="font-medium text-gray-800">{statusChangeUser.email}</p>
+              <p className="text-xs text-gray-500">Current status: {statusChangeUser.status}</p>
+            </div>
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                onClick={confirmStatusChange}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium text-white ${statusChangeUser.status === 'active' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
+              >
+                {statusChangeUser.status === 'active' ? 'Deactivate Account' : 'Reactivate Account'}
+              </button>
+              <button type="button" onClick={() => setStatusChangeUser(null)} className="flex-1 rounded-lg bg-gray-200 py-2 text-sm font-medium text-gray-700">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleCreate} className="bg-white rounded-xl max-w-md w-full p-6">
@@ -144,9 +215,7 @@ export default function AdminPanel() {
               <div>
                 <label className="text-sm font-medium text-gray-700">Role</label>
                 <select value={createForm.role} onChange={e => setCreateForm({ ...createForm, role: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
-                  <option value="manager">Manager</option>
-                  <option value="department_staff">Department Staff</option>
-                  <option value="staff_member">Staff Member</option>
+                  {roleOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
               <div>

@@ -48,7 +48,7 @@ export default function Layout({ children, role = 'manager' }) {
       const [{ data: profile }, { data: notificationRows }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('full_name,email,role,business_name')
+          .select('full_name,email,role,business_name,status')
           .eq('id', user.id)
           .single(),
         supabase
@@ -64,6 +64,13 @@ export default function Layout({ children, role = 'manager' }) {
         email: user.email,
         role,
         business_name: user.user_metadata?.business_name || '',
+        status: 'active',
+      }
+
+      if (resolvedProfile.status !== 'active') {
+        await supabase.auth.signOut()
+        router.push('/login')
+        return
       }
 
       setProfileInfo(resolvedProfile)

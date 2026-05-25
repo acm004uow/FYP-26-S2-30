@@ -12,7 +12,7 @@ export default function RequireRole({ roles, children }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       const { data: profile } = await supabase.from("profiles").select("role,status").eq("id", user.id).single();
-      if (!profile || profile.status === "suspended" || !roles.includes(profile.role)) {
+      if (!profile || profile.status !== "active" || !roles.includes(profile.role)) {
         router.push("/login");
         return;
       }
