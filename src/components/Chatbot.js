@@ -12,7 +12,7 @@ const assistantSuggestions = {
   manager: ['What needs attention?', 'How do recommendations work?', 'Where are reports?'],
   department: ['Create urgent request', 'Track my request', 'Cancel a request'],
   staffMember: ['Update availability', 'Start a task', 'Upload proof'],
-  admin: ['Who are you?', 'How do I reset a password?', 'Explain audit logs'],
+  admin: ['Reset a password', 'Review security logs', 'Explain audit logs'],
 }
 
 const normalizeRole = (role) => ({
@@ -66,7 +66,7 @@ export default function Chatbot({ role, addNotification }) {
       setMessages(prev => [...prev, { role: 'bot', content: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
       if (addNotification) addNotification(`Chatbot: ${reply.substring(0, 50)}...`)
     } catch (error) {
-      const errorReply = error.message || 'Gemini request failed.'
+      const errorReply = 'The assistant is temporarily unavailable. Please try again in a moment.'
       setMessages(prev => [...prev, { role: 'bot', content: errorReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
       if (addNotification) addNotification('Chatbot: Gemini connection failed.')
     } finally {

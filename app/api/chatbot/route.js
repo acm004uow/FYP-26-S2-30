@@ -28,13 +28,28 @@ const cleanHistory = (messages = []) => messages
     parts: [{ text: String(message.content).slice(0, 1000) }],
   }));
 
-export async function POST(request) {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "GEMINI_API_KEY is not configured." }, { status: 500 });
+const getLocalReply = (message, role) => {
+  const normalizedMessage = message.toLowerCase();
+
+  if (role === "admin") {
+    if (normalizedMessage.includes("reset") && normalizedMessage.includes("password")) {
+      return "Open Admin Panel, find the user in User Accounts, choose Reset, enter a new temporary password, and confirm. The reset is recorded in Security Logs and Audit Logs.";
     }
 
+    if (normalizedMessage.includes("security") && normalizedMessage.includes("log")) {
+      return "Open Admin Panel and check Security Logs. It shows recent security events such as password resets and account-related activity, with the latest entries first.";
+    }
+
+    if (normalizedMessage.includes("audit") && normalizedMessage.includes("log")) {
+      return "Open Admin Panel and check Audit Logs. Use it to review admin actions such as password resets, role changes, and global parameter updates.";
+    }
+  }
+
+  return "";
+};
+
+export async function POST(request) {
+  try {
     const { message, role, history } = await request.json();
     const userMessage = String(message || "").trim();
     if (!userMessage) {
@@ -42,6 +57,16 @@ export async function POST(request) {
     }
 
     const normalizedRole = normalizeRole(role);
+    const localReply = getLocalReply(userMessage, normalizedRole);
+    if (localReply) {
+      return NextResponse.json({ reply: localReply });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "GEMINI_API_KEY is not configured." }, { status: 500 });
+    }
+
     const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const contents = cleanHistory(history);
