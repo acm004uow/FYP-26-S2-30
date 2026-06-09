@@ -1,11 +1,44 @@
 import Layout from '../../../components/Layout'
 import { useState } from 'react'
-import { FileText, TrendingUp, Users, CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { Download, FileText, Printer, Star } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 
 export default function ManagerReports() {
   const [reportType, setReportType] = useState('daily')
   const [data, setData] = useState(null)
+  const [message, setMessage] = useState('')
+
+  const reportLabel = reportType.charAt(0).toUpperCase() + reportType.slice(1)
+  const fileStamp = new Date().toISOString().slice(0, 10)
+
+  const getReportRows = (reportData = data) => {
+    if (!reportData) return []
+    return [
+      ['Report Type', reportLabel],
+      ['Generated At', reportData.generatedAt],
+      ['Total Tasks', reportData.totalTasks],
+      ['Completed', reportData.completed],
+      ['Pending', reportData.pending],
+      ['Urgent', reportData.urgent],
+      ['Efficiency', reportData.efficiency],
+      ['Staff Utilization', reportData.staffUtilization],
+      ['Top Performer', reportData.topStaff],
+      ['Average Rating', reportData.avgRating],
+      ...Object.entries(reportData.tasksByCategory).map(([category, value]) => [`Category: ${category}`, value]),
+    ]
+  }
+
+  const escapeCsvCell = (value) => {
+    const cell = String(value ?? '')
+    return /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell
+  }
+
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 
   const generate = async () => {
     const days = reportType === 'daily' ? 1 : reportType === 'weekly' ? 7 : 30
@@ -43,7 +76,90 @@ export default function ManagerReports() {
       topStaff: topEntry ? `${topEntry[0]} (${topEntry[1]} tasks)` : 'No assigned tasks',
       avgRating,
       tasksByCategory: Object.keys(tasksByCategory).length ? tasksByCategory : { General: 0 },
+      generatedAt: new Date().toLocaleString(),
     })
+    setMessage('')
+  }
+
+  const downloadCsv = () => {
+    if (!data) return
+    const csv = getReportRows().map(row => row.map(escapeCsvCell).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${reportType}-operational-report-${fileStamp}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    setMessage('CSV report downloaded.')
+  }
+
+  const exportPdf = () => {
+    if (!data) return
+    const reportRows = getReportRows()
+    const categoryRows = Object.entries(data.tasksByCategory)
+      .map(([category, value]) => `<tr><td>${escapeHtml(category)}</td><td>${escapeHtml(value)}</td></tr>`)
+      .join('')
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700')
+    if (!printWindow) {
+      setMessage('Pop-up blocked. Allow pop-ups for this site, then try Export PDF again.')
+      return
+    }
+
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>${escapeHtml(reportLabel)} Operational Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 32px; color: #111827; }
+            h1 { margin: 0 0 6px; font-size: 24px; }
+            h2 { margin-top: 24px; font-size: 18px; }
+            .meta { color: #4b5563; margin-bottom: 24px; }
+            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+            .metric { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
+            .metric span { display: block; color: #6b7280; font-size: 12px; margin-bottom: 6px; }
+            .metric strong { font-size: 22px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+            th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; font-size: 13px; }
+            th { background: #f9fafb; }
+            @media print { body { margin: 20px; } }
+          </style>
+        </head>
+        <body>
+          <h1>${escapeHtml(reportLabel)} Operational Report</h1>
+          <div class="meta">Generated at ${escapeHtml(data.generatedAt)}</div>
+          <div class="grid">
+            <div class="metric"><span>Total Tasks</span><strong>${escapeHtml(data.totalTasks)}</strong></div>
+            <div class="metric"><span>Completed</span><strong>${escapeHtml(data.completed)}</strong></div>
+            <div class="metric"><span>Pending</span><strong>${escapeHtml(data.pending)}</strong></div>
+            <div class="metric"><span>Urgent</span><strong>${escapeHtml(data.urgent)}</strong></div>
+          </div>
+          <table>
+            <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+            <tbody>
+              ${reportRows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+          <h2>Tasks by Category</h2>
+          <table>
+            <thead><tr><th>Category</th><th>Tasks</th></tr></thead>
+            <tbody>${categoryRows}</tbody>
+          </table>
+          <script>
+            window.onload = () => {
+              window.print();
+              window.onafterprint = () => window.close();
+            };
+          </script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    setMessage('PDF export opened. Choose Save as PDF in the print dialog.')
   }
 
   return (
@@ -57,7 +173,16 @@ export default function ManagerReports() {
               <button key={t} onClick={() => setReportType(t)} className={`px-4 py-2 rounded-lg text-sm font-medium ${reportType === t ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700'}`}>{t.charAt(0).toUpperCase() + t.slice(1)}</button>
             ))}
           </div>
-          <button onClick={generate} className="bg-gradient-to-r from-blue-500 to-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2"><FileText className="w-4 h-4" /> Generate Report</button>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={generate} className="bg-gradient-to-r from-blue-500 to-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2"><FileText className="w-4 h-4" /> Generate Report</button>
+            {data && (
+              <>
+                <button onClick={downloadCsv} className="border border-gray-200 bg-white text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50"><Download className="w-4 h-4" /> Download CSV</button>
+                <button onClick={exportPdf} className="border border-gray-200 bg-white text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50"><Printer className="w-4 h-4" /> Export PDF</button>
+              </>
+            )}
+          </div>
+          {message && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
 
           {data && (
             <div className="mt-6 space-y-4">
@@ -71,7 +196,7 @@ export default function ManagerReports() {
                 <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Efficiency</p><p className="text-lg font-semibold">{data.efficiency}</p><p className="text-xs">(Completed / Total)</p></div>
                 <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Staff Utilization</p><p className="text-lg font-semibold">{data.staffUtilization}</p><p className="text-xs">Avg tasks per staff</p></div>
                 <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Top Performer</p><p className="text-sm font-medium">{data.topStaff}</p></div>
-                <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Average Rating</p><p className="text-lg font-semibold flex items-center gap-1">⭐{data.avgRating}</p></div>
+                <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Average Rating</p><p className="text-lg font-semibold flex items-center gap-1"><Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />{data.avgRating}</p></div>
               </div>
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-xs text-gray-500 mb-1">Tasks by Category</p>
