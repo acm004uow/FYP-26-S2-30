@@ -9,6 +9,7 @@ export default function TaskCreation() {
   const role = router.query.role === 'dept' ? 'department' : 'manager'
   const [submitted, setSubmitted] = useState(false)
   const [allStaff, setAllStaff] = useState([])
+  const [categories, setCategories] = useState(['Maintenance', 'Inspection', 'Cleaning', 'Delivery', 'Administration'])
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     title: '', description: '', location: '', priority: 'Medium', urgent: false,
@@ -17,12 +18,19 @@ export default function TaskCreation() {
   const [recommendations, setRecommendations] = useState([])
 
   useEffect(() => {
-    async function loadStaff() {
-      const { data } = await supabase
+    async function loadFormData() {
+      const [{ data }, { data: categoryRows, error: categoryError }] = await Promise.all([
+        supabase
         .from('staff_profiles')
         .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,is_suspended,status')
         .eq('is_suspended', false)
-        .eq('status', 'active')
+          .eq('status', 'active'),
+        supabase
+          .from('task_categories')
+          .select('name,status')
+          .eq('status', 'active')
+          .order('name'),
+      ])
       setAllStaff((data || []).map(row => ({
         id: row.id,
         name: row.staff_name,
@@ -34,8 +42,11 @@ export default function TaskCreation() {
         location: row.assigned_region || '',
         workload: row.current_workload || 0,
       })))
+      if (!categoryError && categoryRows?.length) {
+        setCategories(categoryRows.map(category => category.name))
+      }
     }
-    loadStaff()
+    loadFormData()
   }, [])
 
   // AI recommendation engine
@@ -128,7 +139,7 @@ export default function TaskCreation() {
                   <div><label className="block text-sm font-medium text-gray-700 mb-2">Task Title *</label><input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Equipment Maintenance Check" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-2">Description</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Describe the task requirements..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" /></div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-2">Category</label><select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"><option value="">Select category</option><option>Maintenance</option><option>Inspection</option><option>Cleaning</option><option>Delivery</option><option>Administration</option></select></div>
+                    <div><label className="block text-sm font-medium text-gray-700 mb-2">Category</label><select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"><option value="">Select category</option>{categories.map(category => <option key={category} value={category}>{category}</option>)}</select></div>
                     <div><label className="block text-sm font-medium text-gray-700 mb-2">Priority</label><div className="flex gap-2">{['Low', 'Medium', 'High'].map(p => (<button key={p} type="button" onClick={() => setForm({ ...form, priority: p })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition ${form.priority === p ? p === 'High' ? 'bg-red-500 text-white' : p === 'Medium' ? 'bg-orange-500 text-white' : 'bg-gray-500 text-white' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>{p}</button>))}</div></div>
                   </div>
                   <div className="flex items-center gap-3"><input type="checkbox" id="urgent" checked={form.urgent} onChange={e => setForm({ ...form, urgent: e.target.checked })} className="w-4 h-4" /><label htmlFor="urgent" className="text-sm text-gray-700">Mark as Urgent (requires faster allocation)</label></div>
