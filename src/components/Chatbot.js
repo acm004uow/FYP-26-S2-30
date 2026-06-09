@@ -10,7 +10,7 @@ const roleNames = {
 
 const assistantSuggestions = {
   manager: ['Generate quick report', 'Check allocation status', 'Show availability'],
-  department: ['Create urgent request', 'Track my request', 'Cancel a request'],
+  department: ['How to create urgent request', 'Track my request', 'Cancel a request'],
   staffMember: ['Update availability', 'Start a task', 'Upload proof'],
   admin: ['Reset a password', 'Review security logs', 'Explain audit logs'],
 }
