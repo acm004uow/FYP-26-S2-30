@@ -75,6 +75,19 @@ export default function Layout({ children, role = 'manager' }) {
         status: 'active',
       }
 
+      let resolvedBusinessName = resolvedProfile.business_name
+      if (!resolvedBusinessName) {
+        const { data: adminProfiles } = await supabase
+          .from('profiles')
+          .select('business_name,created_at')
+          .eq('role', 'system_admin')
+          .not('business_name', 'is', null)
+          .order('created_at', { ascending: true })
+          .limit(1)
+
+        resolvedBusinessName = adminProfiles?.[0]?.business_name || ''
+      }
+
       if (resolvedProfile.status !== 'active') {
         await supabase.auth.signOut()
         router.push('/login')
@@ -93,8 +106,8 @@ export default function Layout({ children, role = 'manager' }) {
         return
       }
 
-      setProfileInfo(resolvedProfile)
-      if (resolvedProfile.business_name) setBusinessName(resolvedProfile.business_name)
+      setProfileInfo({ ...resolvedProfile, business_name: resolvedBusinessName })
+      if (resolvedBusinessName) setBusinessName(resolvedBusinessName)
       setNotifications((notificationRows || []).map(item => ({
         id: item.id,
         message: item.message,

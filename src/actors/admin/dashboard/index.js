@@ -88,9 +88,18 @@ export default function AdminPanel() {
       return
     }
 
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setMessage('Your admin session has expired. Please log in again.')
+      return
+    }
+
     const response = await fetch('/api/admin/create-user', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: JSON.stringify({ full_name, email, password, role }),
     })
     const result = await response.json()

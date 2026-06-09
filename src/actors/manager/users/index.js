@@ -62,9 +62,17 @@ export default function ManagerUserAccounts() {
         setMessage('Please enter a temporary password.')
         return
       }
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) {
+        setMessage('Your session has expired. Please log in again.')
+        return
+      }
       const response = await fetch('/api/admin/create-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({ full_name: data.username, email: data.email, password: temporaryPassword, role: toDbRole(data.role) }),
       })
       const result = await response.json()
