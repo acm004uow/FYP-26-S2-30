@@ -25,7 +25,7 @@ export async function POST(request) {
     const requesterId = requesterData.user.id;
     const { data: requesterProfile, error: profileError } = await supabase
       .from("profiles")
-      .select("role,status,email")
+      .select("role,status,email,business_name,host_admin_id")
       .eq("id", requesterId)
       .single();
 
@@ -39,12 +39,19 @@ export async function POST(request) {
 
     const { data: targetProfile, error: targetError } = await supabase
       .from("profiles")
-      .select("id,email,full_name,role,status")
+      .select("id,email,full_name,role,status,business_name,host_admin_id")
       .eq("id", user_id)
       .single();
 
     if (targetError || !targetProfile) {
       return NextResponse.json({ error: "User profile not found" }, { status: 404 });
+    }
+
+    const requesterHostAdminId = requesterProfile.host_admin_id || requesterId;
+    const isSameHost = targetProfile.id === requesterId || targetProfile.host_admin_id === requesterHostAdminId;
+    const isSameBusiness = requesterProfile.business_name && targetProfile.business_name === requesterProfile.business_name;
+    if (!isSameHost && !isSameBusiness) {
+      return NextResponse.json({ error: "This user is not under your system admin organisation" }, { status: 403 });
     }
 
     if (targetProfile.role === "system_admin" && (role && role !== "system_admin" || status === "inactive")) {

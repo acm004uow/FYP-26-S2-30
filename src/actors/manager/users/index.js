@@ -9,16 +9,58 @@ export default function ManagerUserAccounts() {
   const [modal, setModal] = useState({ open: false, editing: null, viewing: null })
   const [suspendTarget, setSuspendTarget] = useState(null)
   const [message, setMessage] = useState('')
-  const [temporaryPassword, setTemporaryPassword] = useState('')
 
   const toUiRole = (role) => role === 'staff_member' ? 'staffMember' : role === 'department_staff' ? 'department' : role
   const toDbRole = (role) => role === 'staffMember' ? 'staff_member' : role === 'department' ? 'department_staff' : role
   const permissionsFor = (role) => role === 'manager' ? 'Full Access' : role === 'department' ? 'Create Tasks, View History, Request Allocation' : 'View Tasks, Update Availability'
 
   const loadUsers = async () => {
-    const { data, error } = await supabase.from('profiles').select('id,full_name,email,role,status,updated_at').order('full_name')
+    const { data: { user } } = await supabase.auth.getUser()
+    let { data: currentProfile, error: currentProfileError } = await supabase
+      .from('profiles')
+      .select('business_name,host_admin_id')
+      .eq('id', user?.id)
+      .single()
+
+    if (currentProfileError) {
+      const fallbackProfile = await supabase
+        .from('profiles')
+        .select('business_name')
+        .eq('id', user?.id)
+        .single()
+      currentProfile = fallbackProfile.data
+    }
+
+    const hostAdminId = currentProfile?.host_admin_id || ''
+    const businessName = currentProfile?.business_name || ''
+    const baseProfileSelect = 'id,full_name,email,role,status,updated_at,business_name'
+    const hostProfileSelect = `${baseProfileSelect},host_admin_id`
+    const profileRequests = [
+      supabase.from('profiles').select(baseProfileSelect).eq('id', user?.id),
+    ]
+
+    if (hostAdminId) {
+      profileRequests.push(supabase.from('profiles').select(hostProfileSelect).eq('host_admin_id', hostAdminId))
+    }
+
+    if (businessName) {
+      profileRequests.push(supabase.from('profiles').select(baseProfileSelect).eq('business_name', businessName))
+    }
+
+    const results = await Promise.all(profileRequests)
+    const error = results.find(result => result.error)?.error
     if (error) setMessage(error.message)
-    setUsers((data || []).map(profile => ({
+
+    const profilesById = new Map()
+    results.forEach(({ data, error }) => {
+      if (error) return
+      ;(data || []).forEach(profile => profilesById.set(profile.id, profile))
+    })
+    const profiles = Array.from(profilesById.values())
+      .filter(profile => profile.role !== 'system_admin')
+      .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
+
+    setUsers(profiles.map(profile => ({
       id: profile.id,
       username: profile.full_name,
       email: profile.email,
@@ -35,8 +77,7 @@ export default function ManagerUserAccounts() {
   }, [])
 
   const handleCreate = () => {
-    setModal({ open: true, editing: { id: null, username: '', email: '', role: 'staffMember', linkedStaff: '', status: 'Active' }, viewing: null })
-    setTemporaryPassword('')
+    setModal({ open: true, editing: { id: null, username: '', email: '', role: 'staffMember', status: 'Active' }, viewing: null })
   }
 
   const handleEdit = (user) => {
@@ -58,10 +99,6 @@ export default function ManagerUserAccounts() {
       }).eq('id', data.id)
       setMessage(error ? error.message : 'User account updated.')
     } else {
-      if (!temporaryPassword) {
-        setMessage('Please enter a temporary password.')
-        return
-      }
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) {
         setMessage('Your session has expired. Please log in again.')
@@ -73,14 +110,17 @@ export default function ManagerUserAccounts() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ full_name: data.username, email: data.email, password: temporaryPassword, role: toDbRole(data.role) }),
+        body: JSON.stringify({ full_name: data.username, email: data.email, role: toDbRole(data.role) }),
       })
       const result = await response.json()
-      setMessage(response.ok ? 'User account created.' : result.error)
+      if (!response.ok) {
+        setMessage(result.error || 'Invitation could not be sent.')
+        return
+      }
+      setMessage('Invitation sent. The user can set their own password from the email link.')
     }
-    await supabase.from('audit_logs').insert({ action: data.id ? 'update_user_account' : 'create_user_account', details: data.email })
+    await supabase.from('audit_logs').insert({ action: data.id ? 'update_user_account' : 'invite_user_account', details: data.email })
     await loadUsers()
-    setTemporaryPassword('')
     setModal({ open: false, editing: null, viewing: null })
   }
 
@@ -107,7 +147,7 @@ export default function ManagerUserAccounts() {
             <p className="text-gray-500 text-sm mt-1">Manage system access and permissions</p>
           </div>
           <button onClick={handleCreate} className="bg-gradient-to-r from-blue-500 to-green-500 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg transition">
-            <Plus className="w-5 h-5" /> Create User Account
+            <Plus className="w-5 h-5" /> Invite User
           </button>
         </div>
         {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
@@ -207,10 +247,11 @@ export default function ManagerUserAccounts() {
           <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold">
-                {modal.viewing ? 'User Account Details' : (modal.editing?.id ? 'Edit User' : 'Create User Account')}
+                {modal.viewing ? 'User Account Details' : (modal.editing?.id ? 'Edit User' : 'Invite User Account')}
               </h3>
               <button onClick={() => setModal({ open: false, editing: null, viewing: null })} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
+            {message && !modal.viewing && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
 
             {modal.viewing ? (
               <div className="space-y-3 text-sm">
@@ -225,26 +266,15 @@ export default function ManagerUserAccounts() {
                 </div>
               </div>
             ) : (
-              <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.target); handleSave({ id: modal.editing?.id, username: fd.get('username'), email: fd.get('email'), role: fd.get('role'), linkedStaff: fd.get('linkedStaff'), status: modal.editing?.status || 'Active' }); }}>
-                <input name="username" defaultValue={modal.editing?.username} placeholder="Username" className="w-full border rounded-lg p-3 my-2 text-sm" required />
+              <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.target); handleSave({ id: modal.editing?.id, username: fd.get('username'), email: fd.get('email'), role: fd.get('role'), status: modal.editing?.status || 'Active' }); }}>
+                <input name="username" defaultValue={modal.editing?.username} placeholder="Full Name" className="w-full border rounded-lg p-3 my-2 text-sm" required />
                 <input name="email" defaultValue={modal.editing?.email} placeholder="Email" className="w-full border rounded-lg p-3 my-2 text-sm" required />
                 <select name="role" defaultValue={modal.editing?.role || 'staffMember'} className="w-full border rounded-lg p-3 my-2 text-sm">
                   <option value="staffMember">Staff Member</option>
                   <option value="department">Department Staff</option>
                   <option value="manager">Manager</option>
                 </select>
-                {!modal.editing?.id && (
-                  <input
-                    type="password"
-                    value={temporaryPassword}
-                    onChange={e => setTemporaryPassword(e.target.value)}
-                    placeholder="Temporary Password"
-                    className="w-full border rounded-lg p-3 my-2 text-sm"
-                    required
-                  />
-                )}
-                <input name="linkedStaff" defaultValue={modal.editing?.linkedStaff} placeholder="Linked Staff Name" className="w-full border rounded-lg p-3 my-2 text-sm" />
-                <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-3 rounded-lg font-medium mt-2">{modal.editing?.id ? 'Update' : 'Create'} Account</button>
+                <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-3 rounded-lg font-medium mt-2">{modal.editing?.id ? 'Update Account' : 'Send Invite'}</button>
               </form>
             )}
           </div>

@@ -14,23 +14,25 @@ export async function POST(request) {
 
     const user = userData.user;
     const metadata = user.user_metadata || {};
+    const resolvedRole = metadata.role || fallback_role || "staff_member";
     const profile = {
       id: user.id,
       full_name: metadata.full_name || user.email,
       business_name: metadata.business_name || null,
+      host_admin_id: resolvedRole === "system_admin" ? user.id : metadata.host_admin_id || null,
       email: user.email,
-      role: metadata.role || fallback_role || "staff_member",
+      role: resolvedRole,
       status: "active",
     };
 
     const { error } = await supabase.from("profiles").upsert(profile);
     if (!error) return NextResponse.json({ profile });
 
-    const { business_name, ...profileWithoutBusinessName } = profile;
-    const { error: fallbackError } = await supabase.from("profiles").upsert(profileWithoutBusinessName);
+    const { business_name, host_admin_id, ...profileWithoutOwnership } = profile;
+    const { error: fallbackError } = await supabase.from("profiles").upsert(profileWithoutOwnership);
     if (fallbackError) return NextResponse.json({ error: fallbackError.message }, { status: 400 });
 
-    return NextResponse.json({ profile: profileWithoutBusinessName });
+    return NextResponse.json({ profile: profileWithoutOwnership });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

@@ -17,22 +17,63 @@ export default function AdminPanel() {
   const [showReset, setShowReset] = useState(null)
   const [showCreate, setShowCreate] = useState(null)
   const [statusChangeUser, setStatusChangeUser] = useState(null)
-  const [createForm, setCreateForm] = useState({ full_name: '', email: '', password: '', role: 'manager' })
+  const [createForm, setCreateForm] = useState({ full_name: '', email: '', role: 'manager' })
   const [resetPassword, setResetPassword] = useState('')
   const [params, setParams] = useState({ workloadThreshold: 3, proximityRadius: 10, priorityWeights: 10 })
   const [message, setMessage] = useState('')
   const [currentUserId, setCurrentUserId] = useState('')
+  const [currentBusinessName, setCurrentBusinessName] = useState('')
 
   const loadAdminData = async () => {
-    const [{ data: { user } }, { data: profiles }, { data: security }, { data: audit }, { data: systemParams }] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase.from('profiles').select('id,full_name,email,role,status,created_at').order('created_at', { ascending: false }),
+    const { data: { user } } = await supabase.auth.getUser()
+    let { data: currentProfile, error: currentProfileError } = await supabase
+      .from('profiles')
+      .select('business_name,host_admin_id')
+      .eq('id', user?.id)
+      .single()
+
+    if (currentProfileError) {
+      const fallbackProfile = await supabase
+        .from('profiles')
+        .select('business_name')
+        .eq('id', user?.id)
+        .single()
+      currentProfile = fallbackProfile.data
+    }
+
+    const businessName = currentProfile?.business_name || ''
+    const hostAdminId = currentProfile?.host_admin_id || user?.id || ''
+    const baseProfileSelect = 'id,full_name,email,role,status,created_at,business_name'
+    const hostProfileSelect = `${baseProfileSelect},host_admin_id`
+    const profileRequests = [
+      supabase.from('profiles').select(baseProfileSelect).eq('id', user?.id),
+    ]
+
+    if (hostAdminId) {
+      profileRequests.push(supabase.from('profiles').select(hostProfileSelect).eq('host_admin_id', hostAdminId))
+    }
+
+    if (businessName) {
+      profileRequests.push(supabase.from('profiles').select(baseProfileSelect).eq('business_name', businessName))
+    }
+
+    const [profileResults, { data: security }, { data: audit }, { data: systemParams }] = await Promise.all([
+      Promise.all(profileRequests),
       supabase.from('security_logs').select('id,email,event_type,details,created_at').order('created_at', { ascending: false }).limit(20),
       supabase.from('audit_logs').select('id,action,details,created_at,profiles(email)').order('created_at', { ascending: false }).limit(20),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
     ])
 
+    const profilesById = new Map()
+    profileResults.forEach(({ data, error }) => {
+      if (error) return
+      ;(data || []).forEach(profile => profilesById.set(profile.id, profile))
+    })
+    const profiles = Array.from(profilesById.values())
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+
     setCurrentUserId(user?.id || '')
+    setCurrentBusinessName(businessName)
     setUsers(profiles || [])
     setSecurityLogs(security || [])
     setAuditLogs(audit || [])
@@ -83,9 +124,9 @@ export default function AdminPanel() {
 
   const handleCreate = async (event) => {
     event.preventDefault()
-    const { full_name, email, password, role } = createForm
-    if (!full_name || !email || !password || !role) {
-      setMessage('Please fill in name, email, password, and role.')
+    const { full_name, email, role } = createForm
+    if (!full_name || !email || !role) {
+      setMessage('Please fill in name, email, and role.')
       return
     }
 
@@ -101,12 +142,17 @@ export default function AdminPanel() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ full_name, email, password, role }),
+      body: JSON.stringify({ full_name, email, role, business_name: currentBusinessName || undefined }),
     })
     const result = await response.json()
-    setMessage(response.ok ? 'User account created in Supabase.' : result.error)
-    if (response.ok) await loadAdminData()
-    if (response.ok) setCreateForm({ full_name: '', email: '', password: '', role: 'manager' })
+    if (!response.ok) {
+      setMessage(result.error || 'Invitation could not be sent.')
+      return
+    }
+
+    setMessage('Invitation sent. The user can set their own password from the email link.')
+    await loadAdminData()
+    setCreateForm({ full_name: '', email: '', role: 'manager' })
     setShowCreate(null)
   }
 
@@ -230,7 +276,8 @@ export default function AdminPanel() {
       {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleCreate} className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex justify-between"><h3 className="text-lg font-semibold">Create User Account</h3><button type="button" onClick={() => setShowCreate(null)}><X /></button></div>
+            <div className="flex justify-between"><h3 className="text-lg font-semibold">Invite User Account</h3><button type="button" onClick={() => setShowCreate(null)}><X /></button></div>
+            {message && <div className="mt-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
             <div className="space-y-3 mt-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Role</label>
@@ -246,11 +293,7 @@ export default function AdminPanel() {
                 <label className="text-sm font-medium text-gray-700">Email</label>
                 <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="name@example.com" />
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Temporary Password</label>
-                <input type="password" value={createForm.password} onChange={e => setCreateForm({ ...createForm, password: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Create temporary password" />
-              </div>
-              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Create Account</button>
+              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Send Invite</button>
             </div>
           </form>
         </div>

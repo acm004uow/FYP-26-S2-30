@@ -11,12 +11,28 @@ create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null,
   business_name text,
+  host_admin_id uuid references profiles(id) on delete set null,
   email text not null unique,
   role user_role not null,
   status text default 'active',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table profiles add column if not exists host_admin_id uuid references profiles(id) on delete set null;
+
+update profiles
+set host_admin_id = id
+where role = 'system_admin'
+  and host_admin_id is null;
+
+update profiles profile
+set host_admin_id = admin.id
+from profiles admin
+where profile.host_admin_id is null
+  and profile.business_name is not null
+  and admin.role = 'system_admin'
+  and admin.business_name = profile.business_name;
 
 create table if not exists staff_profiles (
   id uuid primary key default gen_random_uuid(),
@@ -211,14 +227,20 @@ declare
   requested_role user_role;
   requested_name text;
   requested_business_name text;
+  requested_host_admin_id uuid;
 begin
   requested_role := coalesce((new.raw_user_meta_data ->> 'role')::user_role, 'staff_member'::user_role);
 
   requested_name := coalesce(nullif(new.raw_user_meta_data ->> 'full_name', ''), new.email);
   requested_business_name := nullif(new.raw_user_meta_data ->> 'business_name', '');
+  requested_host_admin_id := nullif(new.raw_user_meta_data ->> 'host_admin_id', '')::uuid;
 
-  insert into public.profiles (id, full_name, business_name, email, role, status)
-  values (new.id, requested_name, requested_business_name, new.email, requested_role, 'active')
+  if requested_role = 'system_admin' and requested_host_admin_id is null then
+    requested_host_admin_id := new.id;
+  end if;
+
+  insert into public.profiles (id, full_name, business_name, host_admin_id, email, role, status)
+  values (new.id, requested_name, requested_business_name, requested_host_admin_id, new.email, requested_role, 'active')
   on conflict (id) do nothing;
 
   if requested_role = 'staff_member' then
