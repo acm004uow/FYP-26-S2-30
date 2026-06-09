@@ -147,6 +147,18 @@ export default function Layout({ children, role = 'manager' }) {
     .map(part => part[0]?.toUpperCase())
     .join('') || 'U'
 
+  const renderNavLink = (item, options = {}) => {
+    const isActive = router.pathname === item.path
+    return (
+      <Link key={item.path} href={item.path}
+        onClick={options.onClick}
+        className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition ${isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}>
+        <item.icon className="h-5 w-5 shrink-0" />
+        <span>{item.name}</span>
+      </Link>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
@@ -163,16 +175,6 @@ export default function Layout({ children, role = 'manager' }) {
                 <h1 className="text-base font-semibold text-gray-800 hidden sm:block">{businessName}</h1>
                 <p className="text-xs text-gray-400 hidden sm:block">{roleDisplay}</p>
               </div>
-            </div>
-
-            <div className="hidden lg:flex items-center gap-1">
-              {nav.map(item => (
-                <Link key={item.path} href={item.path}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-sm font-medium ${router.pathname === item.path ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}>
-                  <item.icon className="w-4 h-4" />
-                  {item.name}
-                </Link>
-              ))}
             </div>
 
             <div className="flex items-center gap-2">
@@ -260,21 +262,39 @@ export default function Layout({ children, role = 'manager' }) {
           </div>
         </div>
 
-        {mobileOpen && (
-          <div className="lg:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-1">
-            {nav.map(item => (
-              <Link key={item.path} href={item.path}
-                onClick={() => setMobileOpen(false)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
-                <item.icon className="w-5 h-5" />
-                {item.name}
-              </Link>
-            ))}
-          </div>
-        )}
       </nav>
 
-      <main>{children}</main>
+      <aside className="fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r border-gray-200 bg-white lg:block">
+        <div className="flex h-full flex-col px-4 py-5">
+          <div className="mb-4 px-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Navigation</p>
+          </div>
+          <div className="space-y-1">
+            {nav.map(item => renderNavLink(item))}
+          </div>
+        </div>
+      </aside>
+
+      {mobileOpen && (
+        <div className="fixed inset-0 top-16 z-30 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-gray-900/30"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation menu"
+          />
+          <aside className="relative h-full w-72 max-w-[85vw] border-r border-gray-200 bg-white px-4 py-5 shadow-xl">
+            <div className="mb-4 px-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Navigation</p>
+            </div>
+            <div className="space-y-1">
+              {nav.map(item => renderNavLink(item, { onClick: () => setMobileOpen(false) }))}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <main className="lg:pl-64">{children}</main>
       <Chatbot role={role} addNotification={addNotification} />
     </div>
   )
