@@ -47,7 +47,10 @@ export default function Chatbot({ role, addNotification }) {
         history: nextMessages.slice(-8),
       }),
     })
-    const data = await response.json()
+    const contentType = response.headers.get('content-type') || ''
+    const data = contentType.includes('application/json')
+      ? await response.json()
+      : { error: `Expected JSON from /api/chatbot but received ${contentType || 'a non-JSON response'}.` }
     if (!response.ok) throw new Error(data.error || 'Gemini request failed.')
     return data.reply
   }
@@ -66,9 +69,9 @@ export default function Chatbot({ role, addNotification }) {
       setMessages(prev => [...prev, { role: 'bot', content: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
       if (addNotification) addNotification(`Chatbot: ${reply.substring(0, 50)}...`)
     } catch (error) {
-      const errorReply = 'The assistant is temporarily unavailable. Please try again in a moment.'
+      const errorReply = `AI error: ${error.message}`
       setMessages(prev => [...prev, { role: 'bot', content: errorReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
-      if (addNotification) addNotification('Chatbot: Gemini connection failed.')
+      if (addNotification) addNotification(`Chatbot: ${error.message}`)
     } finally {
       setIsSending(false)
     }
