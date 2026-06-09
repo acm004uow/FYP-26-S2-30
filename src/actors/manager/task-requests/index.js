@@ -10,7 +10,7 @@ export default function ManagerTaskRequests() {
   const loadRequests = async () => {
     const { data } = await supabase
       .from('task_requests')
-      .select('id,title,location,priority,status,created_at,profiles(full_name,email)')
+      .select('id,created_by,title,location,priority,status,created_at,profiles(full_name,email)')
       .in('status', ['pending', 'approved', 'rejected'])
       .order('created_at', { ascending: false })
     setRequests(data || [])
@@ -23,6 +23,14 @@ export default function ManagerTaskRequests() {
   const handleReview = async (id, decision) => {
     const status = decision === 'Approved' ? 'approved' : 'rejected'
     const { error } = await supabase.from('task_requests').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+    const request = requests.find(item => item.id === id)
+    if (!error && request?.created_by) {
+      await supabase.from('notifications').insert({
+        user_id: request.created_by,
+        title: `Task request ${status}`,
+        message: `${request.title} was ${status} by the manager.`,
+      })
+    }
     await supabase.from('audit_logs').insert({ action: 'review_task_request', details: `Task ${id} ${status}` })
     setNotification(error ? error.message : `Task ${id.slice(0, 8)} ${decision}. Department staff notified.`)
     await loadRequests()

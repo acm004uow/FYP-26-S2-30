@@ -49,8 +49,41 @@ const compactStaff = (staff) => ({
   rating: staff.performance_rating || 0,
 })
 
-async function buildLiveContext(role) {
+async function buildLiveContext(role, userId) {
   const supabase = createSupabaseAdmin()
+
+  if (role === 'department') {
+    if (!userId) {
+      return JSON.stringify({
+        scope: 'department_task_context',
+        generated_at: new Date().toISOString(),
+        note: 'No authenticated department staff user was available.',
+      })
+    }
+
+    const { data: tasks } = await supabase
+      .from('task_requests')
+      .select('title,status,priority,required_skill,location,created_at,updated_at,scheduled_end,staff_profiles(staff_name)')
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+
+    const taskRows = tasks || []
+    return JSON.stringify({
+      scope: 'department_submitted_tasks_live_context',
+      generated_at: new Date().toISOString(),
+      summary: {
+        total_submitted_tasks: taskRows.length,
+        pending_tasks: taskRows.filter(task => task.status === 'pending').length,
+        approved_tasks: taskRows.filter(task => task.status === 'approved').length,
+        rejected_tasks: taskRows.filter(task => task.status === 'rejected').length,
+        completed_tasks: taskRows.filter(task => task.status === 'completed').length,
+        cancelled_tasks: taskRows.filter(task => task.status === 'cancelled').length,
+        urgent_tasks: taskRows.filter(task => String(task.priority).toLowerCase() === 'high').length,
+      },
+      submitted_tasks: taskRows.map(compactTask),
+    })
+  }
 
   if (role !== 'manager') {
     return JSON.stringify({
@@ -119,7 +152,14 @@ export default async function handler(req, res) {
     if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY is not configured.' })
 
     const normalizedRole = normalizeRole(role)
-    const liveContext = await buildLiveContext(normalizedRole)
+    const token = req.headers.authorization?.replace('Bearer ', '')
+    let userId = null
+    if (token) {
+      const supabase = createSupabaseAdmin()
+      const { data: authData } = await supabase.auth.getUser(token)
+      userId = authData?.user?.id || null
+    }
+    const liveContext = await buildLiveContext(normalizedRole, userId)
     const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
     const contents = cleanHistory(history)

@@ -4,9 +4,9 @@ import { useRouter } from 'next/router'
 import { ClipboardList, MapPin, Users, Calendar, AlertCircle, CheckCircle, Star, TrendingUp } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
 
-export default function TaskCreation() {
+export default function TaskCreation({ initialRole = 'manager' }) {
   const router = useRouter()
-  const role = router.query.role === 'dept' ? 'department' : 'manager'
+  const role = initialRole
   const [submitted, setSubmitted] = useState(false)
   const [allStaff, setAllStaff] = useState([])
   const [categories, setCategories] = useState(['Maintenance', 'Inspection', 'Cleaning', 'Delivery', 'Administration'])
@@ -74,13 +74,13 @@ export default function TaskCreation() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (!form.assignee && recommendations.length > 0) {
+    if (role === 'manager' && !form.assignee && recommendations.length > 0) {
       setError('Please select a staff member from recommendations.')
       return
     }
     const { data: { user } } = await supabase.auth.getUser()
     const scheduled_end = form.dueDate ? new Date(`${form.dueDate}T${form.dueTime || '23:59'}`).toISOString() : null
-    const { error: insertError } = await supabase.from('task_requests').insert({
+    const { data: createdTask, error: insertError } = await supabase.from('task_requests').insert({
       created_by: user?.id,
       title: form.title,
       description: form.description,
@@ -90,13 +90,23 @@ export default function TaskCreation() {
       estimated_hours: 1,
       instructions: form.notes,
       scheduled_end,
-      assigned_staff_id: form.assignee || null,
+      assigned_staff_id: role === 'manager' ? form.assignee || null : null,
       status: role === 'manager' ? 'approved' : 'pending',
-    })
+    }).select('id').single()
     await supabase.from('audit_logs').insert({ user_id: user?.id, action: 'create_task', details: form.title })
     if (insertError) {
       setError(insertError.message)
       return
+    }
+    if (createdTask?.id && recommendations.length > 0) {
+      await supabase.from('task_recommendations').insert(
+        recommendations.map(rec => ({
+          task_id: createdTask.id,
+          staff_id: rec.id,
+          score: rec.score,
+          reason: `${rec.available ? 'Available' : 'Unavailable'}; ${rec.skills.join(', ') || 'general skills'}; workload ${rec.workload}; rating ${rec.rating}`,
+        }))
+      )
     }
     setSubmitted(true)
     setTimeout(() => {
@@ -159,11 +169,11 @@ export default function TaskCreation() {
             {/* AI Recommendation Panel */}
             <div className="space-y-6">
               <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-purple-500" /> AI Recommendations</h3>
+                <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-purple-500" /> Staff Recommendations</h3>
                 {recommendations.length > 0 ? (
                   <div className="space-y-3">
                     {recommendations.map((rec, idx) => (
-                      <div key={rec.id} onClick={() => setForm({ ...form, assignee: rec.id.toString() })} className={`p-3 rounded-xl border-2 cursor-pointer transition ${form.assignee === rec.id.toString() ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-300 bg-gray-50'}`}>
+                      <div key={rec.id} onClick={() => role === 'manager' && setForm({ ...form, assignee: rec.id.toString() })} className={`p-3 rounded-xl border-2 transition ${role === 'manager' ? 'cursor-pointer' : ''} ${form.assignee === rec.id.toString() ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-300 bg-gray-50'}`}>
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-green-400 rounded-full flex items-center justify-center text-white text-xs font-bold">{rec.name.split(' ').map(n=>n[0]).join('')}</div>
                           <div className="flex-1"><p className="text-sm font-medium text-gray-800">{rec.name} <span className="text-xs text-gray-400">(Score: {rec.score})</span></p><p className="text-xs text-gray-500">{rec.role} • {rec.tasks} tasks • ⭐{rec.rating}</p></div>
@@ -173,13 +183,14 @@ export default function TaskCreation() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">Select a category and location to see AI recommendations.</p>
+                  <p className="text-sm text-gray-500">Select a category and location to see staff recommendations.</p>
                 )}
-                {form.assignee && <div className="mt-3 p-2 bg-green-50 text-green-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Staff selected</div>}
+                {role === 'manager' && form.assignee && <div className="mt-3 p-2 bg-green-50 text-green-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Staff selected</div>}
+                {role === 'department' && recommendations.length > 0 && <div className="mt-3 p-2 bg-blue-50 text-blue-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Recommendations will be sent with this request</div>}
               </div>
 
               <div className="space-y-3">
-                <button type="submit" className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md">Create & Assign Task</button>
+                <button type="submit" className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md">{role === 'manager' ? 'Create & Assign Task' : 'Submit Task Request'}</button>
                 <button type="button" onClick={() => router.push(role === 'manager' ? '/manager' : '/department')} className="w-full py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>
               </div>
             </div>
@@ -188,4 +199,12 @@ export default function TaskCreation() {
       </div>
     </Layout>
   )
+}
+
+export async function getServerSideProps({ query }) {
+  return {
+    props: {
+      initialRole: query.role === 'dept' ? 'department' : 'manager',
+    },
+  }
 }
