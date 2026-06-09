@@ -98,6 +98,28 @@ export default function TaskCreation({ initialRole = 'manager' }) {
       setError(insertError.message)
       return
     }
+    if (role === 'manager' && form.assignee && createdTask?.id) {
+      const { data: assignedStaff } = await supabase
+        .from('staff_profiles')
+        .select('user_id,staff_name,current_workload')
+        .eq('id', form.assignee)
+        .single()
+
+      if (assignedStaff) {
+        await supabase.from('staff_profiles').update({
+          current_workload: Number(assignedStaff.current_workload || 0) + 1,
+          updated_at: new Date().toISOString(),
+        }).eq('id', form.assignee)
+
+        if (assignedStaff.user_id) {
+          await supabase.from('notifications').insert({
+            user_id: assignedStaff.user_id,
+            title: 'New task assignment',
+            message: `${form.title} has been assigned to you.`,
+          })
+        }
+      }
+    }
     if (createdTask?.id && recommendations.length > 0) {
       await supabase.from('task_recommendations').insert(
         recommendations.map(rec => ({

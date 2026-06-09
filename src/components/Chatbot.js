@@ -27,7 +27,7 @@ export default function Chatbot({ role, addNotification }) {
   const messagesEndRef = useRef(null)
   const [messages, setMessages] = useState([{
     role: 'bot',
-    content: `Hello! I'm your AI assistant for ${roleNames[normalizedRole] || 'your dashboard'}. Ask me about tasks, accounts, reports, logs, or recommendations.`,
+    content: `Hello! I'm your AI assistant for ${roleNames[normalizedRole] || 'your dashboard'}`,
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }])
   const [input, setInput] = useState('')
