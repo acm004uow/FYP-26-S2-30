@@ -161,7 +161,10 @@ export default function Layout({ children, role = 'manager' }) {
     .join('') || 'U'
 
   const renderNavLink = (item, options = {}) => {
-    const isActive = router.pathname === item.path
+    const [itemPath, itemQuery] = item.path.split('?')
+    const isActive = itemQuery
+      ? router.pathname === itemPath && router.asPath.includes(itemQuery)
+      : router.pathname === itemPath && !(itemPath === '/admin' && router.asPath.includes('section='))
     return (
       <Link key={item.path} href={item.path}
         onClick={options.onClick}

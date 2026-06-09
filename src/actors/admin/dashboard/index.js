@@ -1,20 +1,15 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
-import { FileText, Menu, Settings, ShieldAlert, UserCog, UserPlus, X } from 'lucide-react'
+import { UserPlus, X } from 'lucide-react'
+import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
 import AuditLogsPanel from '../audit-logs/AuditLogsPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
 import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
 import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 
-const adminSections = [
-  { id: 'users', label: 'User Accounts', icon: UserCog },
-  { id: 'security', label: 'Security Logs', icon: ShieldAlert },
-  { id: 'audit', label: 'Audit Logs', icon: FileText },
-  { id: 'parameters', label: 'Global Parameters', icon: Settings },
-]
-
 export default function AdminPanel() {
+  const router = useRouter()
   const [users, setUsers] = useState([])
   const [securityLogs, setSecurityLogs] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
@@ -79,6 +74,12 @@ export default function AdminPanel() {
   useEffect(() => {
     loadAdminData()
   }, [])
+
+  useEffect(() => {
+    const validSections = ['users', 'security', 'audit', 'parameters']
+    const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
+    setActiveSection(validSections.includes(section) ? section : 'users')
+  }, [router.query.section])
 
   const handleCreate = async (event) => {
     event.preventDefault()
@@ -159,31 +160,6 @@ export default function AdminPanel() {
         <h1 className="text-2xl font-bold">System Administration</h1>
         <p className="text-gray-500 text-sm mb-6">Manage users, monitor security, and configure system settings.</p>
         {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
-
-        <div className="mb-6 rounded-xl border bg-white p-3 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex items-center gap-2 px-2 text-sm font-semibold text-gray-700">
-              <Menu className="h-5 w-5" />
-              Menu
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {adminSections.map(section => {
-                const SectionIcon = section.icon
-                return (
-                  <button
-                    key={section.id}
-                    type="button"
-                    onClick={() => setActiveSection(section.id)}
-                    className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${activeSection === section.id ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    <SectionIcon className="h-4 w-4" />
-                    {section.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
 
         <div>
           {activeSection === 'users' && (

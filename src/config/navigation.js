@@ -1,4 +1,4 @@
-import { Activity, ClipboardList, FileText, LayoutDashboard, Settings, Tags, UserCog, Users } from 'lucide-react'
+import { Activity, ClipboardList, FileText, LayoutDashboard, Settings, ShieldAlert, Tags, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
@@ -18,6 +18,9 @@ export const navMap = {
     { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
   ],
   admin: [
-    { name: 'Admin Panel', path: '/admin', icon: Settings },
+    { name: 'User Accounts', path: '/admin', icon: UserCog },
+    { name: 'Security Logs', path: '/admin?section=security', icon: ShieldAlert },
+    { name: 'Audit Logs', path: '/admin?section=audit', icon: FileText },
+    { name: 'Global Parameters', path: '/admin?section=parameters', icon: Settings },
   ],
 }
