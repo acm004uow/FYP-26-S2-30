@@ -180,7 +180,7 @@ export default function ManagerDashboard() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="font-semibold text-gray-800">Recent Tasks</h3>
-              <button onClick={() => router.push('/tasks/create')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
+              <button onClick={() => router.push('/manager-task-requests')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
             </div>
             <div className="divide-y divide-gray-50">
               {recentTaskRows.map(task => (
@@ -206,7 +206,7 @@ export default function ManagerDashboard() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="font-semibold text-gray-800">Staff Availability</h3>
-              <button onClick={() => router.push('/staff')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">Manage <ChevronRight className="w-3 h-3" /></button>
+              <button onClick={() => router.push('/manager-availability')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">Live view <ChevronRight className="w-3 h-3" /></button>
             </div>
             <div className="divide-y divide-gray-50">
               {staffRows.map(s => (
@@ -217,7 +217,7 @@ export default function ManagerDashboard() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800">{s.name}</p>
-                      <p className="text-xs text-gray-500">{s.role} • {s.tasks} active tasks</p>
+                      <p className="text-xs text-gray-500">{s.role} - {s.tasks} active tasks</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${staffStatusColor[s.status]}`}>{s.status}</span>

@@ -41,9 +41,16 @@ export default function Layout({ children, role = 'manager' }) {
   }
 
   useEffect(() => {
+    let notificationChannel = null
+    let cancelled = false
+
     async function loadSessionData() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (cancelled) return
+      if (!user) {
+        router.push('/login')
+        return
+      }
 
       const [{ data: profile }, { data: notificationRows }] = await Promise.all([
         supabase
@@ -58,6 +65,7 @@ export default function Layout({ children, role = 'manager' }) {
           .order('created_at', { ascending: false })
           .limit(10),
       ])
+      if (cancelled) return
 
       const resolvedProfile = profile || {
         full_name: user.user_metadata?.full_name || user.email,
@@ -73,6 +81,18 @@ export default function Layout({ children, role = 'manager' }) {
         return
       }
 
+      const expectedRoleMap = {
+        manager: 'manager',
+        department: 'department_staff',
+        staffMember: 'staff_member',
+        admin: 'system_admin',
+      }
+      const expectedRole = expectedRoleMap[role] || role
+      if (resolvedProfile.role && resolvedProfile.role !== expectedRole) {
+        router.push('/login')
+        return
+      }
+
       setProfileInfo(resolvedProfile)
       if (resolvedProfile.business_name) setBusinessName(resolvedProfile.business_name)
       setNotifications((notificationRows || []).map(item => ({
@@ -80,6 +100,23 @@ export default function Layout({ children, role = 'manager' }) {
         message: item.message,
         time: new Date(item.created_at).toLocaleString(),
       })))
+
+      notificationChannel = supabase
+        .channel(`notifications-${user.id}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          (payload) => {
+            const row = payload.new
+            setNotifications(prev => [{
+              id: row.id,
+              message: row.message,
+              time: new Date(row.created_at).toLocaleString(),
+            }, ...prev].slice(0, 10))
+          }
+        )
+        .subscribe()
+
     }
 
     loadSessionData()
@@ -94,8 +131,12 @@ export default function Layout({ children, role = 'manager' }) {
     }
 
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [role])
+    return () => {
+      cancelled = true
+      document.removeEventListener('mousedown', handleClickOutside)
+      if (notificationChannel) supabase.removeChannel(notificationChannel)
+    }
+  }, [role, router])
 
   const roleDisplay = roleDisplayMap[role]
   const profileRoleDisplay = profileRoleDisplayMap[profileInfo?.role || role] || roleDisplay

@@ -78,8 +78,21 @@ export default function StaffMemberDashboard() {
 
   const toggleAvailability = async () => {
     const next = availability === 'Available' ? 'unavailable' : 'available'
-    if (profile) await supabase.from('staff_profiles').update({ availability: next }).eq('id', profile.id)
+    if (profile) {
+      await supabase.from('staff_profiles').update({ availability: next, updated_at: new Date().toISOString() }).eq('id', profile.id)
+      const { data: managers } = await supabase.from('profiles').select('id').eq('role', 'manager').eq('status', 'active')
+      const nextLabel = next === 'available' ? 'available' : 'unavailable'
+      const notifications = (managers || []).map(manager => ({
+        user_id: manager.id,
+        title: 'Staff availability changed',
+        message: `${profile.staff_name || 'A staff member'} is now ${nextLabel}.`,
+      }))
+      if (notifications.length) await supabase.from('notifications').insert(notifications)
+      await supabase.from('audit_logs').insert({ action: 'update_availability', details: `${profile.staff_name || profile.id} set ${nextLabel}` })
+    }
     setAvailability(next === 'available' ? 'Available' : 'Unavailable')
+    setNotification(`Availability updated to ${next === 'available' ? 'Available' : 'Unavailable'}.`)
+    setTimeout(() => setNotification(null), 2000)
   }
 
   const avgRating = completedTasks.length

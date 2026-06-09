@@ -31,6 +31,32 @@ const cleanHistory = (messages = []) => messages
 const getLocalReply = (message, role) => {
   const normalizedMessage = message.toLowerCase();
 
+  if (role === "manager") {
+    if (normalizedMessage.includes("daily") && normalizedMessage.includes("report")) {
+      return "Open Reports, choose Daily, and generate the report to see today's task volume, completion rate, urgent requests, utilization, and top assigned staff.";
+    }
+
+    if (normalizedMessage.includes("weekly") && normalizedMessage.includes("report")) {
+      return "Open Reports, choose Weekly, and generate the report to review the last 7 days of tasks, pending work, utilization, ratings, and task categories.";
+    }
+
+    if (normalizedMessage.includes("monthly") && normalizedMessage.includes("report")) {
+      return "Open Reports, choose Monthly, and generate the report to review the last 30 days of operations and performance trends.";
+    }
+
+    if (normalizedMessage.includes("quick report") || normalizedMessage.includes("report")) {
+      return "Use Reports for daily, weekly, or monthly operational summaries. For a faster check, ask me for a daily report, weekly report, or monthly report.";
+    }
+
+    if (normalizedMessage.includes("allocation") || normalizedMessage.includes("status")) {
+      return "Check allocation status in Task Requests and the Manager Dashboard. Pending requests need review, approved tasks are ready or assigned, in-progress tasks are underway, and completed tasks are closed.";
+    }
+
+    if (normalizedMessage.includes("availability")) {
+      return "Open Availability to monitor real-time staff availability, workload, skills, regions, suspended staff, and scheduling changes.";
+    }
+  }
+
   if (role === "admin") {
     if (normalizedMessage.includes("reset") && normalizedMessage.includes("password")) {
       return "Open Admin Panel, find the user in User Accounts, choose Reset, enter a new temporary password, and confirm. The reset is recorded in Security Logs and Audit Logs.";
