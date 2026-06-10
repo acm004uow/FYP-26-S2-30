@@ -22,17 +22,43 @@ export default function ManagerTaskRequests() {
 
   const handleReview = async (id, decision) => {
     const status = decision === 'Approved' ? 'approved' : 'rejected'
-    const { error } = await supabase.from('task_requests').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
-    const request = requests.find(item => item.id === id)
-    if (!error && request?.created_by) {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('role,status')
+      .eq('id', user?.id)
+      .single()
+
+    if (managerProfile?.role !== 'manager' || managerProfile?.status !== 'active') {
+      setNotification('Only an active manager can approve or reject task requests.')
+      setTimeout(() => setNotification(null), 3000)
+      return
+    }
+
+    const { data: reviewedRequest, error } = await supabase
+      .from('task_requests')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('status', 'pending')
+      .select('id,created_by,title')
+      .maybeSingle()
+
+    if (!error && reviewedRequest?.created_by) {
       await supabase.from('notifications').insert({
-        user_id: request.created_by,
+        user_id: reviewedRequest.created_by,
         title: `Task request ${status}`,
-        message: `${request.title} was ${status} by the manager.`,
+        message: `${reviewedRequest.title} was ${status} by the manager.`,
       })
     }
-    await supabase.from('audit_logs').insert({ action: 'review_task_request', details: `Task ${id} ${status}` })
-    setNotification(error ? error.message : `Task ${id.slice(0, 8)} ${decision}. Department staff notified.`)
+    if (!error && reviewedRequest) {
+      await supabase.from('audit_logs').insert({ user_id: user?.id, action: 'review_task_request', details: `Task ${id} ${status}` })
+    }
+    const message = error
+      ? error.message
+      : reviewedRequest
+        ? `Task ${id.slice(0, 8)} ${decision}. Department staff notified.`
+        : 'This task request is no longer pending.'
+    setNotification(message)
     await loadRequests()
     setTimeout(() => setNotification(null), 3000)
   }

@@ -98,6 +98,70 @@ export default function TaskCreation({ initialRole = 'manager' }) {
       setError(insertError.message)
       return
     }
+    if (role === 'department' && createdTask?.id) {
+      let { data: requesterProfile, error: requesterProfileError } = await supabase
+        .from('profiles')
+        .select('full_name,email,business_name,host_admin_id')
+        .eq('id', user?.id)
+        .single()
+
+      if (requesterProfileError) {
+        const fallbackProfile = await supabase
+          .from('profiles')
+          .select('full_name,email,business_name')
+          .eq('id', user?.id)
+          .single()
+        requesterProfile = fallbackProfile.data
+      }
+
+      const managerQueries = []
+      if (requesterProfile?.host_admin_id) {
+        managerQueries.push(
+          supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'manager')
+            .eq('status', 'active')
+            .eq('host_admin_id', requesterProfile.host_admin_id)
+        )
+      }
+      if (requesterProfile?.business_name) {
+        managerQueries.push(
+          supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'manager')
+            .eq('status', 'active')
+            .eq('business_name', requesterProfile.business_name)
+        )
+      }
+      if (managerQueries.length === 0) {
+        managerQueries.push(
+          supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'manager')
+            .eq('status', 'active')
+        )
+      }
+
+      const managerResults = await Promise.all(managerQueries)
+      const managersById = new Map()
+      managerResults.forEach(({ data }) => {
+        ;(data || []).forEach(manager => managersById.set(manager.id, manager))
+      })
+
+      const requesterName = requesterProfile?.full_name || requesterProfile?.email || 'Department staff'
+      const managerNotifications = Array.from(managersById.values()).map(manager => ({
+        user_id: manager.id,
+        title: 'New task request',
+        message: `${requesterName} submitted ${form.title} for review.`,
+      }))
+
+      if (managerNotifications.length) {
+        await supabase.from('notifications').insert(managerNotifications)
+      }
+    }
     if (role === 'manager' && form.assignee && createdTask?.id) {
       const { data: assignedStaff } = await supabase
         .from('staff_profiles')
