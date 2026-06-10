@@ -45,47 +45,53 @@ export default function ManagerDashboard() {
   const [taskBarData, setTaskBarData] = useState([])
   const [pieData, setPieData] = useState([])
 
+  const loadDashboard = async () => {
+    const [{ data: staff }, { data: tasks }] = await Promise.all([
+      supabase.from('staff_profiles').select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,assigned_region,status,is_suspended').limit(8),
+      supabase.from('task_requests').select('id,title,location,status,priority,created_at,assigned_staff_id,staff_profiles(staff_name)').order('created_at', { ascending: false }).limit(30),
+    ])
+
+    const staffData = staff || []
+    const taskData = tasks || []
+    const activeTasks = taskData.filter(t => !['completed', 'cancelled', 'rejected'].includes(t.status))
+    const completedTasks = taskData.filter(t => t.status === 'completed')
+    const pendingTasks = taskData.filter(t => t.status === 'pending')
+
+    setStats([
+      { label: 'Total Staff', value: String(staffData.length), icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: `${staffData.filter(s => s.availability === 'available' && !s.is_suspended).length} available today` },
+      { label: 'Active Tasks', value: String(activeTasks.length), icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase' },
+      { label: 'Completed', value: String(completedTasks.length), icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'Recent records' },
+      { label: 'Pending', value: String(pendingTasks.length), icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention' },
+    ])
+    setRecentTaskRows(taskData.slice(0, 8).map(t => ({
+      id: t.id,
+      shortId: t.id.slice(0, 8),
+      title: t.title,
+      location: t.location,
+      assignedStaffId: t.assigned_staff_id,
+      assignee: t.staff_profiles?.staff_name || 'Unassigned',
+      rawStatus: t.status,
+      status: t.status === 'in_progress' ? 'In Progress' : t.status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()),
+      priority: t.priority,
+    })))
+    setStaffRows(staffData.map(s => ({
+      id: s.id,
+      userId: s.user_id,
+      name: s.staff_name,
+      role: s.skills?.[0] || 'Staff Member',
+      status: s.is_suspended ? 'On Leave' : s.availability === 'available' ? 'Available' : 'Busy',
+      tasks: s.current_workload || 0,
+      rating: s.performance_rating || 0,
+    })))
+    setTaskBarData(buildWeeklyTaskData(taskData))
+    setPieData([
+      { name: 'Completed', value: completedTasks.length, color: '#22c55e' },
+      { name: 'In Progress', value: taskData.filter(t => t.status === 'in_progress').length, color: '#3b82f6' },
+      { name: 'Pending', value: pendingTasks.length, color: '#f59e0b' },
+    ].filter(item => item.value > 0))
+  }
+
   useEffect(() => {
-    async function loadDashboard() {
-      const [{ data: staff }, { data: tasks }] = await Promise.all([
-        supabase.from('staff_profiles').select('id,staff_name,skills,availability,current_workload,performance_rating,assigned_region,status,is_suspended').limit(8),
-        supabase.from('task_requests').select('id,title,location,status,priority,created_at,staff_profiles(staff_name)').order('created_at', { ascending: false }).limit(30),
-      ])
-
-      const staffData = staff || []
-      const taskData = tasks || []
-      const activeTasks = taskData.filter(t => !['completed', 'cancelled', 'rejected'].includes(t.status))
-      const completedTasks = taskData.filter(t => t.status === 'completed')
-      const pendingTasks = taskData.filter(t => t.status === 'pending')
-
-      setStats([
-        { label: 'Total Staff', value: String(staffData.length), icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: `${staffData.filter(s => s.availability === 'available' && !s.is_suspended).length} available today` },
-        { label: 'Active Tasks', value: String(activeTasks.length), icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase' },
-        { label: 'Completed', value: String(completedTasks.length), icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'Recent records' },
-        { label: 'Pending', value: String(pendingTasks.length), icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention' },
-      ])
-      setRecentTaskRows(taskData.slice(0, 8).map(t => ({
-        id: t.id.slice(0, 8),
-        title: t.title,
-        location: t.location,
-        assignee: t.staff_profiles?.staff_name || 'Unassigned',
-        status: t.status === 'in_progress' ? 'In Progress' : t.status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()),
-        priority: t.priority,
-      })))
-      setStaffRows(staffData.map(s => ({
-        name: s.staff_name,
-        role: s.skills?.[0] || 'Staff Member',
-        status: s.is_suspended ? 'On Leave' : s.availability === 'available' ? 'Available' : 'Busy',
-        tasks: s.current_workload || 0,
-        rating: s.performance_rating || 0,
-      })))
-      setTaskBarData(buildWeeklyTaskData(taskData))
-      setPieData([
-        { name: 'Completed', value: completedTasks.length, color: '#22c55e' },
-        { name: 'In Progress', value: taskData.filter(t => t.status === 'in_progress').length, color: '#3b82f6' },
-        { name: 'Pending', value: pendingTasks.length, color: '#f59e0b' },
-      ].filter(item => item.value > 0))
-    }
     loadDashboard()
   }, [])
 
@@ -184,11 +190,14 @@ export default function ManagerDashboard() {
             </div>
             <div className="divide-y divide-gray-50">
               {recentTaskRows.map(task => (
-                <div key={task.id} className="p-4 hover:bg-gray-50 transition">
+                <div
+                  key={task.id}
+                  className="p-4 transition hover:bg-gray-50"
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono text-gray-400">{task.id}</span>
+                        <span className="text-xs font-mono text-gray-400">{task.shortId}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor[task.priority]}`}>{task.priority}</span>
                       </div>
                       <p className="text-sm font-medium text-gray-800 truncate">{task.title}</p>
@@ -210,7 +219,10 @@ export default function ManagerDashboard() {
             </div>
             <div className="divide-y divide-gray-50">
               {staffRows.map(s => (
-                <div key={s.name} className="p-4 hover:bg-gray-50 transition">
+                <div
+                  key={s.id}
+                  className="p-4 transition hover:bg-gray-50"
+                >
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-green-400 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
                       {s.name.split(' ').map(n => n[0]).join('')}
