@@ -21,6 +21,21 @@ const availabilityDot = {
   time_off: 'bg-gray-300',
 }
 
+const getTaskAssignedDate = (task) => {
+  const dateValue = task.scheduled_start || task.scheduledStartRaw || task.scheduled_end || task.scheduledEndRaw
+  return dateValue ? new Date(dateValue) : null
+}
+
+const isSameLocalDay = (first, second) => (
+  first &&
+  second &&
+  first.getFullYear() === second.getFullYear() &&
+  first.getMonth() === second.getMonth() &&
+  first.getDate() === second.getDate()
+)
+
+const isTaskAssignedToday = (task) => isSameLocalDay(getTaskAssignedDate(task), new Date())
+
 export default function StaffMemberDashboard() {
   const [availability, setAvailability] = useState('available')
   const [profile, setProfile] = useState(null)
@@ -42,8 +57,11 @@ export default function StaffMemberDashboard() {
     id: task.id,
     title: task.title,
     location: task.location,
+    scheduledStartRaw: task.scheduled_start,
+    scheduledEndRaw: task.scheduled_end,
     scheduledStart: task.scheduled_start ? new Date(task.scheduled_start).toLocaleString() : 'Not set',
     due: task.scheduled_end ? new Date(task.scheduled_end).toLocaleString() : 'No due date',
+    assignedDate: getTaskAssignedDate(task)?.toLocaleDateString() || 'Not scheduled',
     priority: task.priority,
     status: titleCase(task.status),
     rawStatus: task.status,
@@ -106,6 +124,12 @@ export default function StaffMemberDashboard() {
   }, [])
 
   const handleStartTask = async (taskId) => {
+    const task = myTasks.find(item => item.id === taskId)
+    if (!task || !isTaskAssignedToday(task)) {
+      setNotification('You can only start this task on its assigned day.')
+      setTimeout(() => setNotification(null), 3000)
+      return
+    }
     await supabase.from('task_requests').update({ status: 'in_progress', updated_at: new Date().toISOString() }).eq('id', taskId)
     await supabase.from('audit_logs').insert({ action: 'start_task', details: `Task ${taskId}` })
     await loadDashboard()
@@ -224,6 +248,75 @@ export default function StaffMemberDashboard() {
   const avgRating = completedTasks.length
     ? (completedTasks.reduce((sum, task) => sum + Number(task.rating || 0), 0) / completedTasks.length).toFixed(1)
     : Number(profile?.performance_rating || 0).toFixed(1)
+  const todayTasks = myTasks.filter(isTaskAssignedToday)
+  const otherActiveTasks = myTasks.filter(task => !isTaskAssignedToday(task))
+
+  const renderTaskCard = (task) => {
+    const canStartToday = isTaskAssignedToday(task)
+    return (
+      <div key={task.id} onClick={() => setSelectedTask(selectedTask?.id === task.id ? null : task)} className={`bg-white rounded-xl shadow-sm border-l-4 border border-gray-100 p-5 cursor-pointer hover:shadow-md transition ${priorityColor[task.priority] || priorityColor.Low}`}>
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-mono text-gray-400">{task.id.slice(0, 8)}</span>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[task.status] || statusColor.Pending}`}>{task.status}</span>
+              {canStartToday && task.status !== 'In Progress' && <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Today</span>}
+            </div>
+            <h3 className="font-semibold text-gray-800 text-sm">{task.title}</h3>
+            <div className="flex flex-wrap items-center gap-4 mt-2">
+              <span className="text-xs text-gray-500 flex items-center gap-1"><MapPin className="w-3 h-3" />{task.location}</span>
+              <span className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" />{task.due}</span>
+            </div>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${selectedTask?.id === task.id ? 'rotate-90' : ''}`} />
+        </div>
+        {selectedTask?.id === task.id && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-sm text-gray-600 mb-3">{task.description}</p>
+            <div className="grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
+              <p className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Assigned day: {task.assignedDate}</p>
+              <p className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Due: {task.due}</p>
+              <p className="flex items-center gap-1"><Route className="h-3.5 w-3.5" /> Travel time: {task.travelTime}</p>
+              <p>Requirement: {task.requiredSkill}</p>
+            </div>
+            <div className="my-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
+              <p className="font-medium text-gray-700">Instructions</p>
+              <p className="mt-1">{task.instructions}</p>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">Assigned by: {task.supervisor}</p>
+            <div className="flex gap-3">
+              {['Pending', 'Approved'].includes(task.status) && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleStartTask(task.id)
+                  }}
+                  disabled={!canStartToday}
+                  title={canStartToday ? 'Start task' : 'This task can only be started on its assigned day'}
+                  className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-500"
+                >
+                  {canStartToday ? 'Start Task' : 'Start on Assigned Day'}
+                </button>
+              )}
+              {task.status === 'In Progress' && (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleCompleteTask(task.id)
+                  }}
+                  className="flex-1 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg text-sm font-medium"
+                >
+                  Mark Complete
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <Layout role="staffMember">
@@ -271,44 +364,23 @@ export default function StaffMemberDashboard() {
         {activeTab === 'active' && (
           <div className="space-y-4">
             {myTasks.length === 0 && <div className="bg-white rounded-xl border p-8 text-center text-gray-400">No active tasks assigned.</div>}
-            {myTasks.map(task => (
-              <div key={task.id} onClick={() => setSelectedTask(selectedTask?.id === task.id ? null : task)} className={`bg-white rounded-xl shadow-sm border-l-4 border border-gray-100 p-5 cursor-pointer hover:shadow-md transition ${priorityColor[task.priority] || priorityColor.Low}`}>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs font-mono text-gray-400">{task.id.slice(0, 8)}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[task.status] || statusColor.Pending}`}>{task.status}</span>
-                    </div>
-                    <h3 className="font-semibold text-gray-800 text-sm">{task.title}</h3>
-                    <div className="flex items-center gap-4 mt-2">
-                      <span className="text-xs text-gray-500 flex items-center gap-1"><MapPin className="w-3 h-3" />{task.location}</span>
-                      <span className="text-xs text-gray-500 flex items-center gap-1"><Clock className="w-3 h-3" />{task.due}</span>
-                    </div>
-                  </div>
-                  <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${selectedTask?.id === task.id ? 'rotate-90' : ''}`} />
-                </div>
-                {selectedTask?.id === task.id && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <p className="text-sm text-gray-600 mb-3">{task.description}</p>
-                    <div className="grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
-                      <p className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Starts: {task.scheduledStart}</p>
-                      <p className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Due: {task.due}</p>
-                      <p className="flex items-center gap-1"><Route className="h-3.5 w-3.5" /> Travel time: {task.travelTime}</p>
-                      <p>Requirement: {task.requiredSkill}</p>
-                    </div>
-                    <div className="my-3 rounded-lg bg-gray-50 p-3 text-xs text-gray-600">
-                      <p className="font-medium text-gray-700">Instructions</p>
-                      <p className="mt-1">{task.instructions}</p>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-4">Assigned by: {task.supervisor}</p>
-                    <div className="flex gap-3">
-                      {['Pending', 'Approved'].includes(task.status) && <button onClick={() => handleStartTask(task.id)} className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium">Start Task</button>}
-                      {task.status === 'In Progress' && <button onClick={() => handleCompleteTask(task.id)} className="flex-1 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg text-sm font-medium">Mark Complete</button>}
-                    </div>
-                  </div>
-                )}
+            <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-gray-900">Today Tasks ({todayTasks.length})</h2>
+                <span className="text-xs text-gray-500">{new Date().toLocaleDateString()}</span>
               </div>
-            ))}
+              <div className="space-y-3">
+                {todayTasks.length === 0 && <div className="rounded-lg bg-white p-5 text-center text-sm text-gray-400">No tasks assigned for today.</div>}
+                {todayTasks.map(renderTaskCard)}
+              </div>
+            </div>
+
+            {otherActiveTasks.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="px-1 text-sm font-semibold text-gray-900">Other Active Tasks ({otherActiveTasks.length})</h2>
+                {otherActiveTasks.map(renderTaskCard)}
+              </div>
+            )}
           </div>
         )}
 
