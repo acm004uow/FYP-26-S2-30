@@ -35,10 +35,10 @@ const staffStatusColor = {
 export default function ManagerDashboard() {
   const router = useRouter()
   const [stats, setStats] = useState([
-    { label: 'Total Staff', value: '0', icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: '0 available today' },
-    { label: 'Active Tasks', value: '0', icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase' },
-    { label: 'Completed', value: '0', icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'All time' },
-    { label: 'Pending', value: '0', icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention' },
+    { label: 'Total Staff', value: '0', icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: '0 available today', path: '/staff' },
+    { label: 'Active Tasks', value: '0', icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase', path: '/manager-task-requests' },
+    { label: 'Completed', value: '0', icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'All time', path: '/manager-reports?section=completed' },
+    { label: 'Pending', value: '0', icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention', path: '/manager-task-requests' },
   ])
   const [recentTaskRows, setRecentTaskRows] = useState([])
   const [staffRows, setStaffRows] = useState([])
@@ -58,10 +58,10 @@ export default function ManagerDashboard() {
     const pendingTasks = taskData.filter(t => t.status === 'pending')
 
     setStats([
-      { label: 'Total Staff', value: String(staffData.length), icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: `${staffData.filter(s => s.availability === 'available' && !s.is_suspended).length} available today` },
-      { label: 'Active Tasks', value: String(activeTasks.length), icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase' },
-      { label: 'Completed', value: String(completedTasks.length), icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'Recent records' },
-      { label: 'Pending', value: String(pendingTasks.length), icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention' },
+      { label: 'Total Staff', value: String(staffData.length), icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: `${staffData.filter(s => s.availability === 'available' && !s.is_suspended).length} available today`, path: '/staff' },
+      { label: 'Active Tasks', value: String(activeTasks.length), icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase', path: '/manager-task-requests' },
+      { label: 'Completed', value: String(completedTasks.length), icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'Recent records', path: '/manager-reports?section=completed' },
+      { label: 'Pending', value: String(pendingTasks.length), icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention', path: '/manager-task-requests' },
     ])
     setRecentTaskRows(taskData.slice(0, 8).map(t => ({
       id: t.id,
@@ -140,7 +140,12 @@ export default function ManagerDashboard() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {stats.map(stat => (
-            <div key={stat.label} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <button
+              key={stat.label}
+              type="button"
+              onClick={() => router.push(stat.path)}
+              className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 text-left transition hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className={`w-10 h-10 ${stat.bg} rounded-xl flex items-center justify-center`}>
                   <stat.icon className={`w-5 h-5 ${stat.text}`} />
@@ -150,7 +155,7 @@ export default function ManagerDashboard() {
               <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
               <p className="text-sm font-medium text-gray-600">{stat.label}</p>
               <p className="text-xs text-gray-400 mt-1">{stat.sub}</p>
-            </div>
+            </button>
           ))}
         </div>
 
