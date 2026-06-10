@@ -31,6 +31,7 @@ export default function StaffMemberDashboard() {
   const [showProofModal, setShowProofModal] = useState(false)
   const [proofTask, setProofTask] = useState(null)
   const [proofFile, setProofFile] = useState(null)
+  const [proofError, setProofError] = useState('')
   const [notification, setNotification] = useState(null)
   const [uploadingProof, setUploadingProof] = useState(false)
   const [pendingAvailability, setPendingAvailability] = useState(null)
@@ -115,63 +116,79 @@ export default function StaffMemberDashboard() {
   const handleCompleteTask = (taskId) => {
     setProofTask(myTasks.find(t => t.id === taskId))
     setProofFile(null)
+    setProofError('')
     setShowProofModal(true)
   }
 
   const handleUploadProof = async () => {
-    if (!proofTask) return
+    if (!proofTask || uploadingProof) return
+    if (!profile?.id) {
+      setProofError('Staff profile is still loading. Please try again in a moment.')
+      return
+    }
+
+    setProofError('')
     setUploadingProof(true)
-    let proofUrl = null
-    let proofName = null
+    try {
+      let proofUrl = null
+      let proofName = null
 
-    if (proofFile) {
-      const safeName = proofFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-      const path = `${profile.id}/${proofTask.id}-${Date.now()}-${safeName}`
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('task-proofs')
-        .upload(path, proofFile, { upsert: false })
+      if (proofFile) {
+        const safeName = proofFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `${profile.id}/${proofTask.id}-${Date.now()}-${safeName}`
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('task-proofs')
+          .upload(path, proofFile, { upsert: false })
 
-      if (uploadError) {
-        setUploadingProof(false)
-        setNotification(uploadError.message)
-        setTimeout(() => setNotification(null), 3000)
-        return
+        if (uploadError) throw uploadError
+
+        const { data: publicUrlData } = supabase.storage.from('task-proofs').getPublicUrl(uploadData.path)
+        proofUrl = publicUrlData?.publicUrl
+        proofName = proofFile.name
       }
 
-      const { data: publicUrlData } = supabase.storage.from('task-proofs').getPublicUrl(uploadData.path)
-      proofUrl = publicUrlData?.publicUrl
-      proofName = proofFile.name
-    }
+      if (proofUrl) {
+        const { error: proofInsertError } = await supabase.from('task_proofs').insert({
+          task_id: proofTask.id,
+          staff_id: profile.id,
+          file_url: proofUrl,
+          file_name: proofName,
+        })
+        if (proofInsertError) throw proofInsertError
+      }
 
-    if (proofUrl) {
-      await supabase.from('task_proofs').insert({
-        task_id: proofTask.id,
-        staff_id: profile.id,
-        file_url: proofUrl,
-        file_name: proofName,
-      })
-    }
+      const { error: taskError } = await supabase
+        .from('task_requests')
+        .update({ status: 'completed', updated_at: new Date().toISOString() })
+        .eq('id', proofTask.id)
+        .eq('assigned_staff_id', profile.id)
+      if (taskError) throw taskError
 
-    await supabase.from('task_requests').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', proofTask.id)
-    await supabase.from('staff_profiles').update({
-      current_workload: Math.max(0, Number(profile.current_workload || 0) - 1),
-      updated_at: new Date().toISOString(),
-    }).eq('id', profile.id)
-    const { data: managers } = await supabase.from('profiles').select('id').eq('role', 'manager').eq('status', 'active')
-    const completionNotifications = (managers || []).map(manager => ({
-      user_id: manager.id,
-      title: 'Task completed',
-      message: `${profile.staff_name || 'A staff member'} completed ${proofTask.title}.`,
-    }))
-    if (completionNotifications.length) await supabase.from('notifications').insert(completionNotifications)
-    await supabase.from('audit_logs').insert({ action: 'complete_task', details: `Task ${proofTask.id}` })
-    await loadDashboard()
-    setUploadingProof(false)
-    setShowProofModal(false)
-    setProofTask(null)
-    setProofFile(null)
-    setNotification('Task completed.')
-    setTimeout(() => setNotification(null), 2000)
+      const { error: workloadError } = await supabase.from('staff_profiles').update({
+        current_workload: Math.max(0, Number(profile.current_workload || 0) - 1),
+        updated_at: new Date().toISOString(),
+      }).eq('id', profile.id)
+      if (workloadError) throw workloadError
+
+      const { data: managers } = await supabase.from('profiles').select('id').eq('role', 'manager').eq('status', 'active')
+      const completionNotifications = (managers || []).map(manager => ({
+        user_id: manager.id,
+        title: 'Task completed',
+        message: `${profile.staff_name || 'A staff member'} completed ${proofTask.title}.`,
+      }))
+      if (completionNotifications.length) await supabase.from('notifications').insert(completionNotifications)
+      await supabase.from('audit_logs').insert({ action: 'complete_task', details: `Task ${proofTask.id}` })
+      await loadDashboard()
+      setShowProofModal(false)
+      setProofTask(null)
+      setProofFile(null)
+      setNotification('Task completed.')
+      setTimeout(() => setNotification(null), 2000)
+    } catch (error) {
+      setProofError(error.message || 'Task could not be completed. Please try again.')
+    } finally {
+      setUploadingProof(false)
+    }
   }
 
   const updateAvailability = async (next) => {
@@ -325,10 +342,14 @@ export default function StaffMemberDashboard() {
       {showProofModal && proofTask && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-sm w-full p-6">
-            <div className="flex justify-between items-center mb-4"><h3 className="font-semibold">Confirm Completion</h3><button onClick={() => setShowProofModal(false)}><X className="w-5 h-5" /></button></div>
+            <div className="flex justify-between items-center mb-4"><h3 className="font-semibold">Confirm Completion</h3><button type="button" onClick={() => setShowProofModal(false)}><X className="w-5 h-5" /></button></div>
             <p className="text-sm text-gray-600 mb-4">Task: {proofTask.title}</p>
-            <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={event => setProofFile(event.target.files?.[0] || null)} className="mb-4 text-sm" />
-            <button onClick={handleUploadProof} disabled={uploadingProof} className="w-full py-2 bg-blue-500 text-white rounded-lg text-sm disabled:opacity-60">
+            <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={event => {
+              setProofFile(event.target.files?.[0] || null)
+              setProofError('')
+            }} className="mb-4 text-sm" />
+            {proofError && <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">{proofError}</div>}
+            <button type="button" onClick={handleUploadProof} disabled={uploadingProof} className="w-full py-2 bg-blue-500 text-white rounded-lg text-sm disabled:opacity-60">
               {uploadingProof ? 'Uploading...' : 'Complete Task'}
             </button>
           </div>

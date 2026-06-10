@@ -217,6 +217,20 @@ insert into storage.buckets (id, name, public)
 values ('task-proofs', 'task-proofs', true)
 on conflict (id) do nothing;
 
+do $$ begin
+  create policy "authenticated read task proof files" on storage.objects
+  for select using (bucket_id = 'task-proofs' and auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated upload task proof files" on storage.objects
+  for insert with check (bucket_id = 'task-proofs' and auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated update task proof files" on storage.objects
+  for update using (bucket_id = 'task-proofs' and auth.role() = 'authenticated')
+  with check (bucket_id = 'task-proofs' and auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+
 create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
