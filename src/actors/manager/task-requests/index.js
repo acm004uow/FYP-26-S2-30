@@ -222,9 +222,7 @@ export default function ManagerTaskRequests() {
                 <div className="flex justify-between items-start gap-4">
                   <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-mono text-gray-400">{req.id.slice(0, 8)}</span>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor[req.priority] || priorityColor.Medium}`}>{req.priority}</span>
-                      {req.status !== 'rejected' && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-600">Drop staff here</span>}
                     </div>
                     <h3 className="font-semibold text-gray-900">{req.title}</h3>
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{req.location}</p>
