@@ -1,15 +1,13 @@
 import Head from 'next/head'
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
-  ArrowLeft,
   ArrowRight,
   BarChart3,
   CalendarCheck,
   CheckCircle2,
   Clock3,
   FileCheck2,
-  Gauge,
   LayoutDashboard,
   LockKeyhole,
   MapPin,
@@ -18,7 +16,6 @@ import {
   Sparkles,
   UsersRound,
   Workflow,
-  X,
 } from 'lucide-react'
 
 const metrics = [
@@ -100,26 +97,22 @@ const features = [
   {
     icon: Sparkles,
     title: 'Smart recommendations',
-    accent: 'from-blue-500 to-green-500',
-    text: 'Match requests with staff based on availability, workload, proximity, skill fit, and priority.',
+    text: 'Match requests with staff based on availability, workload, proximity, skill fit, and priority, all weighted automatically.',
   },
   {
     icon: CalendarCheck,
     title: 'Live availability',
-    accent: 'from-green-500 to-emerald-500',
-    text: 'Give managers a clear view of who is available, unavailable, or on time off before assigning work.',
+    text: 'Give managers a clear view of who is available, unavailable, or on time off before confirming any work assignment.',
   },
   {
     icon: FileCheck2,
     title: 'Proof and feedback',
-    accent: 'from-blue-500 to-cyan-500',
-    text: 'Let staff update task status, upload completion proof, and receive performance feedback in one flow.',
+    text: 'Staff update task status, upload completion proof, and receive feedback. Managers close the loop with structured reports.',
   },
   {
     icon: ShieldCheck,
     title: 'Admin governance',
-    accent: 'from-green-500 to-blue-500',
-    text: 'Manage users, roles, password resets, security logs, audit logs, and allocation parameters.',
+    text: 'Manage users, roles, password resets, security logs, audit trails, and allocation parameters from a single admin panel.',
   },
 ]
 
@@ -170,10 +163,6 @@ const navItems = [
 export default function MarketingHome() {
   const [activeHero, setActiveHero] = useState(0)
   const [activeNav, setActiveNav] = useState('#features')
-  const [expandedFeature, setExpandedFeature] = useState(null)
-  const [expandedRole, setExpandedRole] = useState(null)
-  const featureCarouselRef = useRef(null)
-  const roleCarouselRef = useRef(null)
 
   useEffect(() => {
     const syncActiveNav = () => {
@@ -221,34 +210,6 @@ export default function MarketingHome() {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    if (!expandedRole && !expandedFeature) return
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setExpandedRole(null)
-        setExpandedFeature(null)
-      }
-    }
-
-    window.addEventListener('keydown', handleEscape)
-    return () => window.removeEventListener('keydown', handleEscape)
-  }, [expandedFeature, expandedRole])
-
-  const scrollFeatures = (direction) => {
-    featureCarouselRef.current?.scrollBy({
-      left: direction === 'left' ? -360 : 360,
-      behavior: 'smooth',
-    })
-  }
-
-  const scrollRoles = (direction) => {
-    roleCarouselRef.current?.scrollBy({
-      left: direction === 'left' ? -360 : 360,
-      behavior: 'smooth',
-    })
-  }
-
   const hero = heroScenarios[activeHero]
 
   return (
@@ -293,8 +254,8 @@ export default function MarketingHome() {
         }
       `}</style>
 
-      <main className="min-h-screen bg-slate-50 text-slate-950">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <main className="min-h-screen bg-[#f6f9fc] text-slate-950">
+        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
           <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
             <Link href="/" className="flex min-w-0 items-center gap-3">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-lg">
@@ -306,14 +267,14 @@ export default function MarketingHome() {
               </span>
             </Link>
 
-            <div className="hidden items-center rounded-full border border-slate-200 bg-white/90 p-1 text-sm font-semibold text-slate-600 shadow-lg shadow-slate-200/70 md:flex">
+            <div className="hidden items-center rounded-full border border-slate-200 bg-white/95 p-1 text-sm font-semibold text-slate-600 shadow-xl shadow-slate-200/80 md:flex">
               {navItems.map((item) => (
                 <a
                   key={item.href}
                   href={item.href}
                   onClick={() => setActiveNav(item.href)}
                   className={`group relative rounded-full px-6 py-3 transition ${
-                    activeNav === item.href ? 'bg-slate-100 text-slate-950' : 'hover:bg-slate-50 hover:text-slate-950'
+                    activeNav === item.href ? 'bg-slate-100 text-slate-950 shadow-sm' : 'hover:bg-slate-50 hover:text-slate-950'
                   }`}
                 >
                   <span
@@ -328,7 +289,7 @@ export default function MarketingHome() {
 
             <Link
               href="/login"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 text-sm font-bold text-white shadow-sm hover:from-blue-600 hover:to-green-600"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
             >
               Sign in
               <ArrowRight className="h-4 w-4" />
@@ -336,31 +297,39 @@ export default function MarketingHome() {
           </nav>
         </header>
 
-        <section className="overflow-hidden bg-white">
-          <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 py-14 sm:px-8 lg:grid-cols-[0.95fr_1.05fr] lg:py-20">
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-bold text-green-700">
-                <Gauge className="h-4 w-4" />
+        <section className="relative overflow-hidden bg-slate-950 text-white">
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(148,163,184,0.09)_1px,transparent_1px),linear-gradient(180deg,rgba(148,163,184,0.09)_1px,transparent_1px)] bg-[size:64px_64px]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(79,70,229,0.18),transparent_32%),radial-gradient(circle_at_82%_70%,rgba(34,197,94,0.14),transparent_30%)]" />
+          <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[0.9fr_1.1fr] lg:py-24">
+            <div className="relative">
+              <div className="mb-6 inline-flex items-center gap-2 font-mono text-xs font-bold uppercase tracking-[0.18em] text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 {hero.badge}
               </div>
-              <h1 key={hero.title} className="hero-copy-in max-w-3xl text-3xl font-extrabold leading-tight text-slate-950 sm:text-4xl lg:text-5xl">
-                {hero.title}
+              <h1 key={hero.title} className="hero-copy-in max-w-3xl text-4xl font-black leading-[1.04] tracking-tight text-white sm:text-5xl lg:text-6xl">
+                {activeHero === 0 ? (
+                  <>
+                    Assign the <span className="text-indigo-400">right staff</span> to every task, faster.
+                  </>
+                ) : (
+                  hero.title
+                )}
               </h1>
-              <p key={hero.description} className="hero-copy-in mt-6 max-w-2xl text-base leading-7 text-slate-600">
+              <p key={hero.description} className="hero-copy-in mt-6 max-w-xl text-base font-semibold leading-8 text-slate-400">
                 {hero.description}
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Link
                   href="/login"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-bold text-white shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:bg-indigo-500"
                 >
                   Open application
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 text-sm font-bold text-slate-800 hover:bg-slate-50"
+                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
                 >
                   Register system admin
                 </Link>
@@ -375,45 +344,43 @@ export default function MarketingHome() {
                     aria-label={`Show hero scenario ${index + 1}`}
                     className={`h-2.5 rounded-full transition-all duration-300 ${
                       activeHero === index
-                        ? 'w-10 bg-gradient-to-r from-blue-500 to-green-500'
-                        : 'w-2.5 bg-slate-300 hover:bg-slate-400'
+                        ? 'w-10 bg-white'
+                        : 'w-2.5 bg-white/20 hover:bg-white/40'
                     }`}
                   />
                 ))}
               </div>
 
-              <div className="mt-9 grid max-w-2xl grid-cols-3 gap-3">
+              <div className="mt-9 grid max-w-lg grid-cols-3 gap-3">
                 {metrics.map((metric) => (
-                  <div key={metric.label} className="rounded-lg border border-slate-200 bg-white p-4">
-                    <div className={`mb-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${metric.tone}`}>
-                      {metric.label}
-                    </div>
-                    <div className="text-2xl font-extrabold text-slate-950">{metric.value}</div>
+                  <div key={metric.label} className="border-l border-white/10 pl-5 first:border-l-0 first:pl-0">
+                    <div className="text-3xl font-black text-white">{metric.value}</div>
+                    <div className="mt-1 font-mono text-xs font-bold text-slate-500">{metric.label}</div>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="relative">
-              <div className="absolute -left-8 top-8 hidden h-24 w-24 rounded-lg bg-amber-100 lg:block" />
-              <div className="absolute -right-7 bottom-12 hidden h-28 w-28 rounded-lg bg-green-100 lg:block" />
-              <div key={hero.dashboardTitle} className="hero-card-in relative rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-200">
-                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div className="absolute -right-4 -top-4 hidden h-24 w-24 rounded-2xl bg-white/5 lg:block" />
+              <div className="absolute -bottom-5 left-8 hidden h-24 w-24 rounded-2xl bg-indigo-500/10 lg:block" />
+              <div key={hero.dashboardTitle} className="hero-card-in relative rounded-3xl border border-white/10 bg-white/8 shadow-2xl shadow-black/40 backdrop-blur">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
                   <div>
-                    <p className="text-sm font-bold text-slate-500">Manager dashboard</p>
-                    <h2 className="text-lg font-extrabold leading-tight">{hero.dashboardTitle}</h2>
+                    <p className="text-sm font-bold text-white">Manager dashboard</p>
+                    <h2 className="font-mono text-xs font-bold text-slate-500">{hero.dashboardTitle}</h2>
                   </div>
-                  <span className="rounded-lg bg-green-100 px-3 py-2 text-sm font-bold text-green-700">{hero.status}</span>
+                  <span className="rounded-lg bg-emerald-400/10 px-3 py-2 font-mono text-xs font-bold text-emerald-300">• {hero.status}</span>
                 </div>
 
                 <div className="grid gap-4 p-5 lg:grid-cols-[1.2fr_0.8fr]">
                   <div className="space-y-3">
                     {hero.tasks.map(([title, detail, priority, tone]) => (
-                      <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-sm">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                          <h3 className="font-extrabold text-slate-950">{title}</h3>
-                            <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-500">
+                            <h3 className="font-extrabold text-white">{title}</h3>
+                            <p className="mt-1 flex items-center gap-2 font-mono text-xs font-semibold text-slate-500">
                               <MapPin className="h-4 w-4" />
                               {detail}
                             </p>
@@ -424,14 +391,14 @@ export default function MarketingHome() {
                     ))}
                   </div>
 
-                  <div className="rounded-lg border border-slate-200 bg-slate-950 p-4 text-white">
+                  <div className="rounded-2xl border border-indigo-400/20 bg-indigo-600 p-4 text-white shadow-xl shadow-black/30">
                     <div className="mb-4 flex items-center justify-between">
-                      <h3 className="font-black">Recommendation</h3>
-                      <Sparkles className="h-5 w-5 text-amber-300" />
+                      <h3 className="font-mono text-xs font-black uppercase text-indigo-100">Best match</h3>
+                      <Sparkles className="h-5 w-5 text-indigo-100" />
                     </div>
-                    <div className="rounded-lg bg-white/10 p-4">
-                      <p className="text-sm font-bold text-slate-300">{hero.recommendation.label}</p>
-                      <p className="mt-1 text-xl font-extrabold">{hero.recommendation.name}</p>
+                    <div className="rounded-2xl bg-white/10 p-4">
+                      <p className="text-sm font-bold text-indigo-100">{hero.recommendation.label}</p>
+                      <p className="mt-1 text-2xl font-black">{hero.recommendation.name}</p>
                       <div className="mt-4 space-y-3 text-sm">
                         {hero.recommendation.rows.map(([label, value, tone]) => (
                           <div key={label} className="flex items-center justify-between">
@@ -441,7 +408,7 @@ export default function MarketingHome() {
                         ))}
                       </div>
                     </div>
-                    <button className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-white text-sm font-black text-slate-950">
+                    <button className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/15 text-sm font-black text-white shadow-sm transition hover:bg-white/20">
                       Approve assignment
                       <CheckCircle2 className="h-4 w-4" />
                     </button>
@@ -454,302 +421,134 @@ export default function MarketingHome() {
 
         <section id="features" className="mx-auto max-w-7xl scroll-mt-32 px-5 py-16 sm:px-8">
           <div className="max-w-2xl">
-            <p className="text-sm font-black uppercase text-blue-700">Core capabilities</p>
-            <h2 className="mt-3 text-2xl font-extrabold leading-tight text-slate-950 sm:text-3xl">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-indigo-600">Core capabilities</p>
+            <h2 className="mt-4 text-3xl font-extrabold leading-tight text-slate-950 sm:text-4xl">
               Built for busy teams that need clarity, not extra admin work.
             </h2>
           </div>
 
-          <div className="relative mt-8">
-            <div
-              ref={featureCarouselRef}
-              className="flex snap-x gap-5 overflow-x-auto scroll-smooth pb-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {features.map((feature, index) => {
-                const FeatureIcon = feature.icon
+          <div className="mt-14 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+            {features.map((feature) => {
+              const FeatureIcon = feature.icon
 
-                return (
-                  <button
-                    key={feature.title}
-                    type="button"
-                    onClick={() => setExpandedFeature(feature)}
-                    className="group min-h-[300px] w-[82vw] max-w-[390px] shrink-0 snap-center rounded-3xl border border-slate-200 bg-white p-8 text-left shadow-sm transition duration-300 hover:-translate-y-2 hover:rotate-1 hover:shadow-2xl hover:shadow-slate-200 focus:outline-none focus:ring-4 focus:ring-green-100 md:w-[360px]"
-                    style={{ transitionDelay: `${index * 35}ms` }}
-                  >
-                    <div
-                      className={`mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${feature.accent} text-white shadow-lg transition duration-300 group-hover:scale-110`}
-                    >
-                      <FeatureIcon className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-950">{feature.title}</h3>
-                    <p className="mt-5 min-h-[96px] text-sm font-semibold leading-7 text-slate-600">
-                      {feature.text}
-                    </p>
-                    <span className="mt-7 inline-flex text-sm font-black text-blue-600">
-                      View capability
-                      <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => scrollFeatures('left')}
-                aria-label="Scroll features left"
-                className="grid h-11 w-11 place-items-center rounded-full bg-slate-950 text-white shadow-lg transition hover:bg-slate-800"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollFeatures('right')}
-                aria-label="Scroll features right"
-                className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-r from-blue-500 to-green-500 text-white shadow-lg transition hover:from-blue-600 hover:to-green-600"
-              >
-                <ArrowRight className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          {expandedFeature && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-md">
-              <button
-                type="button"
-                className="absolute inset-0 h-full w-full cursor-default"
-                aria-label="Close capability details"
-                onClick={() => setExpandedFeature(null)}
-              />
-              <div className="relative w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-                <button
-                  type="button"
-                  onClick={() => setExpandedFeature(null)}
-                  aria-label="Close"
-                  className="absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
+              return (
+                <article
+                  key={feature.title}
+                  className="rounded-3xl border border-slate-200 bg-white p-7 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-indigo-100 hover:shadow-xl hover:shadow-slate-200/80"
                 >
-                  <X className="h-5 w-5" />
-                </button>
-                {(() => {
-                  const ExpandedFeatureIcon = expandedFeature.icon
-
-                  return (
-                    <>
-                      <div
-                        className={`mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${expandedFeature.accent} text-white shadow-lg`}
-                      >
-                        <ExpandedFeatureIcon className="h-8 w-8" />
-                      </div>
-                      <p className="text-sm font-black uppercase text-green-700">Core capability</p>
-                      <h3 className="mt-2 pr-10 text-2xl font-extrabold text-slate-950">{expandedFeature.title}</h3>
-                      <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
-                        {expandedFeature.text}
-                      </p>
-                      <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                        <p className="text-sm font-black uppercase text-blue-700">How it supports allocation</p>
-                        <p className="mt-3 leading-7 text-slate-600">
-                          This capability connects task requests, staff availability, manager decisions, and
-                          administrative controls so each assignment has clear context before it is approved.
-                        </p>
-                      </div>
-                      <Link
-                        href="/login"
-                        className="mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-black text-white hover:from-blue-600 hover:to-green-600"
-                      >
-                        Continue to login
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </>
-                  )
-                })()}
-              </div>
-            </div>
-          )}
+                  <div className="mb-7 grid h-12 w-12 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-indigo-600 shadow-sm">
+                    <FeatureIcon className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-base font-extrabold text-slate-950">{feature.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-slate-700">{feature.text}</p>
+                </article>
+              )
+            })}
+          </div>
         </section>
 
-        <section id="workflow" className="scroll-mt-32 border-y border-slate-200 bg-white">
-          <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
+        <section id="workflow" className="scroll-mt-32 bg-slate-50">
+          <div className="mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
             <div>
-              <p className="text-sm font-black uppercase text-green-700">Allocation workflow</p>
-              <h2 className="mt-3 text-2xl font-extrabold leading-tight sm:text-3xl">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-indigo-600">Allocation workflow</p>
+              <h2 className="mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
                 From request to proof of completion.
               </h2>
-              <p className="mt-5 leading-8 text-slate-600">
+              <p className="mt-5 max-w-lg leading-8 text-slate-700">
                 The system connects department requests, manager decisions, staff execution, and reporting without
                 scattering updates across separate tools.
               </p>
+              <Link
+                href="/login"
+                className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
+              >
+                See it in action
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
 
-            <div className="grid gap-4">
+            <div className="grid gap-9">
               {steps.map((step, index) => (
-                <div key={step} className="flex gap-4 rounded-lg border border-slate-200 bg-slate-50 p-5">
-                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white">
-                    {index + 1}
+                <div key={step} className="flex gap-5">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-950 font-mono text-xs font-black text-white shadow-md">
+                    {String(index + 1).padStart(2, '0')}
                   </span>
-                  <p className="pt-2 text-sm font-semibold leading-6 text-slate-700">{step}</p>
+                  <p className="pt-1 text-base font-semibold leading-7 text-slate-700">{step}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section id="roles" className="mx-auto max-w-7xl scroll-mt-32 px-5 py-16 sm:px-8">
+        <section id="roles" className="mx-auto max-w-7xl scroll-mt-32 px-5 py-20 sm:px-8">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div className="max-w-2xl">
-              <p className="text-sm font-black uppercase text-amber-700">Role-based workspace</p>
-              <h2 className="mt-3 text-2xl font-extrabold leading-tight sm:text-3xl">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-indigo-600">Role-based workspace</p>
+              <h2 className="mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
                 Every user sees the work that matters to them.
               </h2>
             </div>
             <Link
               href="/login"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-black text-slate-800 hover:bg-slate-50"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
             >
               Go to login
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          <div className="relative mt-8">
-            <div
-              ref={roleCarouselRef}
-              className="flex snap-x gap-5 overflow-x-auto scroll-smooth pb-6 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            >
-              {roles.map((role, index) => {
-                const RoleIcon = role.icon
+          <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {roles.map((role) => {
+              const RoleIcon = role.icon
 
-                return (
-                  <button
-                    key={role.title}
-                    type="button"
-                    onClick={() => setExpandedRole(role)}
-                    className="group min-h-[330px] w-[82vw] max-w-[390px] shrink-0 snap-center rounded-3xl border border-slate-200 bg-white p-8 text-left shadow-sm transition duration-300 hover:-translate-y-2 hover:rotate-1 hover:shadow-2xl hover:shadow-slate-200 focus:outline-none focus:ring-4 focus:ring-green-100 md:w-[360px]"
-                    style={{ transitionDelay: `${index * 35}ms` }}
-                  >
-                    <div
-                      className={`mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${role.accent} text-white shadow-lg transition duration-300 group-hover:scale-110`}
-                    >
-                      <RoleIcon className="h-8 w-8" />
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-950">{role.title}</h3>
-                    <p className="mt-4 min-h-[78px] text-sm font-semibold leading-6 text-slate-500">
-                      {role.summary}
-                    </p>
-                    <ul className="mt-6 space-y-3 text-sm font-bold text-slate-700">
-                      {role.points.map((point) => (
-                        <li key={point} className="flex gap-3">
-                          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
-                          <span>{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <span className="mt-7 inline-flex text-sm font-black text-blue-600">
-                      View role details
-                      <ArrowRight className="ml-2 h-4 w-4 transition group-hover:translate-x-1" />
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => scrollRoles('left')}
-                aria-label="Scroll roles left"
-                className="grid h-11 w-11 place-items-center rounded-full bg-slate-950 text-white shadow-lg transition hover:bg-slate-800"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollRoles('right')}
-                aria-label="Scroll roles right"
-                className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-r from-blue-500 to-green-500 text-white shadow-lg transition hover:from-blue-600 hover:to-green-600"
-              >
-                <ArrowRight className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
-
-          {expandedRole && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-md">
-              <button
-                type="button"
-                className="absolute inset-0 h-full w-full cursor-default"
-                aria-label="Close role details"
-                onClick={() => setExpandedRole(null)}
-              />
-              <div className="relative w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-                <button
-                  type="button"
-                  onClick={() => setExpandedRole(null)}
-                  aria-label="Close"
-                  className="absolute right-5 top-5 grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-700 transition hover:bg-slate-200"
+              return (
+                <article
+                  key={role.title}
+                  className="rounded-2xl border border-slate-200 bg-slate-50/80 p-6 transition duration-300 hover:-translate-y-1 hover:bg-white hover:shadow-xl hover:shadow-slate-200/80"
                 >
-                  <X className="h-5 w-5" />
-                </button>
-                {(() => {
-                  const ExpandedIcon = expandedRole.icon
-
-                  return (
-                    <>
-                      <div
-                        className={`mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br ${expandedRole.accent} text-white shadow-lg`}
-                      >
-                        <ExpandedIcon className="h-8 w-8" />
-                      </div>
-                      <p className="text-sm font-black uppercase text-green-700">Role workspace</p>
-                      <h3 className="mt-2 pr-10 text-2xl font-extrabold text-slate-950">{expandedRole.title}</h3>
-                      <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
-                        {expandedRole.summary}
-                      </p>
-                      <div className="mt-7 grid gap-3 sm:grid-cols-3">
-                        {expandedRole.points.map((point) => (
-                          <div key={point} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <CheckCircle2 className="h-5 w-5 text-green-600" />
-                            <p className="mt-3 text-sm font-black leading-6 text-slate-800">{point}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <Link
-                        href="/login"
-                        className="mt-8 inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-black text-white hover:from-blue-600 hover:to-green-600"
-                      >
-                        Continue to login
-                        <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </>
-                  )
-                })()}
-              </div>
-            </div>
-          )}
+                  <div className="mb-5 grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm">
+                    <RoleIcon className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-extrabold text-slate-950">{role.title}</h3>
+                  <p className="mt-3 min-h-[84px] text-sm leading-6 text-slate-700">{role.summary}</p>
+                  <ul className="mt-5 space-y-2 text-sm font-bold text-slate-950">
+                    {role.points.map((point) => (
+                      <li key={point} className="flex gap-2">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+                        <span>{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              )
+            })}
+          </div>
         </section>
 
         <section id="security" className="scroll-mt-32 bg-slate-950 text-white">
-          <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_0.9fr]">
+          <div className="mx-auto grid max-w-7xl gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[1fr_0.95fr]">
             <div>
-              <p className="text-sm font-black uppercase text-green-300">Governance included</p>
-              <h2 className="mt-3 text-2xl font-extrabold leading-tight sm:text-3xl">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-300">Governance included</p>
+              <h2 className="mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
                 Admin controls for real workplace accountability.
               </h2>
-              <p className="mt-5 max-w-2xl leading-8 text-slate-300">
+              <p className="mt-5 max-w-xl leading-8 text-slate-400">
                 System admins can create accounts, manage permissions, reset passwords, configure allocation
-                parameters, and review security or audit activity.
+                parameters, and review security or audit activity, all in one place.
               </p>
             </div>
 
-            <div className="grid gap-3">
+            <div className="grid gap-4">
               {[
                 [BarChart3, 'Daily, weekly, and monthly reports'],
                 [MessageSquareText, 'Built-in chatbot support for quick operational questions'],
                 [Clock3, 'Availability and task status updates in near real time'],
                 [ShieldCheck, 'Security logs and audit logs for admin review'],
               ].map(([Icon, label]) => (
-                <div key={label} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/10 p-4">
-                  <Icon className="h-5 w-5 shrink-0 text-green-300" />
+                <div key={label} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-5 transition hover:bg-white/10">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-400/10 text-emerald-300">
+                    <Icon className="h-5 w-5" />
+                  </span>
                   <span className="font-bold">{label}</span>
                 </div>
               ))}
@@ -765,7 +564,7 @@ export default function MarketingHome() {
             </div>
             <Link
               href="/login"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white hover:bg-blue-700"
+              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-black text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
             >
               Launch Smart Task Allocation
               <ArrowRight className="h-4 w-4" />
