@@ -163,6 +163,7 @@ const navItems = [
 export default function MarketingHome() {
   const [activeHero, setActiveHero] = useState(0)
   const [activeNav, setActiveNav] = useState('#features')
+  const [activeStep, setActiveStep] = useState(0)
 
   useEffect(() => {
     const syncActiveNav = () => {
@@ -469,12 +470,21 @@ export default function MarketingHome() {
 
             <div className="grid gap-9">
               {steps.map((step, index) => (
-                <div key={step} className="flex gap-5">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-950 font-mono text-xs font-black text-white shadow-md">
+                <button
+                  key={step}
+                  type="button"
+                  onClick={() => setActiveStep(index)}
+                  className={`group flex w-full gap-5 rounded-xl p-4 text-left transition ${
+                    activeStep === index ? 'bg-indigo-50 shadow-sm' : 'hover:bg-white/70'
+                  }`}
+                >
+                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-950 font-mono text-xs font-black text-white transition ${
+                    activeStep === index ? 'shadow-lg shadow-slate-300' : 'shadow-md group-hover:shadow-lg'
+                  }`}>
                     {String(index + 1).padStart(2, '0')}
                   </span>
                   <p className="pt-1 text-base font-semibold leading-7 text-slate-700">{step}</p>
-                </div>
+                </button>
               ))}
             </div>
           </div>
