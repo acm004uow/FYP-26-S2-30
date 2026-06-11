@@ -187,6 +187,33 @@ export default function MarketingHome() {
   }, [])
 
   useEffect(() => {
+    const sections = navItems
+      .map((item) => document.querySelector(item.href))
+      .filter(Boolean)
+
+    if (!sections.length) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntries = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)
+
+        if (visibleEntries[0]) {
+          setActiveNav(`#${visibleEntries[0].target.id}`)
+        }
+      },
+      {
+        rootMargin: '-28% 0px -58% 0px',
+        threshold: [0.1, 0.35, 0.6],
+      }
+    )
+
+    sections.forEach((section) => observer.observe(section))
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setActiveHero((current) => (current + 1) % heroScenarios.length)
     }, 5500)
@@ -425,7 +452,7 @@ export default function MarketingHome() {
           </div>
         </section>
 
-        <section id="features" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+        <section id="features" className="mx-auto max-w-7xl scroll-mt-32 px-5 py-16 sm:px-8">
           <div className="max-w-2xl">
             <p className="text-sm font-black uppercase text-blue-700">Core capabilities</p>
             <h2 className="mt-3 text-2xl font-extrabold leading-tight text-slate-950 sm:text-3xl">
@@ -541,7 +568,7 @@ export default function MarketingHome() {
           )}
         </section>
 
-        <section id="workflow" className="border-y border-slate-200 bg-white">
+        <section id="workflow" className="scroll-mt-32 border-y border-slate-200 bg-white">
           <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
             <div>
               <p className="text-sm font-black uppercase text-green-700">Allocation workflow</p>
@@ -567,7 +594,7 @@ export default function MarketingHome() {
           </div>
         </section>
 
-        <section id="roles" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
+        <section id="roles" className="mx-auto max-w-7xl scroll-mt-32 px-5 py-16 sm:px-8">
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div className="max-w-2xl">
               <p className="text-sm font-black uppercase text-amber-700">Role-based workspace</p>
@@ -701,7 +728,7 @@ export default function MarketingHome() {
           )}
         </section>
 
-        <section id="security" className="bg-slate-950 text-white">
+        <section id="security" className="scroll-mt-32 bg-slate-950 text-white">
           <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_0.9fr]">
             <div>
               <p className="text-sm font-black uppercase text-green-300">Governance included</p>
