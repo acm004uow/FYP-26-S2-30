@@ -27,6 +27,75 @@ const metrics = [
   { label: 'Completed today', value: '31', tone: 'bg-green-50 text-green-700' },
 ]
 
+const heroScenarios = [
+  {
+    badge: 'Allocation decisions with operational context',
+    title: 'Assign the right staff to the right task faster.',
+    description:
+      'Smart Task Allocation gives SMEs a practical control center for task requests, staff availability, workload balance, reporting, and role-based administration.',
+    dashboardTitle: "Today's allocation queue",
+    status: 'Live',
+    tasks: [
+      ['Urgent room setup', '12 min away', 'High', 'bg-red-50 text-red-700'],
+      ['Inventory count', '3 staff matched', 'Medium', 'bg-amber-50 text-amber-700'],
+      ['Customer support desk', 'Best fit: Aye Chan', 'Normal', 'bg-blue-50 text-blue-700'],
+    ],
+    recommendation: {
+      label: 'Best match',
+      name: 'Aye Chan',
+      rows: [
+        ['Availability', 'Available', 'text-green-300'],
+        ['Workload', '2 tasks', 'text-white'],
+        ['Travel time', '8 min', 'text-white'],
+      ],
+    },
+  },
+  {
+    badge: 'Availability updates before every assignment',
+    title: 'See capacity before you approve the next request.',
+    description:
+      'Managers can compare who is free, who is already busy, and who is on time off before confirming work.',
+    dashboardTitle: 'Live staff availability',
+    status: 'Updated',
+    tasks: [
+      ['Morning stock check', '4 staff available', 'Open', 'bg-green-50 text-green-700'],
+      ['Front desk support', '2 staff nearby', 'Medium', 'bg-amber-50 text-amber-700'],
+      ['Delivery handover', '1 staff matched', 'Normal', 'bg-blue-50 text-blue-700'],
+    ],
+    recommendation: {
+      label: 'Available now',
+      name: 'Myo Thant',
+      rows: [
+        ['Availability', 'Available', 'text-green-300'],
+        ['Workload', '1 task', 'text-white'],
+        ['Distance', '5 min', 'text-white'],
+      ],
+    },
+  },
+  {
+    badge: 'Proof, feedback, and reporting in one loop',
+    title: 'Close each task with evidence and clear reporting.',
+    description:
+      'Staff can update progress and upload proof while managers review completion history and generate reports.',
+    dashboardTitle: 'Completion review',
+    status: 'Ready',
+    tasks: [
+      ['Service counter setup', 'Proof uploaded', 'Done', 'bg-green-50 text-green-700'],
+      ['Storage audit', 'Feedback pending', 'Review', 'bg-amber-50 text-amber-700'],
+      ['Customer support desk', 'In progress', 'Active', 'bg-blue-50 text-blue-700'],
+    ],
+    recommendation: {
+      label: 'Report focus',
+      name: '31 tasks',
+      rows: [
+        ['Completed today', '31', 'text-green-300'],
+        ['Pending review', '4', 'text-white'],
+        ['Avg response', '9 min', 'text-white'],
+      ],
+    },
+  },
+]
+
 const features = [
   {
     icon: Sparkles,
@@ -99,6 +168,7 @@ const navItems = [
 ]
 
 export default function MarketingHome() {
+  const [activeHero, setActiveHero] = useState(0)
   const [activeNav, setActiveNav] = useState('#features')
   const [expandedFeature, setExpandedFeature] = useState(null)
   const [expandedRole, setExpandedRole] = useState(null)
@@ -114,6 +184,14 @@ export default function MarketingHome() {
     syncActiveNav()
     window.addEventListener('hashchange', syncActiveNav)
     return () => window.removeEventListener('hashchange', syncActiveNav)
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveHero((current) => (current + 1) % heroScenarios.length)
+    }, 5500)
+
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
@@ -144,6 +222,8 @@ export default function MarketingHome() {
     })
   }
 
+  const hero = heroScenarios[activeHero]
+
   return (
     <>
       <Head>
@@ -153,6 +233,38 @@ export default function MarketingHome() {
           content="Smart Task Allocation helps SMEs assign work using availability, workload, proximity, priority, and role-based governance."
         />
       </Head>
+
+      <style jsx global>{`
+        @keyframes hero-copy-in {
+          from {
+            opacity: 0;
+            transform: translateY(14px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes hero-card-in {
+          from {
+            opacity: 0;
+            transform: translateX(34px) scale(0.97);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
+        }
+
+        .hero-copy-in {
+          animation: hero-copy-in 520ms ease both;
+        }
+
+        .hero-card-in {
+          animation: hero-card-in 560ms ease both;
+        }
+      `}</style>
 
       <main className="min-h-screen bg-slate-50 text-slate-950">
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -202,14 +314,13 @@ export default function MarketingHome() {
             <div>
               <div className="mb-5 inline-flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm font-bold text-green-700">
                 <Gauge className="h-4 w-4" />
-                Allocation decisions with operational context
+                {hero.badge}
               </div>
-              <h1 className="max-w-3xl text-4xl font-black leading-tight text-slate-950 sm:text-5xl lg:text-6xl">
-                Assign the right staff to the right task faster.
+              <h1 key={hero.title} className="hero-copy-in max-w-3xl text-3xl font-extrabold leading-tight text-slate-950 sm:text-4xl lg:text-5xl">
+                {hero.title}
               </h1>
-              <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
-                Smart Task Allocation gives SMEs a practical control center for task requests, staff availability,
-                workload balance, reporting, and role-based administration.
+              <p key={hero.description} className="hero-copy-in mt-6 max-w-2xl text-base leading-7 text-slate-600">
+                {hero.description}
               </p>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -228,13 +339,29 @@ export default function MarketingHome() {
                 </Link>
               </div>
 
+              <div className="mt-7 flex items-center gap-3">
+                {heroScenarios.map((scenario, index) => (
+                  <button
+                    key={scenario.title}
+                    type="button"
+                    onClick={() => setActiveHero(index)}
+                    aria-label={`Show hero scenario ${index + 1}`}
+                    className={`h-2.5 rounded-full transition-all duration-300 ${
+                      activeHero === index
+                        ? 'w-10 bg-gradient-to-r from-blue-500 to-green-500'
+                        : 'w-2.5 bg-slate-300 hover:bg-slate-400'
+                    }`}
+                  />
+                ))}
+              </div>
+
               <div className="mt-9 grid max-w-2xl grid-cols-3 gap-3">
                 {metrics.map((metric) => (
                   <div key={metric.label} className="rounded-lg border border-slate-200 bg-white p-4">
                     <div className={`mb-2 inline-flex rounded-lg px-2 py-1 text-xs font-bold ${metric.tone}`}>
                       {metric.label}
                     </div>
-                    <div className="text-3xl font-black text-slate-950">{metric.value}</div>
+                    <div className="text-2xl font-extrabold text-slate-950">{metric.value}</div>
                   </div>
                 ))}
               </div>
@@ -243,26 +370,22 @@ export default function MarketingHome() {
             <div className="relative">
               <div className="absolute -left-8 top-8 hidden h-24 w-24 rounded-lg bg-amber-100 lg:block" />
               <div className="absolute -right-7 bottom-12 hidden h-28 w-28 rounded-lg bg-green-100 lg:block" />
-              <div className="relative rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-200">
+              <div key={hero.dashboardTitle} className="hero-card-in relative rounded-lg border border-slate-200 bg-white shadow-2xl shadow-slate-200">
                 <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
                   <div>
                     <p className="text-sm font-bold text-slate-500">Manager dashboard</p>
-                    <h2 className="text-xl font-black leading-tight">Today&apos;s allocation queue</h2>
+                    <h2 className="text-lg font-extrabold leading-tight">{hero.dashboardTitle}</h2>
                   </div>
-                  <span className="rounded-lg bg-green-100 px-3 py-2 text-sm font-bold text-green-700">Live</span>
+                  <span className="rounded-lg bg-green-100 px-3 py-2 text-sm font-bold text-green-700">{hero.status}</span>
                 </div>
 
                 <div className="grid gap-4 p-5 lg:grid-cols-[1.2fr_0.8fr]">
                   <div className="space-y-3">
-                    {[
-                      ['Urgent room setup', '12 min away', 'High', 'bg-red-50 text-red-700'],
-                      ['Inventory count', '3 staff matched', 'Medium', 'bg-amber-50 text-amber-700'],
-                      ['Customer support desk', 'Best fit: Aye Chan', 'Normal', 'bg-blue-50 text-blue-700'],
-                    ].map(([title, detail, priority, tone]) => (
+                    {hero.tasks.map(([title, detail, priority, tone]) => (
                       <div key={title} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <h3 className="font-black text-slate-950">{title}</h3>
+                          <h3 className="font-extrabold text-slate-950">{title}</h3>
                             <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-slate-500">
                               <MapPin className="h-4 w-4" />
                               {detail}
@@ -280,21 +403,15 @@ export default function MarketingHome() {
                       <Sparkles className="h-5 w-5 text-amber-300" />
                     </div>
                     <div className="rounded-lg bg-white/10 p-4">
-                      <p className="text-sm font-bold text-slate-300">Best match</p>
-                      <p className="mt-1 text-2xl font-black">Aye Chan</p>
+                      <p className="text-sm font-bold text-slate-300">{hero.recommendation.label}</p>
+                      <p className="mt-1 text-xl font-extrabold">{hero.recommendation.name}</p>
                       <div className="mt-4 space-y-3 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span>Availability</span>
-                          <span className="font-bold text-green-300">Available</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Workload</span>
-                          <span className="font-bold">2 tasks</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span>Travel time</span>
-                          <span className="font-bold">8 min</span>
-                        </div>
+                        {hero.recommendation.rows.map(([label, value, tone]) => (
+                          <div key={label} className="flex items-center justify-between">
+                            <span>{label}</span>
+                            <span className={`font-bold ${tone}`}>{value}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <button className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-white text-sm font-black text-slate-950">
@@ -311,7 +428,7 @@ export default function MarketingHome() {
         <section id="features" className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
           <div className="max-w-2xl">
             <p className="text-sm font-black uppercase text-blue-700">Core capabilities</p>
-            <h2 className="mt-3 text-3xl font-black leading-tight text-slate-950 sm:text-4xl">
+            <h2 className="mt-3 text-2xl font-extrabold leading-tight text-slate-950 sm:text-3xl">
               Built for busy teams that need clarity, not extra admin work.
             </h2>
           </div>
@@ -337,8 +454,8 @@ export default function MarketingHome() {
                     >
                       <FeatureIcon className="h-8 w-8" />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-950">{feature.title}</h3>
-                    <p className="mt-5 min-h-[104px] text-base font-semibold leading-8 text-slate-600">
+                    <h3 className="text-xl font-extrabold text-slate-950">{feature.title}</h3>
+                    <p className="mt-5 min-h-[96px] text-sm font-semibold leading-7 text-slate-600">
                       {feature.text}
                     </p>
                     <span className="mt-7 inline-flex text-sm font-black text-blue-600">
@@ -398,8 +515,8 @@ export default function MarketingHome() {
                         <ExpandedFeatureIcon className="h-8 w-8" />
                       </div>
                       <p className="text-sm font-black uppercase text-green-700">Core capability</p>
-                      <h3 className="mt-2 pr-10 text-3xl font-black text-slate-950">{expandedFeature.title}</h3>
-                      <p className="mt-4 max-w-2xl text-base font-semibold leading-8 text-slate-600">
+                      <h3 className="mt-2 pr-10 text-2xl font-extrabold text-slate-950">{expandedFeature.title}</h3>
+                      <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
                         {expandedFeature.text}
                       </p>
                       <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -428,7 +545,7 @@ export default function MarketingHome() {
           <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[0.8fr_1.2fr]">
             <div>
               <p className="text-sm font-black uppercase text-green-700">Allocation workflow</p>
-              <h2 className="mt-3 text-3xl font-black leading-tight sm:text-4xl">
+              <h2 className="mt-3 text-2xl font-extrabold leading-tight sm:text-3xl">
                 From request to proof of completion.
               </h2>
               <p className="mt-5 leading-8 text-slate-600">
@@ -443,7 +560,7 @@ export default function MarketingHome() {
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-sm font-black text-white">
                     {index + 1}
                   </span>
-                  <p className="pt-2 text-base font-semibold leading-7 text-slate-700">{step}</p>
+                  <p className="pt-2 text-sm font-semibold leading-6 text-slate-700">{step}</p>
                 </div>
               ))}
             </div>
@@ -454,7 +571,7 @@ export default function MarketingHome() {
           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
             <div className="max-w-2xl">
               <p className="text-sm font-black uppercase text-amber-700">Role-based workspace</p>
-              <h2 className="mt-3 text-3xl font-black leading-tight sm:text-4xl">
+              <h2 className="mt-3 text-2xl font-extrabold leading-tight sm:text-3xl">
                 Every user sees the work that matters to them.
               </h2>
             </div>
@@ -488,7 +605,7 @@ export default function MarketingHome() {
                     >
                       <RoleIcon className="h-8 w-8" />
                     </div>
-                    <h3 className="text-2xl font-black text-slate-950">{role.title}</h3>
+                    <h3 className="text-xl font-extrabold text-slate-950">{role.title}</h3>
                     <p className="mt-4 min-h-[78px] text-sm font-semibold leading-6 text-slate-500">
                       {role.summary}
                     </p>
@@ -557,8 +674,8 @@ export default function MarketingHome() {
                         <ExpandedIcon className="h-8 w-8" />
                       </div>
                       <p className="text-sm font-black uppercase text-green-700">Role workspace</p>
-                      <h3 className="mt-2 pr-10 text-3xl font-black text-slate-950">{expandedRole.title}</h3>
-                      <p className="mt-4 max-w-2xl text-base font-semibold leading-8 text-slate-600">
+                      <h3 className="mt-2 pr-10 text-2xl font-extrabold text-slate-950">{expandedRole.title}</h3>
+                      <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-slate-600">
                         {expandedRole.summary}
                       </p>
                       <div className="mt-7 grid gap-3 sm:grid-cols-3">
@@ -588,7 +705,7 @@ export default function MarketingHome() {
           <div className="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_0.9fr]">
             <div>
               <p className="text-sm font-black uppercase text-green-300">Governance included</p>
-              <h2 className="mt-3 text-3xl font-black leading-tight sm:text-4xl">
+              <h2 className="mt-3 text-2xl font-extrabold leading-tight sm:text-3xl">
                 Admin controls for real workplace accountability.
               </h2>
               <p className="mt-5 max-w-2xl leading-8 text-slate-300">
@@ -616,7 +733,7 @@ export default function MarketingHome() {
         <section className="bg-white">
           <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-5 py-12 sm:px-8 md:flex-row md:items-center">
             <div>
-              <h2 className="text-2xl font-black sm:text-3xl">Ready to manage allocations from one place?</h2>
+              <h2 className="text-xl font-extrabold sm:text-2xl">Ready to manage allocations from one place?</h2>
               <p className="mt-2 text-slate-600">Sign in with your role or create the first system admin account.</p>
             </div>
             <Link
