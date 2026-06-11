@@ -91,8 +91,8 @@ export default function MarketingHome() {
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
           <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
             <Link href="/" className="flex min-w-0 items-center gap-3">
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-950 text-white">
-                <LayoutDashboard className="h-5 w-5" />
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-lg">
+                <LayoutDashboard className="h-7 w-7" />
               </span>
               <span className="min-w-0">
                 <span className="block text-base font-bold leading-tight">Smart Task Allocation</span>
@@ -109,7 +109,7 @@ export default function MarketingHome() {
 
             <Link
               href="/login"
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 text-sm font-bold text-white shadow-sm hover:from-blue-600 hover:to-green-600"
             >
               Sign in
               <ArrowRight className="h-4 w-4" />
