@@ -10,6 +10,7 @@ export default function ManagerReports() {
   const [data, setData] = useState(null)
   const [message, setMessage] = useState('')
   const [completedTasks, setCompletedTasks] = useState([])
+  const [showAllCompletedTasks, setShowAllCompletedTasks] = useState(false)
   const [reviewDrafts, setReviewDrafts] = useState({})
   const [reviewMessage, setReviewMessage] = useState('')
   const [savingReviewId, setSavingReviewId] = useState(null)
@@ -130,6 +131,8 @@ export default function ManagerReports() {
     await loadCompletedTasks()
     setTimeout(() => setReviewMessage(''), 3000)
   }
+
+  const visibleCompletedTasks = showAllCompletedTasks ? completedTasks : completedTasks.slice(0, 3)
 
   const generate = async () => {
     const days = reportType === 'daily' ? 1 : reportType === 'weekly' ? 7 : 30
@@ -300,14 +303,25 @@ export default function ManagerReports() {
         </div>
 
         <div id="completed-task-reviews" className="mt-8 bg-white rounded-xl shadow-sm border p-6 scroll-mt-24">
-          <div className="mb-5">
-            <h2 className="text-lg font-semibold text-gray-900">Completed Task Reviews</h2>
-            <p className="text-sm text-gray-500 mt-1">View uploaded proof, then optionally rate and leave feedback.</p>
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Completed Task Reviews</h2>
+              <p className="text-sm text-gray-500 mt-1">View uploaded proof, then optionally rate and leave feedback.</p>
+            </div>
+            {completedTasks.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setShowAllCompletedTasks(value => !value)}
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+              >
+                {showAllCompletedTasks ? 'Show latest 3' : 'View all'}
+              </button>
+            )}
           </div>
           {reviewMessage && <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{reviewMessage}</div>}
           <div className="space-y-4">
             {completedTasks.length === 0 && <div className="rounded-lg border p-8 text-center text-gray-400">No completed tasks yet.</div>}
-            {completedTasks.map(task => {
+            {visibleCompletedTasks.map(task => {
               const proof = task.task_proofs?.[0]
               const draft = reviewDrafts[task.id] || { rating: '', feedback: '' }
               return (

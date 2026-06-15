@@ -60,6 +60,7 @@ export default function ManagerDashboard() {
     { label: 'active tasks today', value: '24', path: '/manager-task-requests' },
     { label: 'staff utilisation', value: '87%', path: '/manager-availability', featured: true },
     { label: 'pending approvals', value: '6', path: '/manager-task-requests' },
+    { label: 'completed tasks', value: '0', path: '/manager-reports?section=completed' },
     { label: 'avg. performance', value: '4.3★', path: '/manager-reports' },
   ])
   const [recentTaskRows, setRecentTaskRows] = useState([])
@@ -93,6 +94,7 @@ export default function ManagerDashboard() {
       { label: 'active tasks today', value: String(activeTodayCount || 24), path: '/manager-task-requests' },
       { label: 'staff utilisation', value: `${utilisation}%`, path: '/manager-availability', featured: true },
       { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-task-requests' },
+      { label: 'completed tasks', value: String(completedTasks.length), path: '/manager-reports?section=completed' },
       { label: 'avg. performance', value: `${averageRating}★`, path: '/manager-reports' },
     ])
     setRecentTaskRows(taskData.slice(0, 3).map(t => ({
@@ -162,7 +164,7 @@ export default function ManagerDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 mb-8 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 mb-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           {operationStats.map(stat => (
             <button
               key={stat.label}
