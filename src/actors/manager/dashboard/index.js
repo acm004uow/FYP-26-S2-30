@@ -93,7 +93,7 @@ export default function ManagerDashboard() {
       { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-task-requests' },
       { label: 'avg. performance', value: `${averageRating}★`, path: '/manager-reports' },
     ])
-    setRecentTaskRows(taskData.slice(0, 8).map(t => ({
+    setRecentTaskRows(taskData.slice(0, 3).map(t => ({
       id: t.id,
       shortId: t.id.slice(0, 8),
       title: t.title,
@@ -233,7 +233,6 @@ export default function ManagerDashboard() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-xs font-mono text-gray-400">{task.shortId}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor[task.priority]}`}>{task.priority}</span>
                       </div>
                       <p className="text-sm font-medium text-gray-800 truncate">{task.title}</p>
