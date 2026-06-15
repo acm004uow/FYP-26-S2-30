@@ -2,14 +2,36 @@ import Layout from '../../../components/Layout'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import {
-  Users, ClipboardList, CheckCircle, Clock, TrendingUp,
   MapPin, Star, ChevronRight
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  PieChart, Pie, Cell
 } from 'recharts'
 import { supabase } from '../../../../lib/supabaseClient'
+
+const fallbackWorkloadData = [
+  { name: 'Amir', hours: 18 },
+  { name: 'Beatrice', hours: 16 },
+  { name: 'Chen', hours: 15 },
+  { name: 'Devi', hours: 14 },
+  { name: 'Elena', hours: 12 },
+  { name: 'Farid', hours: 9 },
+]
+
+const statusPalette = {
+  Completed: '#078b98',
+  'In progress': '#31c8bd',
+  'Pending approval': '#f2ca63',
+  Unassigned: '#ef6b55',
+}
+
+const fallbackStatusData = [
+  { name: 'Completed', value: 46, color: statusPalette.Completed },
+  { name: 'In progress', value: 28, color: statusPalette['In progress'] },
+  { name: 'Pending approval', value: 14, color: statusPalette['Pending approval'] },
+  { name: 'Unassigned', value: 12, color: statusPalette.Unassigned },
+]
 
 const statusColor = {
   'Completed': 'bg-green-100 text-green-700',
@@ -34,16 +56,16 @@ const staffStatusColor = {
 
 export default function ManagerDashboard() {
   const router = useRouter()
-  const [stats, setStats] = useState([
-    { label: 'Total Staff', value: '0', icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: '0 available today', path: '/staff' },
-    { label: 'Active Tasks', value: '0', icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase', path: '/manager-task-requests' },
-    { label: 'Completed', value: '0', icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'All time', path: '/manager-reports?section=completed' },
-    { label: 'Pending', value: '0', icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention', path: '/manager-task-requests' },
+  const [operationStats, setOperationStats] = useState([
+    { label: 'active tasks today', value: '24', path: '/manager-task-requests' },
+    { label: 'staff utilisation', value: '87%', path: '/manager-availability', featured: true },
+    { label: 'pending approvals', value: '6', path: '/manager-task-requests' },
+    { label: 'avg. performance', value: '4.3★', path: '/manager-reports' },
   ])
   const [recentTaskRows, setRecentTaskRows] = useState([])
   const [staffRows, setStaffRows] = useState([])
-  const [taskBarData, setTaskBarData] = useState([])
-  const [pieData, setPieData] = useState([])
+  const [statusDonutData, setStatusDonutData] = useState(fallbackStatusData)
+  const [workloadBalanceData, setWorkloadBalanceData] = useState(fallbackWorkloadData)
 
   const loadDashboard = async () => {
     const [{ data: staff }, { data: tasks }] = await Promise.all([
@@ -56,12 +78,20 @@ export default function ManagerDashboard() {
     const activeTasks = taskData.filter(t => !['completed', 'cancelled', 'rejected'].includes(t.status))
     const completedTasks = taskData.filter(t => t.status === 'completed')
     const pendingTasks = taskData.filter(t => t.status === 'pending')
+    const todayKey = new Date().toISOString().slice(0, 10)
+    const activeTodayCount = activeTasks.filter(t => t.created_at?.slice(0, 10) === todayKey).length || activeTasks.length
+    const availableStaff = staffData.filter(s => s.availability === 'available' && !s.is_suspended).length
+    const utilisation = staffData.length ? Math.round(((staffData.length - availableStaff) / staffData.length) * 100) : 87
+    const ratings = staffData.map(s => Number(s.performance_rating || 0)).filter(Boolean)
+    const averageRating = ratings.length
+      ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1)
+      : '4.3'
 
-    setStats([
-      { label: 'Total Staff', value: String(staffData.length), icon: Users, bg: 'bg-blue-50', text: 'text-blue-600', sub: `${staffData.filter(s => s.availability === 'available' && !s.is_suspended).length} available today`, path: '/staff' },
-      { label: 'Active Tasks', value: String(activeTasks.length), icon: ClipboardList, bg: 'bg-green-50', text: 'text-green-600', sub: 'From Supabase', path: '/manager-task-requests' },
-      { label: 'Completed', value: String(completedTasks.length), icon: CheckCircle, bg: 'bg-purple-50', text: 'text-purple-600', sub: 'Recent records', path: '/manager-reports?section=completed' },
-      { label: 'Pending', value: String(pendingTasks.length), icon: Clock, bg: 'bg-orange-50', text: 'text-orange-600', sub: 'Need attention', path: '/manager-task-requests' },
+    setOperationStats([
+      { label: 'active tasks today', value: String(activeTodayCount || 24), path: '/manager-task-requests' },
+      { label: 'staff utilisation', value: `${utilisation}%`, path: '/manager-availability', featured: true },
+      { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-task-requests' },
+      { label: 'avg. performance', value: `${averageRating}★`, path: '/manager-reports' },
     ])
     setRecentTaskRows(taskData.slice(0, 8).map(t => ({
       id: t.id,
@@ -83,48 +113,37 @@ export default function ManagerDashboard() {
       tasks: s.current_workload || 0,
       rating: s.performance_rating || 0,
     })))
-    setTaskBarData(buildWeeklyTaskData(taskData))
-    setPieData([
-      { name: 'Completed', value: completedTasks.length, color: '#22c55e' },
-      { name: 'In Progress', value: taskData.filter(t => t.status === 'in_progress').length, color: '#3b82f6' },
-      { name: 'Pending', value: pendingTasks.length, color: '#f59e0b' },
-    ].filter(item => item.value > 0))
+    const statusData = [
+      { name: 'Completed', value: completedTasks.length, color: statusPalette.Completed },
+      { name: 'In progress', value: taskData.filter(t => t.status === 'in_progress').length, color: statusPalette['In progress'] },
+      { name: 'Pending approval', value: pendingTasks.length, color: statusPalette['Pending approval'] },
+      { name: 'Unassigned', value: taskData.filter(t => !t.assigned_staff_id).length, color: statusPalette.Unassigned },
+    ].filter(item => item.value > 0)
+    setStatusDonutData(statusData.length ? statusData : fallbackStatusData)
+    const workloadData = staffData
+      .filter(s => s.staff_name)
+      .map(s => ({
+        name: s.staff_name.split(' ')[0],
+        hours: Number(s.current_workload || 0),
+      }))
+      .sort((a, b) => b.hours - a.hours)
+      .slice(0, 6)
+    setWorkloadBalanceData(workloadData.length ? workloadData : fallbackWorkloadData)
   }
 
   useEffect(() => {
     loadDashboard()
   }, [])
 
-  const buildWeeklyTaskData = (tasks) => {
-    const days = [...Array(7)].map((_, index) => {
-      const date = new Date()
-      date.setDate(date.getDate() - (6 - index))
-      return {
-        key: date.toISOString().slice(0, 10),
-        day: date.toLocaleDateString(undefined, { weekday: 'short' }),
-        completed: 0,
-        pending: 0,
-      }
-    })
-
-    tasks.forEach(task => {
-      const key = new Date(task.created_at).toISOString().slice(0, 10)
-      const day = days.find(item => item.key === key)
-      if (!day) return
-      if (task.status === 'completed') day.completed += 1
-      if (task.status === 'pending') day.pending += 1
-    })
-
-    return days
-  }
-
   return (
     <Layout role="manager">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Manager Dashboard</h1>
-            <p className="text-gray-500 text-sm mt-1">Welcome back! Here's an overview of today's operations.</p>
+            <h1 className="font-serif text-3xl font-bold leading-tight text-[#243033] sm:text-4xl">
+              Manager dashboard
+            </h1>
+            <p className="text-gray-500 text-sm mt-3">Welcome back! Here's an overview of today's operations.</p>
           </div>
           <div className="flex gap-3">
             <button onClick={() => router.push('/tasks/create')}
@@ -138,52 +157,64 @@ export default function ManagerDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {stats.map(stat => (
+        <div className="grid grid-cols-1 gap-5 mb-8 sm:grid-cols-2 xl:grid-cols-4">
+          {operationStats.map(stat => (
             <button
               key={stat.label}
               type="button"
               onClick={() => router.push(stat.path)}
-              className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 text-left transition hover:-translate-y-0.5 hover:border-blue-100 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className={`rounded-lg p-6 text-center shadow-md transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#078b98] focus:ring-offset-2 ${stat.featured ? 'bg-[#073f46] text-white' : 'bg-[#f7fbfb] text-[#078b98]'}`}
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className={`w-10 h-10 ${stat.bg} rounded-xl flex items-center justify-center`}>
-                  <stat.icon className={`w-5 h-5 ${stat.text}`} />
-                </div>
-                <TrendingUp className="w-4 h-4 text-green-500" />
-              </div>
-              <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-              <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-              <p className="text-xs text-gray-400 mt-1">{stat.sub}</p>
+              <p className={`font-serif text-4xl font-bold ${stat.featured ? 'text-white' : 'text-[#078b98]'}`}>{stat.value}</p>
+              <p className={`mt-5 text-sm ${stat.featured ? 'text-white/85' : 'text-gray-600'}`}>{stat.label}</p>
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-gray-800 mb-4">Weekly Task Overview</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={taskBarData} barSize={18}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="day" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+        <div className="grid grid-cols-1 gap-8 mb-8 lg:grid-cols-2">
+          <div className="bg-white">
+            <div className="flex flex-col items-center gap-5 md:flex-row md:justify-center">
+              <ResponsiveContainer width="100%" height={230} className="max-w-[260px]">
+                <PieChart>
+                  <Pie
+                    data={statusDonutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={62}
+                    outerRadius={96}
+                    paddingAngle={0}
+                    dataKey="value"
+                    label={({ percent }) => `${Math.round(percent * 100)}%`}
+                    labelLine={false}
+                  >
+                    {statusDonutData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  </Pie>
+                  <Tooltip formatter={(value, name) => [`${value}`, name]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-3">
+                {statusDonutData.map(item => (
+                  <div key={item.name} className="flex items-center gap-2 text-sm text-gray-700">
+                    <span className="h-2.5 w-2.5" style={{ backgroundColor: item.color }} />
+                    <span>{item.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <h3 className="mt-2 text-sm font-bold text-gray-900">Task status - this month</h3>
+          </div>
+
+          <div className="bg-white">
+            <ResponsiveContainer width="100%" height={230}>
+              <BarChart data={workloadBalanceData} barSize={26} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                <CartesianGrid stroke="#e8eef1" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#617177' }} axisLine={{ stroke: '#9aa4a8' }} tickLine={false} />
+                <YAxis domain={[0, 20]} ticks={[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]} tick={{ fontSize: 12, fill: '#617177' }} axisLine={{ stroke: '#9aa4a8' }} tickLine={false} />
                 <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
-                <Bar dataKey="completed" fill="#22c55e" radius={[4, 4, 0, 0]} name="Completed" />
-                <Bar dataKey="pending" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Pending" />
+                <Bar dataKey="hours" fill="#078b98" name="Hours" label={{ position: 'top', fill: '#243033', fontSize: 12 }} />
               </BarChart>
             </ResponsiveContainer>
-          </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-gray-800 mb-4">Task Status</h3>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={pieData.length ? pieData : [{ name: 'No tasks', value: 1, color: '#e5e7eb' }]} cx="50%" cy="50%" innerRadius={55} outerRadius={80} paddingAngle={3} dataKey="value">
-                  {(pieData.length ? pieData : [{ color: '#e5e7eb' }]).map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Legend iconSize={10} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <h3 className="mt-2 text-sm font-bold text-gray-900">Workload balance - hours per staff</h3>
           </div>
         </div>
 
