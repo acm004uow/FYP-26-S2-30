@@ -9,11 +9,19 @@ const availabilityMeta = {
   time_off: { label: 'Time Off', dot: 'bg-gray-400', badge: 'bg-gray-100 text-gray-700' },
 }
 
+const filterLabels = {
+  all: 'all staff',
+  available: 'available staff',
+  unavailable: 'unavailable staff',
+  suspended: 'suspended staff',
+}
+
 const formatAvailability = (value) => availabilityMeta[value] || availabilityMeta.unavailable
 
 export default function ManagerAvailability() {
   const [staffRows, setStaffRows] = useState([])
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
 
@@ -67,15 +75,23 @@ export default function ManagerAvailability() {
 
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!term) return staffRows
-    return staffRows.filter(row => [
+    const statusFilteredRows = staffRows.filter(row => {
+      const suspended = row.is_suspended || row.status !== 'active'
+      if (statusFilter === 'available') return row.availability === 'available' && !suspended
+      if (statusFilter === 'unavailable') return row.availability === 'unavailable' && !suspended
+      if (statusFilter === 'suspended') return suspended
+      return true
+    })
+
+    if (!term) return statusFilteredRows
+    return statusFilteredRows.filter(row => [
       row.staff_name,
       row.email,
       row.assigned_region,
       ...(row.skills || []),
       formatAvailability(row.availability).label,
     ].some(value => String(value || '').toLowerCase().includes(term)))
-  }, [search, staffRows])
+  }, [search, staffRows, statusFilter])
 
   const summary = useMemo(() => ({
     total: staffRows.length,
@@ -83,6 +99,11 @@ export default function ManagerAvailability() {
     unavailable: staffRows.filter(row => row.availability === 'unavailable' && !row.is_suspended).length,
     suspended: staffRows.filter(row => row.is_suspended || row.status !== 'active').length,
   }), [staffRows])
+
+  const handleStatusFilterChange = (nextFilter) => {
+    setStatusFilter(nextFilter)
+    setSearch('')
+  }
 
   return (
     <Layout role="manager">
@@ -109,11 +130,15 @@ export default function ManagerAvailability() {
         )}
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 mb-6">
-          <SummaryCard icon={Users} label="Total Staff" value={summary.total} />
-          <SummaryCard icon={Activity} label="Available" value={summary.available} tone="green" />
-          <SummaryCard icon={Clock} label="Unavailable" value={summary.unavailable} tone="red" />
-          <SummaryCard icon={Briefcase} label="Suspended" value={summary.suspended} tone="gray" />
+          <SummaryCard icon={Users} label="Total Staff" value={summary.total} active={statusFilter === 'all'} onClick={() => handleStatusFilterChange('all')} />
+          <SummaryCard icon={Activity} label="Available" value={summary.available} tone="green" active={statusFilter === 'available'} onClick={() => handleStatusFilterChange('available')} />
+          <SummaryCard icon={Clock} label="Unavailable" value={summary.unavailable} tone="red" active={statusFilter === 'unavailable'} onClick={() => handleStatusFilterChange('unavailable')} />
+          <SummaryCard icon={Briefcase} label="Suspended" value={summary.suspended} tone="gray" active={statusFilter === 'suspended'} onClick={() => handleStatusFilterChange('suspended')} />
         </div>
+
+        <p className="mb-3 text-sm font-medium text-gray-600">
+          Showing {filteredRows.length} {filterLabels[statusFilter]}
+        </p>
 
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
@@ -170,7 +195,7 @@ export default function ManagerAvailability() {
   )
 }
 
-function SummaryCard({ icon: Icon, label, value, tone = 'blue' }) {
+function SummaryCard({ icon: Icon, label, value, tone = 'blue', active = false, onClick }) {
   const tones = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
@@ -179,12 +204,17 @@ function SummaryCard({ icon: Icon, label, value, tone = 'blue' }) {
   }
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`w-full cursor-pointer rounded-xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${active ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-100'}`}
+    >
       <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${tones[tone]}`}>
         <Icon className="h-5 w-5" />
       </div>
       <p className="text-2xl font-bold text-gray-900">{value}</p>
       <p className="text-sm text-gray-500">{label}</p>
-    </div>
+    </button>
   )
 }

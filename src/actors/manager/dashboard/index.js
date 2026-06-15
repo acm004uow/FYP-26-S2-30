@@ -64,6 +64,7 @@ export default function ManagerDashboard() {
   ])
   const [recentTaskRows, setRecentTaskRows] = useState([])
   const [staffRows, setStaffRows] = useState([])
+  const [availableStaffCount, setAvailableStaffCount] = useState(0)
   const [statusDonutData, setStatusDonutData] = useState(fallbackStatusData)
   const [workloadBalanceData, setWorkloadBalanceData] = useState(fallbackWorkloadData)
 
@@ -81,6 +82,7 @@ export default function ManagerDashboard() {
     const todayKey = new Date().toISOString().slice(0, 10)
     const activeTodayCount = activeTasks.filter(t => t.created_at?.slice(0, 10) === todayKey).length || activeTasks.length
     const availableStaff = staffData.filter(s => s.availability === 'available' && !s.is_suspended).length
+    setAvailableStaffCount(availableStaff)
     const utilisation = staffData.length ? Math.round(((staffData.length - availableStaff) / staffData.length) * 100) : 87
     const ratings = staffData.map(s => Number(s.performance_rating || 0)).filter(Boolean)
     const averageRating = ratings.length
@@ -104,15 +106,18 @@ export default function ManagerDashboard() {
       status: t.status === 'in_progress' ? 'In Progress' : t.status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()),
       priority: t.priority,
     })))
-    setStaffRows(staffData.map(s => ({
-      id: s.id,
-      userId: s.user_id,
-      name: s.staff_name,
-      role: s.skills?.[0] || 'Staff Member',
-      status: s.is_suspended ? 'On Leave' : s.availability === 'available' ? 'Available' : 'Busy',
-      tasks: s.current_workload || 0,
-      rating: s.performance_rating || 0,
-    })))
+    setStaffRows(staffData
+      .sort((a, b) => Number(b.availability === 'available') - Number(a.availability === 'available'))
+      .slice(0, 3)
+      .map(s => ({
+        id: s.id,
+        userId: s.user_id,
+        name: s.staff_name,
+        role: s.skills?.[0] || 'Staff Member',
+        status: s.is_suspended ? 'On Leave' : s.availability === 'available' ? 'Available' : 'Busy',
+        tasks: s.current_workload || 0,
+        rating: s.performance_rating || 0,
+      })))
     const statusData = [
       { name: 'Completed', value: completedTasks.length, color: statusPalette.Completed },
       { name: 'In progress', value: taskData.filter(t => t.status === 'in_progress').length, color: statusPalette['In progress'] },
@@ -249,7 +254,10 @@ export default function ManagerDashboard() {
           </div>
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-800">Staff Availability</h3>
+              <div>
+                <h3 className="font-semibold text-gray-800">Staff Availability</h3>
+                <p className="mt-1 text-sm text-gray-500">{availableStaffCount} available staff</p>
+              </div>
               <button onClick={() => router.push('/manager-availability')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">Live view <ChevronRight className="w-3 h-3" /></button>
             </div>
             <div className="divide-y divide-gray-50">
