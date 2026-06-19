@@ -21,6 +21,32 @@ const normalizeRole = (role) => ({
   department_staff: 'department',
 }[role] || role)
 
+const formatChatText = (text) => String(text || '')
+  .replace(/,?\s*open\s+\/tasks\/create\?role=dept/gi, ', open the task creation page')
+  .replace(/\/tasks\/create\?role=dept/gi, 'the task creation page')
+  .replace(/```[\s\S]*?```/g, block => block.replace(/```/g, ''))
+  .replace(/`([^`]+)`/g, '$1')
+  .replace(/\*\*([^*]+)\*\*/g, '$1')
+  .replace(/\*([^*]+)\*/g, '$1')
+  .trim()
+
+const readChatbotResponse = async (response) => {
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) return response.json()
+
+  const text = await response.text()
+  const nextData = text.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/)
+  if (nextData?.[1]) {
+    try {
+      const parsed = JSON.parse(nextData[1])
+      return { error: parsed.err?.message || `Chatbot server returned ${response.status}.` }
+    } catch {
+      return { error: `Chatbot server returned ${response.status}.` }
+    }
+  }
+  return { error: `Chatbot server returned ${response.status}.` }
+}
+
 export default function Chatbot({ role, addNotification }) {
   const [isOpen, setIsOpen] = useState(false)
   const normalizedRole = normalizeRole(role)
@@ -52,10 +78,7 @@ export default function Chatbot({ role, addNotification }) {
         history: nextMessages.slice(-8),
       }),
     })
-    const contentType = response.headers.get('content-type') || ''
-    const data = contentType.includes('application/json')
-      ? await response.json()
-      : { error: `Expected JSON from /api/chatbot but received ${contentType || 'a non-JSON response'}.` }
+    const data = await readChatbotResponse(response)
     if (!response.ok) throw new Error(data.error || 'Gemini request failed.')
     return data.reply
   }
@@ -71,10 +94,11 @@ export default function Chatbot({ role, addNotification }) {
 
     try {
       const reply = await requestGeminiReply(trimmed, nextMessages)
-      setMessages(prev => [...prev, { role: 'bot', content: reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
+      const formattedReply = formatChatText(reply)
+      setMessages(prev => [...prev, { role: 'bot', content: formattedReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
       if (addNotification) addNotification(`Chatbot: ${reply.substring(0, 50)}...`)
     } catch (error) {
-      const errorReply = `AI error: ${error.message}`
+      const errorReply = formatChatText(`AI error: ${error.message}`)
       setMessages(prev => [...prev, { role: 'bot', content: errorReply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
       if (addNotification) addNotification(`Chatbot: ${error.message}`)
     } finally {
@@ -107,7 +131,7 @@ export default function Chatbot({ role, addNotification }) {
               <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.role === 'bot' && <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-green-500 rounded-full flex items-center justify-center"><Bot className="w-4 h-4 text-white" /></div>}
                 <div>
-                  <div className={`px-4 py-2 rounded-2xl max-w-xs text-sm whitespace-pre-line leading-relaxed ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800'}`}>{msg.content}</div>
+                  <div className={`px-4 py-2 rounded-2xl max-w-xs text-sm whitespace-pre-line leading-relaxed ${msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-800'}`}>{formatChatText(msg.content)}</div>
                   <p className={`mt-1 text-[10px] text-gray-400 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>{msg.time}</p>
                 </div>
                 {msg.role === 'user' && <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center"><User className="w-4 h-4 text-gray-600" /></div>}

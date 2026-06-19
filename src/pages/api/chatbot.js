@@ -1,5 +1,3 @@
-import { createSupabaseAdmin } from '../../../lib/supabaseAdmin'
-
 const roleNames = {
   manager: 'Manager',
   department: 'Department Staff',
@@ -49,9 +47,43 @@ const compactStaff = (staff) => ({
   rating: staff.performance_rating || 0,
 })
 
-async function buildLiveContext(role, userId) {
-  const supabase = createSupabaseAdmin()
+const getSupabaseConfig = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) throw new Error('Missing Supabase admin environment variables')
+  return { url: url.replace(/\/$/, ''), key }
+}
 
+async function fetchSupabaseRows(table, params) {
+  const { url, key } = getSupabaseConfig()
+  const requestUrl = new URL(`${url}/rest/v1/${table}`)
+  Object.entries(params).forEach(([name, value]) => requestUrl.searchParams.set(name, value))
+
+  const response = await fetch(requestUrl, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+    },
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(data?.message || `Supabase ${table} query failed.`)
+  return data || []
+}
+
+async function getUserIdFromToken(token) {
+  if (!token) return null
+  const { url, key } = getSupabaseConfig()
+  const response = await fetch(`${url}/auth/v1/user`, {
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const data = await response.json().catch(() => null)
+  return response.ok ? data?.id || null : null
+}
+
+async function buildLiveContext(role, userId) {
   if (role === 'department') {
     if (!userId) {
       return JSON.stringify({
@@ -61,13 +93,12 @@ async function buildLiveContext(role, userId) {
       })
     }
 
-    const { data: tasks } = await supabase
-      .from('task_requests')
-      .select('title,status,priority,required_skill,location,created_at,updated_at,scheduled_end,staff_profiles(staff_name)')
-      .eq('created_by', userId)
-      .order('created_at', { ascending: false })
-      .limit(50)
-
+    const tasks = await fetchSupabaseRows('task_requests', {
+      select: 'title,status,priority,required_skill,location,created_at,updated_at,scheduled_end,staff_profiles(staff_name)',
+      created_by: `eq.${userId}`,
+      order: 'created_at.desc',
+      limit: '50',
+    })
     const taskRows = tasks || []
     return JSON.stringify({
       scope: 'department_submitted_tasks_live_context',
@@ -93,22 +124,22 @@ async function buildLiveContext(role, userId) {
     })
   }
 
-  const [{ data: tasks }, { data: staff }, { data: reports }] = await Promise.all([
-    supabase
-      .from('task_requests')
-      .select('title,status,priority,required_skill,location,created_at,staff_profiles(staff_name)')
-      .order('created_at', { ascending: false })
-      .limit(50),
-    supabase
-      .from('staff_profiles')
-      .select('staff_name,email,skills,assigned_region,availability,current_workload,status,is_suspended,performance_rating')
-      .order('staff_name')
-      .limit(50),
-    supabase
-      .from('performance_reviews')
-      .select('rating,created_at')
-      .order('created_at', { ascending: false })
-      .limit(30),
+  const [tasks, staff, reports] = await Promise.all([
+    fetchSupabaseRows('task_requests', {
+      select: 'title,status,priority,required_skill,location,created_at,staff_profiles(staff_name)',
+      order: 'created_at.desc',
+      limit: '50',
+    }),
+    fetchSupabaseRows('staff_profiles', {
+      select: 'staff_name,email,skills,assigned_region,availability,current_workload,status,is_suspended,performance_rating',
+      order: 'staff_name.asc',
+      limit: '50',
+    }),
+    fetchSupabaseRows('performance_reviews', {
+      select: 'rating,created_at',
+      order: 'created_at.desc',
+      limit: '30',
+    }),
   ])
 
   const taskRows = tasks || []
@@ -153,13 +184,17 @@ export default async function handler(req, res) {
 
     const normalizedRole = normalizeRole(role)
     const token = req.headers.authorization?.replace('Bearer ', '')
-    let userId = null
-    if (token) {
-      const supabase = createSupabaseAdmin()
-      const { data: authData } = await supabase.auth.getUser(token)
-      userId = authData?.user?.id || null
+    const userId = await getUserIdFromToken(token)
+    let liveContext
+    try {
+      liveContext = await buildLiveContext(normalizedRole, userId)
+    } catch (contextError) {
+      liveContext = JSON.stringify({
+        scope: 'context_unavailable',
+        generated_at: new Date().toISOString(),
+        note: contextError.message,
+      })
     }
-    const liveContext = await buildLiveContext(normalizedRole, userId)
     const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
     const contents = cleanHistory(history)
@@ -180,13 +215,14 @@ export default async function handler(req, res) {
               roleContext[normalizedRole] || roleContext.manager,
               'Answer using the live application context below when the question asks about tasks, assignments, staff, availability, or reports.',
               'You cannot create, update, approve, reject, cancel, assign, or delete records from chat. If the user asks you to perform one of those actions, explain that chat is read-only and direct them to the correct page.',
-              normalizedRole === 'department' ? 'For department staff who want to create an urgent task request, tell them to open /tasks/create?role=dept, fill in the task details, tick Mark as Urgent, and submit the request.' : '',
+              normalizedRole === 'department' ? 'For department staff who want to create an urgent task request, tell them to open the task creation page, fill in the task details, tick Mark as Urgent, and submit the request.' : '',
               normalizedRole === 'department' ? 'For department staff who want to cancel or edit a request, tell them they can do that only while the request is Pending on the My Task Requests page.' : '',
               'For normal greetings or general app questions, answer naturally.',
               'If the user says hello, hi, thanks, or asks a general question, do not search records. Reply naturally.',
               'Only say a record cannot be found when the user clearly asks for a specific task, staff member, report, or assignment that is not in the live context.',
               'Do not invent task names, staff names, counts, assignments, ratings, or statuses.',
               'Keep replies concise and practical.',
+              'Use plain text only. Do not use Markdown formatting, backticks, bullet syntax, headings, or code blocks.',
               `Live application context JSON: ${liveContext}`,
             ].join(' '),
           }],
@@ -200,7 +236,8 @@ export default async function handler(req, res) {
     })
     clearTimeout(timeoutId)
 
-    const data = await response.json()
+    const data = await response.json().catch(() => null)
+    if (!data) return res.status(502).json({ error: 'Gemini returned a non-JSON response.' })
     if (!response.ok) return res.status(response.status).json({ error: data.error?.message || 'Gemini request failed.' })
 
     const reply = data.candidates?.[0]?.content?.parts
