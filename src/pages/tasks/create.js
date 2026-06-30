@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { ClipboardList, MapPin, Users, Calendar, AlertCircle, CheckCircle, Star, TrendingUp } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
+import { generateRecommendations } from '../../../lib/recommendationEngine'
 
 export default function TaskCreation({ initialRole = 'manager' }) {
   const router = useRouter()
@@ -16,13 +17,14 @@ export default function TaskCreation({ initialRole = 'manager' }) {
     category: '', dueDate: '', dueTime: '', assignee: '', notes: ''
   })
   const [recommendations, setRecommendations] = useState([])
+  const [recommendationParams, setRecommendationParams] = useState(null)
 
   useEffect(() => {
     async function loadFormData() {
-      const [{ data }, { data: categoryRows, error: categoryError }] = await Promise.all([
+      const [{ data }, { data: categoryRows, error: categoryError }, { data: systemParams }] = await Promise.all([
         supabase
         .from('staff_profiles')
-        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,is_suspended,status')
+        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
         .eq('is_suspended', false)
           .eq('status', 'active'),
         supabase
@@ -30,18 +32,29 @@ export default function TaskCreation({ initialRole = 'manager' }) {
           .select('name,status')
           .eq('status', 'active')
           .order('name'),
+        supabase.from('system_parameters').select('*').eq('id', 1).single(),
       ])
       setAllStaff((data || []).map(row => ({
         id: row.id,
+        staff_name: row.staff_name,
         name: row.staff_name,
         role: row.skills?.[0] || 'Staff Member',
         skills: row.skills || [],
+        availability: row.availability,
         available: row.availability === 'available',
+        performance_rating: row.performance_rating || 0,
         rating: row.performance_rating || 0,
+        current_workload: row.current_workload || 0,
         tasks: row.current_workload || 0,
+        assigned_region: row.assigned_region || '',
         location: row.assigned_region || '',
+        weekly_working_hours: row.weekly_working_hours || 0,
+        max_weekly_hours: row.max_weekly_hours || 40,
+        is_suspended: row.is_suspended,
+        status: row.status,
         workload: row.current_workload || 0,
       })))
+      setRecommendationParams(systemParams || null)
       if (!categoryError && categoryRows?.length) {
         setCategories(categoryRows.map(category => category.name))
       }
@@ -51,25 +64,30 @@ export default function TaskCreation({ initialRole = 'manager' }) {
 
   // AI recommendation engine
   useEffect(() => {
-    if (!form.category || !form.location) return
-    const prioritized = allStaff
-      .filter(s => s.available)
-      .map(s => {
-        let score = 0
-        // Skill match
-        if (s.skills.some(skill => skill.toLowerCase().includes(form.category.toLowerCase()))) score += 30
-        // Same-zone assignments score higher.
-        if (s.location === form.location.split(' ')[0]) score += 20
-        // Lower workload better
-        score += Math.max(0, 10 - s.workload) * 2
-        // Rating bonus
-        score += s.rating * 5
-        return { ...s, score }
-      })
-      .sort((a,b) => b.score - a.score)
+    if (!form.category || !form.location) {
+      setRecommendations([])
+      return
+    }
+    const taskForScoring = {
+      required_skill: form.category,
+      location: form.location,
+      estimated_hours: 1,
+    }
+    const staffById = new Map(allStaff.map(staff => [staff.id, staff]))
+    const prioritized = generateRecommendations(allStaff, taskForScoring, recommendationParams || {})
       .slice(0, 3)
+      .map(rec => {
+        const staff = staffById.get(rec.staff_id) || {}
+        return {
+          ...staff,
+          id: rec.staff_id,
+          name: rec.staff_name,
+          score: rec.score,
+          reason: rec.reason,
+        }
+      })
     setRecommendations(prioritized)
-  }, [form.category, form.location])
+  }, [allStaff, form.category, form.location, recommendationParams])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -190,7 +208,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
           task_id: createdTask.id,
           staff_id: rec.id,
           score: rec.score,
-          reason: `${rec.available ? 'Available' : 'Unavailable'}; ${rec.skills.join(', ') || 'general skills'}; workload ${rec.workload}; rating ${rec.rating}`,
+          reason: rec.reason,
         }))
       )
     }

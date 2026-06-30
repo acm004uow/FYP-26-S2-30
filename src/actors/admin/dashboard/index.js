@@ -19,7 +19,16 @@ export default function AdminPanel() {
   const [statusChangeUser, setStatusChangeUser] = useState(null)
   const [createForm, setCreateForm] = useState({ full_name: '', email: '', role: 'manager' })
   const [resetPassword, setResetPassword] = useState('')
-  const [params, setParams] = useState({ workloadThreshold: 3, proximityRadius: 10, priorityWeights: 10 })
+  const [params, setParams] = useState({
+    workloadThreshold: 3,
+    proximityRadius: 10,
+    availabilityWeight: 30,
+    skillWeight: 25,
+    regionWeight: 20,
+    hoursWeight: 15,
+    workloadWeight: 10,
+    performanceWeight: 10,
+  })
   const [message, setMessage] = useState('')
   const [currentUserId, setCurrentUserId] = useState('')
   const [currentBusinessName, setCurrentBusinessName] = useState('')
@@ -81,7 +90,12 @@ export default function AdminPanel() {
       setParams({
         workloadThreshold: systemParams.workload_threshold,
         proximityRadius: systemParams.proximity_radius,
-        priorityWeights: systemParams.performance_weight,
+        availabilityWeight: systemParams.availability_weight,
+        skillWeight: systemParams.skill_weight,
+        regionWeight: systemParams.region_weight,
+        hoursWeight: systemParams.hours_weight,
+        workloadWeight: systemParams.workload_weight,
+        performanceWeight: systemParams.performance_weight,
       })
     }
   }
@@ -193,7 +207,12 @@ export default function AdminPanel() {
       id: 1,
       workload_threshold: Number(params.workloadThreshold),
       proximity_radius: Number(params.proximityRadius),
-      performance_weight: Number(params.priorityWeights),
+      availability_weight: Number(params.availabilityWeight),
+      skill_weight: Number(params.skillWeight),
+      region_weight: Number(params.regionWeight),
+      hours_weight: Number(params.hoursWeight),
+      workload_weight: Number(params.workloadWeight),
+      performance_weight: Number(params.performanceWeight),
       updated_at: new Date().toISOString(),
     })
     await supabase.from('audit_logs').insert({ action: 'update_system_parameters', details: 'Global system parameters updated' })
