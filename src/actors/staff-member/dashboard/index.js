@@ -11,8 +11,15 @@ const statusColor = {
   Overdue: 'bg-red-100 text-red-700',
 }
 
+const parseDate = (value) => (value ? new Date(value) : null)
+
+const isTaskPastDue = (task) => {
+  const dueDate = parseDate(task.scheduledEndRaw)
+  return dueDate && dueDate < new Date() && task.rawStatus !== 'completed'
+}
+
 const getTaskDisplayStatus = (task) => {
-  if (task.rawStatus === 'overdue') {
+  if (task.rawStatus === 'overdue' || isTaskPastDue(task)) {
     return 'Overdue'
   }
 
@@ -371,6 +378,10 @@ export default function StaffMemberDashboard() {
     return [...myTasks, ...completedTasks]
   }, [myTasks, completedTasks])
 
+  const overdueTasks = useMemo(() => {
+    return allTasks.filter((task) => isTaskPastDue(task))
+  }, [allTasks])
+
   const selectedCalendarTasks = useMemo(() => {
     return allTasks.filter((task) => {
       const assigned = getTaskAssignedDate(task)
@@ -607,6 +618,12 @@ export default function StaffMemberDashboard() {
         </div>
 
         {/* Calendar */}
+        {overdueTasks.length > 0 && (
+          <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+            <p className="font-semibold">Overdue tasks alert</p>
+            <p className="mt-1">You have {overdueTasks.length} overdue assigned task{overdueTasks.length === 1 ? '' : 's'}.</p>
+          </div>
+        )}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 shadow-sm">
           <div className="flex items-start justify-between gap-3 mb-6">
             <div>
