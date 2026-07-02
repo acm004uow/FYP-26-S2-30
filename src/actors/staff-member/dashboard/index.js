@@ -371,8 +371,8 @@ export default function StaffMemberDashboard() {
     ? (completedTasks.reduce((sum, task) => sum + Number(task.rating || 0), 0) / completedTasks.length).toFixed(1)
     : Number(profile?.performance_rating || 0).toFixed(1)
 
-  const todayTasks = myTasks.filter(isTaskAssignedToday)
-  const otherActiveTasks = myTasks.filter(task => !isTaskAssignedToday(task))
+  const todayTasks = myTasks.filter((task) => isTaskAssignedToday(task) && !isTaskPastDue(task))
+  const otherActiveTasks = myTasks.filter((task) => !isTaskAssignedToday(task) && !isTaskPastDue(task))
 
   const allTasks = useMemo(() => {
     return [...myTasks, ...completedTasks]
@@ -781,7 +781,14 @@ export default function StaffMemberDashboard() {
             onClick={() => setActiveTab('active')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium ${activeTab === 'active' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
           >
-            Active Tasks ({myTasks.length})
+            Active Tasks ({todayTasks.length + otherActiveTasks.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('overdue')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium ${activeTab === 'overdue' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500'}`}
+          >
+            Overdue ({overdueTasks.length})
           </button>
 
           <button
@@ -830,6 +837,59 @@ export default function StaffMemberDashboard() {
                 {otherActiveTasks.map(renderTaskCard)}
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'overdue' && (
+          <div className="space-y-3">
+            {overdueTasks.length === 0 && (
+              <div className="bg-white rounded-xl border p-8 text-center text-gray-400">
+                No overdue tasks.
+              </div>
+            )}
+
+            {overdueTasks.map(task => (
+              <div key={task.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <Bell className="w-5 h-5 text-red-500" />
+                  </div>
+
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-800">
+                      {task.title}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {task.location} - {task.due}
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedTask(selectedTask?.id === task.id ? null : task)}
+                    className="text-xs text-blue-500"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {selectedTask?.id === task.id && (
+                  <div className="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-600">
+                    <p>
+                      <span className="font-medium text-gray-800">Assigned day:</span>{' '}
+                      {task.assignedDate}
+                    </p>
+                    <p className="mt-1">
+                      <span className="font-medium text-gray-800">Status:</span>{' '}
+                      {getTaskDisplayStatus(task)}
+                    </p>
+                    <p className="mt-1">
+                      <span className="font-medium text-gray-800">Instructions:</span>{' '}
+                      {task.instructions}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
 
