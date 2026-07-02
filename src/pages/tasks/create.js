@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { ClipboardList, MapPin, Users, Calendar, AlertCircle, CheckCircle, Star, TrendingUp } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
-import { generateRecommendations } from '../../../lib/recommendationEngine'
+import { generateRecommendations, formatRecommendationExplanation } from '../../../lib/recommendationEngine'
 
 export default function TaskCreation({ initialRole = 'manager' }) {
   const router = useRouter()
@@ -84,6 +84,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
           name: rec.staff_name,
           score: rec.score,
           reason: rec.reason,
+          explanation: rec.explanation || [],
         }
       })
     setRecommendations(prioritized)
@@ -282,6 +283,17 @@ export default function TaskCreation({ initialRole = 'manager' }) {
                           <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-green-400 rounded-full flex items-center justify-center text-white text-xs font-bold">{rec.name.split(' ').map(n=>n[0]).join('')}</div>
                           <div className="flex-1"><p className="text-sm font-medium text-gray-800">{rec.name} <span className="text-xs text-gray-400">(Score: {rec.score})</span></p><p className="text-xs text-gray-500">{rec.role} • {rec.tasks} tasks • ⭐{rec.rating}</p></div>
                           {idx === 0 && <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full">Best match</span>}
+                        </div>
+                        <div className="mt-3 space-y-1 text-xs text-gray-500">
+                          {(rec.explanation?.filter(item => item.matched) || []).length > 0 ? (
+                            <ul className="list-disc list-inside space-y-1">
+                              {rec.explanation.filter(item => item.matched).map((item, index) => (
+                                <li key={index}>{item.description}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p>{rec.reason}</p>
+                          )}
                         </div>
                       </div>
                     ))}
