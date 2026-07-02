@@ -670,7 +670,7 @@ export default function StaffMemberDashboard() {
                         const isSelected = isSameLocalDay(day.date, selectedCalendarDate)
                         const isCurrentMonth = day.date.getMonth() === calendarDate.getMonth()
                         const hasTasks = day.tasks.length > 0
-                        const isOverdue = day.tasks.some((task) => task.rawStatus === 'overdue')
+                        const isOverdue = day.tasks.some((task) => getTaskDisplayStatus(task) === 'Overdue')
                         const isAllCompleted = hasTasks && day.tasks.every((task) => task.rawStatus === 'completed')
 
                         return (
