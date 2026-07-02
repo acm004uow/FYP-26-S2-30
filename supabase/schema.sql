@@ -82,23 +82,6 @@ create table if not exists task_recommendations (
   created_at timestamptz default now()
 );
 
-create table if not exists task_categories (
-  id uuid primary key default gen_random_uuid(),
-  name text not null unique,
-  description text,
-  status text default 'active',
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-insert into task_categories (name, description)
-values
-  ('Maintenance', 'Equipment, facilities, and repair work'),
-  ('Inspection', 'Checking quality, safety, or completion status'),
-  ('Cleaning', 'Cleaning and hygiene-related tasks'),
-  ('Delivery', 'Pickup, delivery, and movement tasks'),
-  ('Administration', 'Administrative and coordination work')
-on conflict (name) do nothing;
-
 create table if not exists notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) on delete cascade,
@@ -163,7 +146,6 @@ alter table profiles enable row level security;
 alter table staff_profiles enable row level security;
 alter table task_requests enable row level security;
 alter table task_recommendations enable row level security;
-alter table task_categories enable row level security;
 alter table notifications enable row level security;
 alter table task_proofs enable row level security;
 alter table performance_reviews enable row level security;
@@ -190,9 +172,6 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all recommendations" on task_recommendations for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-exception when duplicate_object then null; end $$;
-do $$ begin
-  create policy "authenticated all categories" on task_categories for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all notifications" on notifications for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');

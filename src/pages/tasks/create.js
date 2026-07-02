@@ -10,28 +10,22 @@ export default function TaskCreation({ initialRole = 'manager' }) {
   const role = initialRole
   const [submitted, setSubmitted] = useState(false)
   const [allStaff, setAllStaff] = useState([])
-  const [categories, setCategories] = useState(['Maintenance', 'Inspection', 'Cleaning', 'Delivery', 'Administration'])
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     title: '', description: '', location: '', priority: 'Medium', urgent: false,
-    category: '', dueDate: '', dueTime: '', assignee: '', notes: ''
+    dueDate: '', dueTime: '', assignee: '', notes: ''
   })
   const [recommendations, setRecommendations] = useState([])
   const [recommendationParams, setRecommendationParams] = useState(null)
 
   useEffect(() => {
     async function loadFormData() {
-      const [{ data }, { data: categoryRows, error: categoryError }, { data: systemParams }] = await Promise.all([
+      const [{ data }, { data: systemParams }] = await Promise.all([
         supabase
         .from('staff_profiles')
         .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
         .eq('is_suspended', false)
           .eq('status', 'active'),
-        supabase
-          .from('task_categories')
-          .select('name,status')
-          .eq('status', 'active')
-          .order('name'),
         supabase.from('system_parameters').select('*').eq('id', 1).single(),
       ])
       setAllStaff((data || []).map(row => ({
@@ -55,21 +49,18 @@ export default function TaskCreation({ initialRole = 'manager' }) {
         workload: row.current_workload || 0,
       })))
       setRecommendationParams(systemParams || null)
-      if (!categoryError && categoryRows?.length) {
-        setCategories(categoryRows.map(category => category.name))
-      }
     }
     loadFormData()
   }, [])
 
   // AI recommendation engine
   useEffect(() => {
-    if (!form.category || !form.location) {
+    if (!form.location) {
       setRecommendations([])
       return
     }
     const taskForScoring = {
-      required_skill: form.category,
+      required_skill: 'Cleaning',
       location: form.location,
       estimated_hours: 1,
     }
@@ -88,7 +79,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
         }
       })
     setRecommendations(prioritized)
-  }, [allStaff, form.category, form.location, recommendationParams])
+  }, [allStaff, form.location, recommendationParams])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -104,7 +95,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
       title: form.title,
       description: form.description,
       location: form.location,
-      required_skill: form.category || 'General',
+      required_skill: 'Cleaning',
       priority: form.urgent ? 'High' : form.priority,
       estimated_hours: 1,
       instructions: form.notes,
@@ -253,10 +244,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
                 <div className="space-y-4">
                   <div><label className="block text-sm font-medium text-gray-700 mb-2">Task Title *</label><input required value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="e.g. Equipment Maintenance Check" className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" /></div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-2">Description</label><textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Describe the task requirements..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" /></div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-2">Category</label><select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"><option value="">Select category</option>{categories.map(category => <option key={category} value={category}>{category}</option>)}</select></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-2">Priority</label><div className="flex gap-2">{['Low', 'Medium', 'High'].map(p => (<button key={p} type="button" onClick={() => setForm({ ...form, priority: p })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition ${form.priority === p ? p === 'High' ? 'bg-red-500 text-white' : p === 'Medium' ? 'bg-orange-500 text-white' : 'bg-gray-500 text-white' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>{p}</button>))}</div></div>
-                  </div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Priority</label><div className="flex gap-2">{['Low', 'Medium', 'High'].map(p => (<button key={p} type="button" onClick={() => setForm({ ...form, priority: p })} className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition ${form.priority === p ? p === 'High' ? 'bg-red-500 text-white' : p === 'Medium' ? 'bg-orange-500 text-white' : 'bg-gray-500 text-white' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>{p}</button>))}</div></div>
                   <div className="flex items-center gap-3"><input type="checkbox" id="urgent" checked={form.urgent} onChange={e => setForm({ ...form, urgent: e.target.checked })} className="w-4 h-4" /><label htmlFor="urgent" className="text-sm text-gray-700">Mark as Urgent (requires faster allocation)</label></div>
                 </div>
               </div>
@@ -299,7 +287,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500">Select a category and location to see staff recommendations.</p>
+                  <p className="text-sm text-gray-500">Enter a location to see staff recommendations.</p>
                 )}
                 {role === 'manager' && form.assignee && <div className="mt-3 p-2 bg-green-50 text-green-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Staff selected</div>}
                 {role === 'department' && recommendations.length > 0 && <div className="mt-3 p-2 bg-blue-50 text-blue-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Recommendations will be sent with this request</div>}
