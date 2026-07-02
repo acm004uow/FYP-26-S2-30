@@ -358,12 +358,16 @@ export default function StaffMemberDashboard() {
   const todayTasks = myTasks.filter(isTaskAssignedToday)
   const otherActiveTasks = myTasks.filter(task => !isTaskAssignedToday(task))
 
+  const allTasks = useMemo(() => {
+    return [...myTasks, ...completedTasks]
+  }, [myTasks, completedTasks])
+
   const selectedCalendarTasks = useMemo(() => {
-    return myTasks.filter((task) => {
+    return allTasks.filter((task) => {
       const assigned = getTaskAssignedDate(task)
       return assigned && isSameLocalDay(assigned, selectedCalendarDate)
     })
-  }, [myTasks, selectedCalendarDate])
+  }, [allTasks, selectedCalendarDate])
 
   useEffect(() => {
     if (selectedCalendarTasks.length === 0) {
@@ -395,7 +399,7 @@ export default function StaffMemberDashboard() {
       for (let i = 0; i < 7; i += 1) {
         const date = new Date(year, month, currentDay)
 
-        const dayTasks = myTasks.filter((task) => {
+        const dayTasks = allTasks.filter((task) => {
           const assigned = getTaskAssignedDate(task)
           return assigned && isSameLocalDay(assigned, date)
         })
@@ -408,7 +412,7 @@ export default function StaffMemberDashboard() {
     }
 
     return weeks
-  }, [calendarDate, myTasks])
+  }, [calendarDate, allTasks])
 
   const changeMonth = (delta) => {
     const next = new Date(calendarDate)
@@ -639,6 +643,13 @@ export default function StaffMemberDashboard() {
                       {week.map((day) => {
                         const isSelected = isSameLocalDay(day.date, selectedCalendarDate)
                         const isCurrentMonth = day.date.getMonth() === calendarDate.getMonth()
+                        const hasTasks = day.tasks.length > 0
+                        const today = new Date()
+                        const isOverdue = day.tasks.some((task) => {
+                          const dueDate = task.scheduledEndRaw ? new Date(task.scheduledEndRaw) : null
+                          return dueDate && dueDate < today && task.rawStatus !== 'Completed'
+                        })
+                        const isAllCompleted = hasTasks && day.tasks.every((task) => task.rawStatus === 'Completed')
 
                         return (
                           <button
@@ -649,28 +660,21 @@ export default function StaffMemberDashboard() {
                               setSelectedCalendarTask(day.tasks[0] || null)
                             }}
                             className={`min-h-[15px] rounded-xl border p-2 text-center transition cursor-pointer
-                              ${isCurrentMonth ? 'border-gray-200 bg-white' : 'border-transparent bg-gray-50 text-gray-200'}
+                              ${isCurrentMonth
+                                ? isOverdue
+                                  ? 'border-green-200 bg-green-50 text-green-700'
+                                  : isAllCompleted
+                                  ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
+                                  : hasTasks
+                                  ? 'border-red-200 bg-red-50 text-red-700'
+                                  : 'border-gray-200 bg-white text-gray-900'
+                                : 'border-transparent bg-gray-50 text-gray-400'}
                               ${isSelected ? 'ring-2 ring-blue-300 shadow-sm' : 'hover:border-gray-300'}
                             `}
                           >
                             <div className={`text-sm font-medium ${isSameLocalDay(day.date, new Date()) ? 'text-blue-600' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'}`}>
                               {day.date.getDate()}
                             </div>
-
-                            {day.tasks.slice(0, 2).map((task) => (
-                              <div
-                                key={task.id}
-                                className="mt-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 truncate"
-                              >
-                                {""}
-                              </div>
-                            ))}
-
-                            {day.tasks.length > 2 && (
-                              <div className="mt-1 text-xs text-gray-500">
-                                +{day.tasks.length - 2} more
-                              </div>
-                            )}
                           </button>
                         )
                       })}
