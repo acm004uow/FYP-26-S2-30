@@ -594,16 +594,13 @@ export default function StaffMemberDashboard() {
         </div>
 
         {/* Calendar */}
-        <div className="bg-white rounded-3xl border border-gray-100 p-8 mb-6 shadow-sm">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 shadow-sm">
           <div className="flex items-start justify-between gap-3 mb-6">
             <div>
               <p className="text-xl font-semibold text-gray-900">
                 Assigned tasks calendar
               </p>
-              <p className="text-base text-gray-500 mt-1">
-                View your assigned tasks by day.
-              </p>
-              <p className="mt-6 text-xl font-semibold text-gray-900">
+              <p className="mt-6 text-sm font-semibold text-gray-900">
                 {calendarDate.toLocaleDateString(undefined, {
                   month: 'long',
                   year: 'numeric',
@@ -614,184 +611,141 @@ export default function StaffMemberDashboard() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => changeMonth(-1)}
-                className="rounded-xl border border-gray-200 px-6 py-3 text-base text-gray-700 hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 px-4 py-3 text-base text-gray-700 hover:bg-gray-50"
               >
                 Prev
               </button>
 
               <button
                 onClick={() => changeMonth(1)}
-                className="rounded-xl border border-gray-200 px-6 py-3 text-base text-gray-700 hover:bg-gray-50"
+                className="rounded-xl border border-gray-200 px-4 py-3 text-base text-gray-700 hover:bg-gray-50"
               >
                 Next
               </button>
             </div>
           </div>
 
-          <div className="grid gap-10 lg:grid-cols-[780px_1fr] items-start">
-            <div className="min-w-0 w-full">
-              <div className="grid grid-cols-7 gap-4 text-center text-sm uppercase tracking-[0.08em] text-gray-500">
-                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                  <div key={day}>{day}</div>
-                ))}
-              </div>
+          <div className="grid gap-6 lg:grid-cols-[520px_1fr] items-stretch h-[520px]">
+            <div className="min-w-0 w-full h-[520px]">
+              <div className="h-full flex flex-col rounded-3xl border border-gray-100 bg-white p-4">
+                <div className="grid grid-cols-7 gap-3 text-center text-xs uppercase tracking-[0.06em] text-gray-500">
+                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                    <div key={day}>{day}</div>
+                  ))}
+                </div>
+                <div className="space-y-3 mt-4 flex-1">
+                  {calendarWeeks.map((week, weekIndex) => (
+                    <div key={weekIndex} className="grid grid-cols-7 gap-2">
+                      {week.map((day) => {
+                        const isSelected = isSameLocalDay(day.date, selectedCalendarDate)
+                        const isCurrentMonth = day.date.getMonth() === calendarDate.getMonth()
 
-              <div className="space-y-4 mt-5">
-                {calendarWeeks.map((week, weekIndex) => (
-                  <div key={weekIndex} className="grid grid-cols-7 gap-4">
-                    {week.map((day) => {
-                      const isSelected = isSameLocalDay(day.date, selectedCalendarDate)
-                      const isCurrentMonth = day.date.getMonth() === calendarDate.getMonth()
-
-                      return (
-                        <button
-                          key={day.date.toISOString()}
-                          type="button"
-                          onClick={() => {
-                            setSelectedCalendarDate(day.date)
-                            setSelectedCalendarTask(day.tasks[0] || null)
-                          }}
-                          className={`min-h-[96px] rounded-2xl border p-4 text-left transition cursor-pointer
-                            ${isCurrentMonth ? 'border-gray-200 bg-white' : 'border-transparent bg-gray-50 text-gray-400'}
-                            ${isSelected ? 'ring-2 ring-blue-300 shadow-sm' : 'hover:border-gray-300'}
-                          `}
-                        >
-                          <div className={`text-base font-medium ${isSameLocalDay(day.date, new Date()) ? 'text-blue-600' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'}`}>
-                            {day.date.getDate()}
-                          </div>
-
-                          {day.tasks.slice(0, 2).map((task) => (
-                            <div
-                              key={task.id}
-                              className="mt-2 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700 truncate"
-                            >
-                              {task.title}
+                        return (
+                          <button
+                            key={day.date.toISOString()}
+                            type="button"
+                            onClick={() => {
+                              setSelectedCalendarDate(day.date)
+                              setSelectedCalendarTask(day.tasks[0] || null)
+                            }}
+                            className={`min-h-[15px] rounded-xl border p-2 text-center transition cursor-pointer
+                              ${isCurrentMonth ? 'border-gray-200 bg-white' : 'border-transparent bg-gray-50 text-gray-200'}
+                              ${isSelected ? 'ring-2 ring-blue-300 shadow-sm' : 'hover:border-gray-300'}
+                            `}
+                          >
+                            <div className={`text-sm font-medium ${isSameLocalDay(day.date, new Date()) ? 'text-blue-600' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'}`}>
+                              {day.date.getDate()}
                             </div>
-                          ))}
 
-                          {day.tasks.length > 2 && (
-                            <div className="mt-1 text-xs text-gray-500">
-                              +{day.tasks.length - 2} more
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                ))}
+                            {day.tasks.slice(0, 2).map((task) => (
+                              <div
+                                key={task.id}
+                                className="mt-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700 truncate"
+                              >
+                                {""}
+                              </div>
+                            ))}
+
+                            {day.tasks.length > 2 && (
+                              <div className="mt-1 text-xs text-gray-500">
+                                +{day.tasks.length - 2} more
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="mt-[43px] rounded-3xl border border-gray-200 bg-white p-6 w-full self-start">
-              <div className="mb-8">
-                <p className="text-2xl font-semibold text-gray-900">
-                  Selected date
-                </p>
-                <p className="text-base text-gray-500 mt-2">
-                  {selectedCalendarDate.toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </p>
-              </div>
-
-              {selectedCalendarTasks.length === 0 ? (
-                <div className="min-h-[285px] rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-base text-gray-500 flex flex-col items-center justify-center">
-                  <Calendar className="w-10 h-10 text-gray-400 mb-4" />
-                  No tasks assigned for this day.
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 w-full h-[520px] overflow-hidden">
+              <div className="h-full flex flex-col">
+                <div className="mb-4">
+                  <p className="text-lg font-semibold text-gray-900">
+                    Selected date <span className="font-normal text-sm text-gray-500">- {selectedCalendarDate.toLocaleDateString(undefined, {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}</span>
+                  </p>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    {selectedCalendarTasks.map((task) => (
-                      <button
-                        key={task.id}
-                        type="button"
-                        onClick={() => setSelectedCalendarTask(task)}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                          selectedCalendarTask?.id === task.id
-                            ? 'border-blue-300 bg-blue-50'
-                            : 'border-gray-200 bg-white hover:border-gray-300'
-                        }`}
-                      >
-                        <div className="font-semibold text-gray-800">
-                          {task.title}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {task.location} · {task.due}
-                        </div>
-                      </button>
-                    ))}
+
+                {selectedCalendarTasks.length === 0 ? (
+                  <div className="min-h-[220px] rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-base text-gray-700 flex flex-col items-center justify-center">
+                    <Calendar className="w-10 h-10 text-gray-400 mb-4" />
+                    No tasks assigned for this day.
                   </div>
-
-                  {selectedCalendarTask && (
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
-                      <h3 className="font-semibold text-gray-900">
-                        Task details
-                      </h3>
-
-                      <p className="mt-2 font-medium">
-                        {selectedCalendarTask.title}
-                      </p>
-
-                      <p className="mt-1 text-xs text-gray-500">
-                        {selectedCalendarTask.location}
-                      </p>
-
-                      <div className="mt-3 space-y-2">
-                        <p>
-                          <span className="font-medium text-gray-800">Due:</span>{' '}
-                          {selectedCalendarTask.due}
+                ) : (
+                  <div className="flex-1 flex flex-col overflow-hidden">
+                    {selectedCalendarTask ? (
+                      <div className="overflow-y-auto rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
+                        <p className="mt-2 font-medium">
+                          {selectedCalendarTask.title}
                         </p>
 
-                        <p>
-                          <span className="font-medium text-gray-800">Status:</span>{' '}
-                          {selectedCalendarTask.status}
+                        <p className="mt-1 text-xs text-gray-500">
+                          {selectedCalendarTask.location}
                         </p>
 
-                        <p>
-                          <span className="font-medium text-gray-800">Priority:</span>{' '}
-                          {selectedCalendarTask.priority}
-                        </p>
+                        <div className="mt-3 space-y-2">
+                          <p>
+                            <span className="font-medium text-gray-800">Due:</span>{' '}
+                            {selectedCalendarTask.due}
+                          </p>
 
-                        <p>
-                          <span className="font-medium text-gray-800">Instructions:</span>{' '}
-                          {selectedCalendarTask.instructions}
-                        </p>
+                          <p>
+                            <span className="font-medium text-gray-800">Status:</span>{' '}
+                            {selectedCalendarTask.status}
+                          </p>
 
-                        <p>
-                          <span className="font-medium text-gray-800">Assigned by:</span>{' '}
-                          {selectedCalendarTask.supervisor}
-                        </p>
+                          <p>
+                            <span className="font-medium text-gray-800">Priority:</span>{' '}
+                            {selectedCalendarTask.priority}
+                          </p>
+
+                          <p>
+                            <span className="font-medium text-gray-800">Instructions:</span>{' '}
+                            {selectedCalendarTask.instructions}
+                          </p>
+
+                          <p>
+                            <span className="font-medium text-gray-800">Assigned by:</span>{' '}
+                            {selectedCalendarTask.supervisor}
+                          </p>
+                        </div>
                       </div>
-
-                      <div className="mt-4 space-y-2">
-                        {['Pending', 'Approved'].includes(selectedCalendarTask.status) && (
-                          <button
-                            type="button"
-                            onClick={() => handleStartTask(selectedCalendarTask.id)}
-                            className="w-full rounded-lg bg-blue-500 py-2 text-sm font-medium text-white hover:bg-blue-600"
-                          >
-                            Start Task
-                          </button>
-                        )}
-
-                        {selectedCalendarTask.status === 'In Progress' && (
-                          <button
-                            type="button"
-                            onClick={() => handleCompleteTask(selectedCalendarTask.id)}
-                            className="w-full rounded-lg bg-green-500 py-2 text-sm font-medium text-white hover:bg-green-600"
-                          >
-                            Mark Complete
-                          </button>
-                        )}
+                    ) : (
+                      <div className="min-h-[250px] rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-base text-gray-500 flex flex-col items-center justify-center">
+                        <Calendar className="w-10 h-10 text-gray-400 mb-4" />
+                        No task selected.
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
