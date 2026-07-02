@@ -3,7 +3,6 @@ import { Activity, ClipboardList, FileText, LayoutDashboard, Settings, ShieldAle
 export const navMap = {
   manager: [
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
-    { name: 'Staff Profiles', path: '/staff', icon: Users },
     { name: 'User Accounts', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Task Requests', path: '/manager-task-requests', icon: ClipboardList },
     { name: 'Availability', path: '/manager-availability', icon: Activity },

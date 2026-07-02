@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabaseClient";
 
 const links = {
   manager: [
-    ["Dashboard", "/manager/dashboard", "grid"], ["Staff Profiles", "/manager/staff", "users"], ["User Accounts", "/manager/users", "user-cog"],
+    ["Dashboard", "/manager/dashboard", "grid"], ["User Accounts", "/manager/users", "user-cog"],
     ["Task Requests", "/manager/tasks", "clipboard"], ["Reports", "/manager/reports", "report"]
   ],
   department_staff: [

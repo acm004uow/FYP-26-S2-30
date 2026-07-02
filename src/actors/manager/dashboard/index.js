@@ -157,10 +157,6 @@ export default function ManagerDashboard() {
               className="px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-green-600 transition shadow-sm">
               + Create Task
             </button>
-            <button onClick={() => router.push('/staff')}
-              className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition">
-              Manage Staff
-            </button>
           </div>
         </div>
 
