@@ -87,6 +87,7 @@ export default function StaffMemberDashboard() {
   const [notification, setNotification] = useState(null)
   const [uploadingProof, setUploadingProof] = useState(false)
   const [pendingAvailability, setPendingAvailability] = useState(null)
+  const [pendingAvailabilityReason, setPendingAvailabilityReason] = useState('')
 
   const titleCase = (value) =>
     value === 'in_progress'
@@ -356,15 +357,71 @@ export default function StaffMemberDashboard() {
   const requestAvailabilityChange = (next) => {
     if (next === availability) return
     setPendingAvailability(next)
+    setPendingAvailabilityReason('')
+  }
+
+  const sendAvailabilityUpdateRequest = async (next, reason) => {
+    if (!profile) return
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { data: managers } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'manager')
+      .eq('status', 'active')
+
+    const nextLabel = availabilityLabels[next]?.toLowerCase() || next
+    const currentLabel = availabilityLabels[availability]?.toLowerCase() || availability
+
+    const requestData = {
+      staff_profile_id: profile.id,
+      requested_by: user?.id,
+      current_availability: availability,
+      requested_availability: next,
+      comment: reason || null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error: requestError } = await supabase.from('availability_requests').insert(requestData)
+
+    if (requestError) {
+      console.error('Availability request failed:', requestError)
+      setNotification('Could not submit availability request. Please try again or contact your manager.')
+      setTimeout(() => setNotification(null), 4000)
+      return
+    }
+
+    const notifications = (managers || []).map((manager) => ({
+      user_id: manager.id,
+      title: 'Availability update request',
+      message: `${profile.staff_name || 'A staff member'} requested to change availability from ${currentLabel} to ${nextLabel}.`,
+    }))
+
+    if (notifications.length) {
+      await supabase.from('notifications').insert(notifications)
+    }
+
+    await supabase.from('audit_logs').insert({
+      action: 'request_update_availability',
+      details: `${profile.staff_name || profile.id} requested ${currentLabel} -> ${nextLabel}`,
+    })
+
+    setNotification(`Request sent to manager to change availability to ${availabilityLabels[next] || next}.`)
+    setTimeout(() => setNotification(null), 2000)
   }
 
   const confirmAvailabilityChange = async () => {
-    if (!pendingAvailability) return
+    if (!pendingAvailability || !pendingAvailabilityReason.trim()) return
 
     const next = pendingAvailability
+    const reason = pendingAvailabilityReason.trim()
     setPendingAvailability(null)
+    setPendingAvailabilityReason('')
 
-    await updateAvailability(next)
+    await sendAvailabilityUpdateRequest(next, reason)
   }
 
   const avgRating = completedTasks.length
@@ -1021,15 +1078,32 @@ export default function StaffMemberDashboard() {
             </div>
 
             <div className="flex gap-3">
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">Reason for request</label>
+                <textarea
+                  value={pendingAvailabilityReason}
+                  onChange={(event) => setPendingAvailabilityReason(event.target.value)}
+                  rows={4}
+                  placeholder="Explain why you need this availability change."
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-4">
               <button
                 onClick={confirmAvailabilityChange}
-                className="flex-1 rounded-lg bg-blue-500 py-2 text-sm font-medium text-white hover:bg-blue-600"
+                disabled={!pendingAvailabilityReason.trim()}
+                className="flex-1 rounded-lg bg-blue-500 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-blue-300"
               >
-                Confirm
+                Submit Request
               </button>
 
               <button
-                onClick={() => setPendingAvailability(null)}
+                onClick={() => {
+                  setPendingAvailability(null)
+                  setPendingAvailabilityReason('')
+                }}
                 className="flex-1 rounded-lg bg-gray-100 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
               >
                 Cancel

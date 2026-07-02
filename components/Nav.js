@@ -48,27 +48,47 @@ export default function Nav({ role = "manager" }) {
   const [message, setMessage] = useState("");
   const [chat, setChat] = useState([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [pendingAvailabilityRequests, setPendingAvailabilityRequests] = useState(0);
 
   useEffect(() => {
-    let channel;
+    let notificationChannel;
+    let availabilityChannel;
+
     async function initNav() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       await loadUnreadNotifications(user.id);
-      channel = supabase
+      if (role === "manager") {
+        await loadPendingAvailabilityRequests();
+      }
+
+      notificationChannel = supabase
         .channel(`nav_notifications_${user.id}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` }, () => loadUnreadNotifications(user.id))
         .subscribe();
+
+      if (role === "manager") {
+        availabilityChannel = supabase
+          .channel(`nav_availability_requests_${Date.now()}`)
+          .on("postgres_changes", { event: "*", schema: "public", table: "availability_requests" }, () => loadPendingAvailabilityRequests())
+          .subscribe();
+      }
     }
     initNav();
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      if (notificationChannel) supabase.removeChannel(notificationChannel);
+      if (availabilityChannel) supabase.removeChannel(availabilityChannel);
     };
-  }, []);
+  }, [role]);
 
   async function loadUnreadNotifications(userId) {
     const { count } = await supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("is_read", false);
     setUnreadNotifications(count || 0);
+  }
+
+  async function loadPendingAvailabilityRequests() {
+    const { count } = await supabase.from("availability_requests").select("id", { count: "exact", head: true }).eq("status", "pending");
+    setPendingAvailabilityRequests(count || 0);
   }
 
   async function logout() {
@@ -103,6 +123,12 @@ export default function Nav({ role = "manager" }) {
             <Link className="nav-bell" href={notificationLinks[role]} aria-label="Notifications">
               <span className="nav-icon nav-icon-bell" aria-hidden="true"></span>
               {unreadNotifications > 0 && <span className="nav-dot"></span>}
+            </Link>
+          )}
+          {role === "manager" && (
+            <Link className="nav-bell" href="/manager/availability" aria-label="Pending availability requests">
+              <span className="nav-icon nav-icon-clock" aria-hidden="true"></span>
+              {pendingAvailabilityRequests > 0 && <span className="nav-badge">{pendingAvailabilityRequests}</span>}
             </Link>
           )}
           <button className="nav-logout" onClick={logout}><span aria-hidden="true">{"->"}</span> Logout</button>

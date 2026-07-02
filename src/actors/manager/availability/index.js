@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, Bell, Briefcase, Clock, MapPin, RefreshCw, Search, Star, Users } from 'lucide-react'
+import { Activity, Bell, Briefcase, CheckCircle, Clock, MapPin, RefreshCw, Search, Star, Users, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 
 const availabilityMeta = {
@@ -16,14 +16,23 @@ const filterLabels = {
   suspended: 'suspended staff',
 }
 
+const requestStatusMeta = {
+  pending: { label: 'Pending', badge: 'bg-yellow-100 text-yellow-700' },
+  approved: { label: 'Approved', badge: 'bg-green-100 text-green-700' },
+  rejected: { label: 'Rejected', badge: 'bg-red-100 text-red-700' },
+}
+
 const formatAvailability = (value) => availabilityMeta[value] || availabilityMeta.unavailable
 
 export default function ManagerAvailability() {
   const [staffRows, setStaffRows] = useState([])
+  const [availabilityRequests, setAvailabilityRequests] = useState([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
+  const [requestsLoading, setRequestsLoading] = useState(true)
+  const [requestActionId, setRequestActionId] = useState(null)
 
   const loadAvailability = async () => {
     setLoading(true)
@@ -40,12 +49,29 @@ export default function ManagerAvailability() {
     setLoading(false)
   }
 
+  const loadAvailabilityRequests = async () => {
+    setRequestsLoading(true)
+    const { data, error } = await supabase
+      .from('availability_requests')
+      .select('id,staff_profile_id,current_availability,requested_availability,status,manager_id,comment,created_at,updated_at,requested_by(full_name,email),staff_profiles(id,staff_name)')
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      setNotice(error.message)
+      setAvailabilityRequests([])
+    } else {
+      setAvailabilityRequests(data || [])
+    }
+    setRequestsLoading(false)
+  }
+
   useEffect(() => {
     let cancelled = false
 
     loadAvailability()
+    loadAvailabilityRequests()
 
-    const channel = supabase
+    const availabilityChannel = supabase
       .channel(`manager-availability-page-${Date.now()}`)
       .on(
         'postgres_changes',
@@ -67,9 +93,25 @@ export default function ManagerAvailability() {
       )
       .subscribe()
 
+    const requestChannel = supabase
+      .channel(`manager-availability-requests-${Date.now()}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'availability_requests' },
+        (payload) => {
+          if (cancelled) return
+          loadAvailabilityRequests()
+          if (payload.eventType === 'INSERT') {
+            setNotice('New availability change request received.')
+          }
+        }
+      )
+      .subscribe()
+
     return () => {
       cancelled = true
-      supabase.removeChannel(channel)
+      supabase.removeChannel(availabilityChannel)
+      supabase.removeChannel(requestChannel)
     }
   }, [])
 
@@ -99,6 +141,53 @@ export default function ManagerAvailability() {
     unavailable: staffRows.filter(row => row.availability === 'unavailable' && !row.is_suspended).length,
     suspended: staffRows.filter(row => row.is_suspended || row.status !== 'active').length,
   }), [staffRows])
+
+  const handleAvailabilityAction = async (requestId, action) => {
+    setRequestActionId(requestId)
+    const { data: { user } } = await supabase.auth.getUser()
+    const request = availabilityRequests.find(req => req.id === requestId)
+    if (!request) {
+      setRequestActionId(null)
+      return
+    }
+
+    const updates = {
+      status: action,
+      manager_id: user?.id,
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error: updateError } = await supabase
+      .from('availability_requests')
+      .update(updates)
+      .eq('id', requestId)
+
+    if (updateError) {
+      setNotice(updateError.message)
+      setRequestActionId(null)
+      return
+    }
+
+    if (action === 'approved') {
+      await supabase
+        .from('staff_profiles')
+        .update({ availability: request.requested_availability, updated_at: new Date().toISOString() })
+        .eq('id', request.staff_profile_id)
+    }
+
+    if (request.requested_by) {
+      await supabase.from('notifications').insert({
+        user_id: request.requested_by,
+        title: `Availability request ${action}`,
+        message: `Your availability change request to ${availabilityMeta[request.requested_availability]?.label || request.requested_availability} has been ${action}.`,
+      })
+    }
+
+    setNotice(`Availability request ${action}.`)
+    setRequestActionId(null)
+    await loadAvailability()
+    await loadAvailabilityRequests()
+  }
 
   const handleStatusFilterChange = (nextFilter) => {
     setStatusFilter(nextFilter)
@@ -134,6 +223,65 @@ export default function ManagerAvailability() {
           <SummaryCard icon={Activity} label="Available" value={summary.available} tone="green" active={statusFilter === 'available'} onClick={() => handleStatusFilterChange('available')} />
           <SummaryCard icon={Clock} label="Unavailable" value={summary.unavailable} tone="red" active={statusFilter === 'unavailable'} onClick={() => handleStatusFilterChange('unavailable')} />
           <SummaryCard icon={Briefcase} label="Suspended" value={summary.suspended} tone="gray" active={statusFilter === 'suspended'} onClick={() => handleStatusFilterChange('suspended')} />
+        </div>
+
+        <div className="mb-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Availability Change Requests</h2>
+              <p className="text-sm text-gray-500">Review staff availability change requests and approve or reject them.</p>
+            </div>
+            <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700">{availabilityRequests.length} requests</div>
+          </div>
+
+          <div className="mt-5 overflow-hidden rounded-3xl border border-gray-100">
+            <div className="hidden grid-cols-[1.6fr_1fr_1fr_0.8fr] gap-4 border-b border-gray-100 bg-gray-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 md:grid">
+              <span>Staff</span>
+              <span>Current</span>
+              <span>Requested</span>
+              <span>Status</span>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {availabilityRequests.map((request) => (
+                <div key={request.id} className="grid gap-4 px-5 py-4 md:grid-cols-[1.6fr_1fr_1fr_0.8fr] md:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900">{request.staff_profiles?.staff_name || 'Unknown staff'}</p>
+                    <p className="truncate text-xs text-gray-500">Requested by {request.requested_by?.full_name || request.requested_by?.email || 'Staff'}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(request.created_at).toLocaleString()}</p>
+                    <p className="mt-2 text-xs text-gray-500">Reason: {request.comment || 'No reason provided'}</p>
+                  </div>
+                  <div className="text-sm text-gray-700">{formatAvailability(request.current_availability).label}</div>
+                  <div className="text-sm text-gray-700">{formatAvailability(request.requested_availability).label}</div>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${requestStatusMeta[request.status]?.badge || 'bg-gray-100 text-gray-600'}`}>
+                      {requestStatusMeta[request.status]?.label || request.status}
+                    </span>
+                    {request.status === 'pending' && (
+                      <div className="ml-auto flex gap-2">
+                        <button
+                          onClick={() => handleAvailabilityAction(request.id, 'approved')}
+                          disabled={requestActionId === request.id}
+                          className="rounded-lg bg-green-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-600 disabled:opacity-60"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleAvailabilityAction(request.id, 'rejected')}
+                          disabled={requestActionId === request.id}
+                          className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 disabled:opacity-60"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {availabilityRequests.length === 0 && (
+                <div className="px-5 py-8 text-center text-sm text-gray-400">No availability requests at this time.</div>
+              )}
+            </div>
+          </div>
         </div>
 
         <p className="mb-3 text-sm font-medium text-gray-600">

@@ -5,6 +5,7 @@ create extension if not exists "pgcrypto";
 
 create type user_role as enum ('manager', 'department_staff', 'staff_member', 'system_admin');
 create type availability_status as enum ('available', 'unavailable', 'time_off');
+create type availability_request_status as enum ('pending', 'approved', 'rejected');
 create type task_status as enum ('pending', 'approved', 'rejected', 'in_progress', 'completed', 'cancelled');
 
 create table if not exists profiles (
@@ -69,6 +70,19 @@ create table if not exists task_requests (
   status task_status default 'pending',
   rejection_reason text,
   assigned_staff_id uuid references staff_profiles(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists availability_requests (
+  id uuid primary key default gen_random_uuid(),
+  staff_profile_id uuid references staff_profiles(id) on delete cascade,
+  requested_by uuid references profiles(id) on delete set null,
+  current_availability availability_status not null,
+  requested_availability availability_status not null,
+  status availability_request_status default 'pending',
+  manager_id uuid references profiles(id) on delete set null,
+  comment text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -146,6 +160,7 @@ alter table profiles enable row level security;
 alter table staff_profiles enable row level security;
 alter table task_requests enable row level security;
 alter table task_recommendations enable row level security;
+alter table availability_requests enable row level security;
 alter table notifications enable row level security;
 alter table task_proofs enable row level security;
 alter table performance_reviews enable row level security;
@@ -172,6 +187,15 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all recommendations" on task_recommendations for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated make availability requests" on availability_requests for insert with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated read availability requests" on availability_requests for select using (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated update availability requests" on availability_requests for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all notifications" on notifications for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
