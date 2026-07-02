@@ -8,6 +8,15 @@ const statusColor = {
   Pending: 'bg-yellow-100 text-yellow-700',
   Completed: 'bg-green-100 text-green-700',
   Approved: 'bg-green-100 text-green-700',
+  Overdue: 'bg-red-100 text-red-700',
+}
+
+const getTaskDisplayStatus = (task) => {
+  if (task.rawStatus === 'overdue') {
+    return 'Overdue'
+  }
+
+  return task.status
 }
 
 const priorityColor = {
@@ -436,8 +445,8 @@ export default function StaffMemberDashboard() {
                 {task.id.slice(0, 8)}
               </span>
 
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[task.status] || statusColor.Pending}`}>
-                {task.status}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[getTaskDisplayStatus(task)] || statusColor.Pending}`}>
+                {getTaskDisplayStatus(task)}
               </span>
 
               {canStartToday && task.status !== 'In Progress' && (
@@ -644,12 +653,8 @@ export default function StaffMemberDashboard() {
                         const isSelected = isSameLocalDay(day.date, selectedCalendarDate)
                         const isCurrentMonth = day.date.getMonth() === calendarDate.getMonth()
                         const hasTasks = day.tasks.length > 0
-                        const today = new Date()
-                        const isOverdue = day.tasks.some((task) => {
-                          const dueDate = task.scheduledEndRaw ? new Date(task.scheduledEndRaw) : null
-                          return dueDate && dueDate < today && task.rawStatus !== 'Completed'
-                        })
-                        const isAllCompleted = hasTasks && day.tasks.every((task) => task.rawStatus === 'Completed')
+                        const isOverdue = day.tasks.some((task) => task.rawStatus === 'overdue')
+                        const isAllCompleted = hasTasks && day.tasks.every((task) => task.rawStatus === 'completed')
 
                         return (
                           <button
@@ -662,11 +667,11 @@ export default function StaffMemberDashboard() {
                             className={`min-h-[15px] rounded-xl border p-2 text-center transition cursor-pointer
                               ${isCurrentMonth
                                 ? isOverdue
-                                  ? 'border-green-200 bg-green-50 text-green-700'
-                                  : isAllCompleted
-                                  ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
-                                  : hasTasks
                                   ? 'border-red-200 bg-red-50 text-red-700'
+                                  : isAllCompleted
+                                  ? 'border-green-200 bg-green-50 text-green-700'
+                                  : hasTasks
+                                  ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
                                   : 'border-gray-200 bg-white text-gray-900'
                                 : 'border-transparent bg-gray-50 text-gray-400'}
                               ${isSelected ? 'ring-2 ring-blue-300 shadow-sm' : 'hover:border-gray-300'}
@@ -722,7 +727,7 @@ export default function StaffMemberDashboard() {
 
                           <p>
                             <span className="font-medium text-gray-800">Status:</span>{' '}
-                            {selectedCalendarTask.status}
+                            {getTaskDisplayStatus(selectedCalendarTask)}
                           </p>
 
                           <p>
