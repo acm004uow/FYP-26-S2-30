@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
-import { Eye, EyeOff, LayoutDashboard, Users, UserCheck, Shield } from 'lucide-react'
+import { Eye, EyeOff, LayoutDashboard, Users, UserCheck, Shield, UserRound } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 
 export default function LoginPage() {
@@ -27,6 +27,7 @@ export default function LoginPage() {
     department_staff: '/department',
     staff_member: '/staffMember',
     system_admin: '/admin',
+    customer: '/customer',
   }
 
   const selectedRoleMap = {
@@ -34,6 +35,7 @@ export default function LoginPage() {
     department: 'department_staff',
     staffMember: 'staff_member',
     admin: 'system_admin',
+    customer: 'customer',
   }
 
   const ensureProfile = async (accessToken, fallbackRole) => {
@@ -100,32 +102,39 @@ export default function LoginPage() {
     router.push(routeByRole[profile.role] || '/login')
   }
 
-  const handleAdminSignup = async (e) => {
+  const targetSignupRole = role === 'admin' ? 'system_admin' : 'customer'
+  const signupRoleLabel = role === 'admin' ? 'System Admin' : 'Customer'
+
+  const handleSignup = async (e) => {
     e.preventDefault()
     setError('')
     setMessage('')
 
-    if (!signupForm.fullName || !signupForm.businessName || !signupForm.email || !signupForm.password) {
+    if (targetSignupRole === 'system_admin' && (!signupForm.fullName || !signupForm.businessName || !signupForm.email || !signupForm.password)) {
       setError('Please fill in name, business name, email, and password.')
       return
     }
+    if (targetSignupRole === 'customer' && (!signupForm.fullName || !signupForm.email || !signupForm.password)) {
+      setError('Please fill in name, email, and password.')
+      return
+    }
+
+    const metadata = {
+      full_name: signupForm.fullName,
+      role: targetSignupRole,
+    }
+    if (targetSignupRole === 'system_admin') metadata.business_name = signupForm.businessName
 
     const { error: signupError } = await supabase.auth.signUp({
       email: signupForm.email,
       password: signupForm.password,
-      options: {
-        data: {
-          full_name: signupForm.fullName,
-          business_name: signupForm.businessName,
-          role: 'system_admin',
-        },
-      },
+      options: { data: metadata },
     })
 
     await supabase.from('security_logs').insert({
       email: signupForm.email,
-      event_type: signupError ? 'admin_signup_failed' : 'admin_signup_requested',
-      details: signupError ? signupError.message : 'System admin email verification requested',
+      event_type: signupError ? 'signup_failed' : 'signup_requested',
+      details: signupError ? signupError.message : `${signupRoleLabel} email verification requested`,
     })
 
     if (signupError) {
@@ -137,7 +146,7 @@ export default function LoginPage() {
     setMessage('Verification code sent. Check your email and enter the code.')
   }
 
-  const handleVerifyAdminSignup = async (e) => {
+  const handleVerifySignup = async (e) => {
     e.preventDefault()
     setError('')
     setMessage('')
@@ -159,7 +168,7 @@ export default function LoginPage() {
     }
 
     if (verifyData.session?.access_token) {
-      const { error: profileError } = await ensureProfile(verifyData.session.access_token, 'system_admin')
+      const { error: profileError } = await ensureProfile(verifyData.session.access_token, targetSignupRole)
       if (profileError) {
         setError(`Email verified, but profile could not be created: ${profileError}`)
         return
@@ -167,8 +176,8 @@ export default function LoginPage() {
     }
 
     await supabase.from('audit_logs').insert({
-      action: 'verify_system_admin_signup',
-      details: signupForm.email,
+      action: 'verify_signup',
+      details: `${signupForm.email} as ${targetSignupRole}`,
     })
 
     setForm({ email: signupForm.email, password: signupForm.password })
@@ -176,10 +185,10 @@ export default function LoginPage() {
     setVerificationCode('')
     setSignupStep('details')
     setShowSignup(false)
-    setMessage('Email verified. You can sign in as System Admin now.')
+    setMessage(`Email verified. You can sign in as ${signupRoleLabel} now.`)
   }
 
-  const handleResendAdminCode = async () => {
+  const handleResendCode = async () => {
     setError('')
     setMessage('')
 
@@ -229,7 +238,8 @@ export default function LoginPage() {
                   { id: 'manager', label: 'Manager', icon: LayoutDashboard, color: 'from-blue-500 to-blue-600' },
                   { id: 'department', label: 'Department Staff', icon: Users, color: 'from-green-500 to-green-600' },
                   { id: 'staffMember', label: 'Staff Member', icon: UserCheck, color: 'from-purple-500 to-purple-600' },
-                  { id: 'admin', label: 'System Admin', icon: Shield, color: 'from-red-500 to-red-600' }
+                  { id: 'admin', label: 'System Admin', icon: Shield, color: 'from-red-500 to-red-600' },
+                  { id: 'customer', label: 'Customer', icon: UserRound, color: 'from-teal-500 to-teal-600' }
                 ].map(r => (
                   <button key={r.id} type="button" onClick={() => handleRoleChange(r.id)}
                     className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${role === r.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
@@ -283,7 +293,7 @@ export default function LoginPage() {
               Sign In
             </button>
 
-            {role === 'admin' && (
+            {(role === 'admin' || role === 'customer') && (
               <button
                 type="button"
                 onClick={() => {
@@ -295,7 +305,7 @@ export default function LoginPage() {
                 }}
                 className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
               >
-                Sign Up as System Admin
+                Sign Up as {signupRoleLabel}
               </button>
             )}
           </form>
@@ -311,8 +321,12 @@ export default function LoginPage() {
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-800">Create System Admin</h3>
-                <p className="text-sm text-gray-500">Register your SME and create the first admin account.</p>
+                <h3 className="text-lg font-semibold text-gray-800">Create {signupRoleLabel} Account</h3>
+                <p className="text-sm text-gray-500">
+                  {targetSignupRole === 'system_admin'
+                    ? 'Register your SME and create the first admin account.'
+                    : 'Register as a customer to start booking cleaning services.'}
+                </p>
               </div>
               <button
                 type="button"
@@ -324,7 +338,7 @@ export default function LoginPage() {
             </div>
 
             {signupStep === 'details' ? (
-              <form onSubmit={handleAdminSignup} className="space-y-4">
+              <form onSubmit={handleSignup} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                   <input
@@ -334,15 +348,17 @@ export default function LoginPage() {
                     placeholder="Enter your full name"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Business / SME Name</label>
-                  <input
-                    value={signupForm.businessName}
-                    onChange={e => setSignupForm({ ...signupForm, businessName: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
-                    placeholder="Enter your business name"
-                  />
-                </div>
+                {targetSignupRole === 'system_admin' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Business / SME Name</label>
+                    <input
+                      value={signupForm.businessName}
+                      onChange={e => setSignupForm({ ...signupForm, businessName: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
+                      placeholder="Enter your business name"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
                   <input
@@ -350,7 +366,7 @@ export default function LoginPage() {
                     value={signupForm.email}
                     onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
-                    placeholder="admin@example.com"
+                    placeholder={targetSignupRole === 'system_admin' ? 'admin@example.com' : 'you@example.com'}
                   />
                 </div>
                 <div>
@@ -371,7 +387,7 @@ export default function LoginPage() {
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleVerifyAdminSignup} className="space-y-4">
+              <form onSubmit={handleVerifySignup} className="space-y-4">
                 <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
                   A verification code was sent to {signupForm.email}.
                 </div>
@@ -392,7 +408,7 @@ export default function LoginPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleResendAdminCode}
+                  onClick={handleResendCode}
                   className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
                 >
                   Resend Code

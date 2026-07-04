@@ -4,9 +4,15 @@
 create extension if not exists "pgcrypto";
 
 create type user_role as enum ('manager', 'department_staff', 'staff_member', 'system_admin');
+do $$ begin
+  alter type user_role add value if not exists 'customer';
+exception when duplicate_object then null; end $$;
 create type availability_status as enum ('available', 'unavailable', 'time_off');
 create type availability_request_status as enum ('pending', 'approved', 'rejected');
 create type task_status as enum ('pending', 'approved', 'rejected', 'in_progress', 'completed', 'cancelled');
+do $$ begin
+  create type booking_status as enum ('pending', 'approved', 'rejected', 'in_progress', 'completed', 'cancelled');
+exception when duplicate_object then null; end $$;
 
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -70,6 +76,24 @@ create table if not exists task_requests (
   status task_status default 'pending',
   rejection_reason text,
   assigned_staff_id uuid references staff_profiles(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists bookings (
+  id uuid primary key default gen_random_uuid(),
+  customer_id uuid references profiles(id) on delete cascade,
+  service_type text not null,
+  description text,
+  location text not null,
+  scheduled_date date,
+  scheduled_time text,
+  estimated_hours numeric not null default 2,
+  notes text,
+  status booking_status default 'pending',
+  assigned_staff_id uuid references staff_profiles(id) on delete set null,
+  reviewed_by uuid references profiles(id) on delete set null,
+  rejection_reason text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -159,6 +183,7 @@ create table if not exists audit_logs (
 alter table profiles enable row level security;
 alter table staff_profiles enable row level security;
 alter table task_requests enable row level security;
+alter table bookings enable row level security;
 alter table task_recommendations enable row level security;
 alter table availability_requests enable row level security;
 alter table notifications enable row level security;
@@ -184,6 +209,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all tasks" on task_requests for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all bookings" on bookings for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all recommendations" on task_recommendations for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');

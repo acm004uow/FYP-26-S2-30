@@ -88,6 +88,7 @@ export default function StaffMemberDashboard() {
   const [uploadingProof, setUploadingProof] = useState(false)
   const [pendingAvailability, setPendingAvailability] = useState(null)
   const [pendingAvailabilityReason, setPendingAvailabilityReason] = useState('')
+  const [dismissedOverdueAlert, setDismissedOverdueAlert] = useState(false)
 
   const titleCase = (value) =>
     value === 'in_progress'
@@ -96,6 +97,8 @@ export default function StaffMemberDashboard() {
 
   const formatTask = (task) => ({
     id: task.id,
+    source: 'task',
+    createdAt: task.created_at,
     title: task.title,
     location: task.location,
     scheduledStartRaw: task.scheduled_start,
@@ -116,6 +119,37 @@ export default function StaffMemberDashboard() {
     proof: task.task_proofs?.[0] || null,
   })
 
+  const formatBookingAsTask = (booking) => {
+    const scheduledIso = booking.scheduled_date
+      ? new Date(`${booking.scheduled_date}T${booking.scheduled_time || '09:00'}`).toISOString()
+      : null
+
+    return {
+      id: booking.id,
+      source: 'booking',
+      createdAt: booking.created_at,
+      title: booking.service_type,
+      location: booking.location,
+      scheduledStartRaw: scheduledIso,
+      scheduledEndRaw: scheduledIso,
+      scheduledStart: scheduledIso ? new Date(scheduledIso).toLocaleString() : 'Not set',
+      due: scheduledIso ? new Date(scheduledIso).toLocaleString() : 'No due date',
+      assignedDate: scheduledIso ? new Date(scheduledIso).toLocaleDateString() : 'Not scheduled',
+      priority: 'Medium',
+      status: titleCase(booking.status),
+      rawStatus: booking.status,
+      description: booking.description || '',
+      requiredSkill: booking.service_type,
+      travelTime: 'Not specified',
+      instructions: booking.notes || 'No special instructions.',
+      supervisor: booking.customer?.full_name || booking.customer?.email || 'Customer',
+      customerId: booking.customer_id,
+      rating: 0,
+      feedback: 'No feedback yet',
+      proof: null,
+    }
+  }
+
   const loadDashboard = async () => {
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -130,20 +164,29 @@ export default function StaffMemberDashboard() {
 
     setAvailability(staffProfile.availability || 'available')
 
-    const { data: tasks } = await supabase
-      .from('task_requests')
-      .select('id,title,location,scheduled_start,scheduled_end,priority,status,description,required_skill,travel_time,instructions,profiles(full_name),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
-      .eq('assigned_staff_id', staffProfile.id)
-      .order('created_at', { ascending: false })
+    const [{ data: tasks }, { data: bookings }] = await Promise.all([
+      supabase
+        .from('task_requests')
+        .select('id,created_at,title,location,scheduled_start,scheduled_end,priority,status,description,required_skill,travel_time,instructions,profiles(full_name),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
+        .eq('assigned_staff_id', staffProfile.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('bookings')
+        .select('id,created_at,service_type,location,scheduled_date,scheduled_time,status,description,notes,customer_id,customer:profiles!bookings_customer_id_fkey(full_name,email)')
+        .eq('assigned_staff_id', staffProfile.id)
+        .order('created_at', { ascending: false }),
+    ])
 
-    const rows = (tasks || []).map(formatTask)
+    const rows = [...(tasks || []).map(formatTask), ...(bookings || []).map(formatBookingAsTask)]
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
 
     setMyTasks(rows.filter(task => task.status !== 'Completed'))
     setCompletedTasks(rows.filter(task => task.status === 'Completed'))
   }
 
   useEffect(() => {
-    let channel = null
+    let taskChannel = null
+    let bookingChannel = null
 
     async function initDashboard() {
       await loadDashboard()
@@ -158,7 +201,7 @@ export default function StaffMemberDashboard() {
 
       if (!staffProfile?.id) return
 
-      channel = supabase
+      taskChannel = supabase
         .channel(`staff-assigned-tasks-${staffProfile.id}-${Date.now()}`)
         .on(
           'postgres_changes',
@@ -178,12 +221,34 @@ export default function StaffMemberDashboard() {
           }
         )
         .subscribe()
+
+      bookingChannel = supabase
+        .channel(`staff-assigned-bookings-${staffProfile.id}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'bookings',
+            filter: `assigned_staff_id=eq.${staffProfile.id}`,
+          },
+          (payload) => {
+            if (['INSERT', 'UPDATE'].includes(payload.eventType) && payload.new?.status === 'approved') {
+              setNotification(`New booking assignment: ${payload.new.service_type}`)
+              setTimeout(() => setNotification(null), 3000)
+            }
+
+            loadDashboard()
+          }
+        )
+        .subscribe()
     }
 
     initDashboard()
 
     return () => {
-      if (channel) supabase.removeChannel(channel)
+      if (taskChannel) supabase.removeChannel(taskChannel)
+      if (bookingChannel) supabase.removeChannel(bookingChannel)
     }
   }, [])
 
@@ -196,14 +261,16 @@ export default function StaffMemberDashboard() {
       return
     }
 
+    const table = task.source === 'booking' ? 'bookings' : 'task_requests'
+
     await supabase
-      .from('task_requests')
+      .from(table)
       .update({ status: 'in_progress', updated_at: new Date().toISOString() })
       .eq('id', taskId)
 
     await supabase.from('audit_logs').insert({
-      action: 'start_task',
-      details: `Task ${taskId}`,
+      action: task.source === 'booking' ? 'start_booking' : 'start_task',
+      details: `${task.source === 'booking' ? 'Booking' : 'Task'} ${taskId}`,
     })
 
     await loadDashboard()
@@ -230,11 +297,13 @@ export default function StaffMemberDashboard() {
     setProofError('')
     setUploadingProof(true)
 
+    const isBooking = proofTask.source === 'booking'
+
     try {
       let proofUrl = null
       let proofName = null
 
-      if (proofFile) {
+      if (proofFile && !isBooking) {
         const safeName = proofFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
         const path = `${profile.id}/${proofTask.id}-${Date.now()}-${safeName}`
 
@@ -266,7 +335,7 @@ export default function StaffMemberDashboard() {
       }
 
       const { error: taskError } = await supabase
-        .from('task_requests')
+        .from(isBooking ? 'bookings' : 'task_requests')
         .update({ status: 'completed', updated_at: new Date().toISOString() })
         .eq('id', proofTask.id)
         .eq('assigned_staff_id', profile.id)
@@ -291,7 +360,7 @@ export default function StaffMemberDashboard() {
 
       const completionNotifications = (managers || []).map(manager => ({
         user_id: manager.id,
-        title: 'Task completed',
+        title: isBooking ? 'Booking completed' : 'Task completed',
         message: `${profile.staff_name || 'A staff member'} completed ${proofTask.title}.`,
       }))
 
@@ -299,9 +368,17 @@ export default function StaffMemberDashboard() {
         await supabase.from('notifications').insert(completionNotifications)
       }
 
+      if (isBooking && proofTask.customerId) {
+        await supabase.from('notifications').insert({
+          user_id: proofTask.customerId,
+          title: 'Booking completed',
+          message: `${profile.staff_name || 'Your assigned staff'} completed your ${proofTask.title} booking.`,
+        })
+      }
+
       await supabase.from('audit_logs').insert({
-        action: 'complete_task',
-        details: `Task ${proofTask.id}`,
+        action: isBooking ? 'complete_booking' : 'complete_task',
+        details: `${isBooking ? 'Booking' : 'Task'} ${proofTask.id}`,
       })
 
       await loadDashboard()
@@ -309,10 +386,10 @@ export default function StaffMemberDashboard() {
       setShowProofModal(false)
       setProofTask(null)
       setProofFile(null)
-      setNotification('Task completed.')
+      setNotification(isBooking ? 'Booking completed.' : 'Task completed.')
       setTimeout(() => setNotification(null), 2000)
     } catch (error) {
-      setProofError(error.message || 'Task could not be completed. Please try again.')
+      setProofError(error.message || 'This could not be completed. Please try again.')
     } finally {
       setUploadingProof(false)
     }
@@ -381,8 +458,6 @@ export default function StaffMemberDashboard() {
       requested_availability: next,
       comment: reason || null,
       status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     }
 
     const { error: requestError } = await supabase.from('availability_requests').insert(requestData)
@@ -675,10 +750,21 @@ export default function StaffMemberDashboard() {
         </div>
 
         {/* Calendar */}
-        {overdueTasks.length > 0 && (
+        {overdueTasks.length > 0 && !dismissedOverdueAlert && (
           <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
-            <p className="font-semibold">Overdue tasks alert</p>
-            <p className="mt-1">You have {overdueTasks.length} overdue assigned task{overdueTasks.length === 1 ? '' : 's'}.</p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-semibold">Overdue tasks alert</p>
+                <p className="mt-1">You have {overdueTasks.length} overdue assigned task{overdueTasks.length === 1 ? '' : 's'}.</p>
+              </div>
+              <button
+                onClick={() => setDismissedOverdueAlert(true)}
+                className="flex-shrink-0 rounded-lg p-1 hover:bg-red-100 transition-colors"
+                aria-label="Close alert"
+              >
+                <X size={18} className="text-red-700" />
+              </button>
+            </div>
           </div>
         )}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 mb-6 shadow-sm">
@@ -1024,18 +1110,22 @@ export default function StaffMemberDashboard() {
             </div>
 
             <p className="text-sm text-gray-600 mb-4">
-              Task: {proofTask.title}
+              {proofTask.source === 'booking' ? 'Booking' : 'Task'}: {proofTask.title}
             </p>
 
-            <input
-              type="file"
-              accept="image/*,.pdf,.doc,.docx"
-              onChange={event => {
-                setProofFile(event.target.files?.[0] || null)
-                setProofError('')
-              }}
-              className="mb-4 text-sm"
-            />
+            {proofTask.source === 'booking' ? (
+              <p className="mb-4 text-xs text-gray-500">Photo proof isn't required for customer bookings.</p>
+            ) : (
+              <input
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={event => {
+                  setProofFile(event.target.files?.[0] || null)
+                  setProofError('')
+                }}
+                className="mb-4 text-sm"
+              />
+            )}
 
             {proofError && (
               <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -1049,7 +1139,7 @@ export default function StaffMemberDashboard() {
               disabled={uploadingProof}
               className="w-full py-2 bg-blue-500 text-white rounded-lg text-sm disabled:opacity-60"
             >
-              {uploadingProof ? 'Uploading...' : 'Complete Task'}
+              {uploadingProof ? 'Uploading...' : proofTask.source === 'booking' ? 'Complete Booking' : 'Complete Task'}
             </button>
           </div>
         </div>

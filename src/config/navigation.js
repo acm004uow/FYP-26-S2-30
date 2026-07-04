@@ -5,6 +5,7 @@ export const navMap = {
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
     { name: 'User Accounts', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Task Requests', path: '/manager-task-requests', icon: ClipboardList },
+    { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'Availability', path: '/manager-availability', icon: Activity },
     { name: 'Reports', path: '/manager-reports', icon: FileText },
   ],
@@ -14,6 +15,10 @@ export const navMap = {
   ],
   staffMember: [
     { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
+  ],
+  customer: [
+    { name: 'My Bookings', path: '/customer', icon: ClipboardList },
+    { name: 'New Booking', path: '/customer-book', icon: ClipboardList },
   ],
   admin: [
     { name: 'User Accounts', path: '/admin', icon: UserCog },

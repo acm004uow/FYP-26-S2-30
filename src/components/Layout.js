@@ -11,6 +11,7 @@ const roleDisplayMap = {
   department: 'Department Staff',
   staffMember: 'Staff Member',
   admin: 'System Admin',
+  customer: 'Customer',
 }
 
 const profileRoleDisplayMap = {
@@ -21,6 +22,7 @@ const profileRoleDisplayMap = {
   staffMember: 'Staff Member',
   system_admin: 'System Admin',
   admin: 'System Admin',
+  customer: 'Customer',
 }
 
 export default function Layout({ children, role = 'manager' }) {
@@ -99,6 +101,7 @@ export default function Layout({ children, role = 'manager' }) {
         department: 'department_staff',
         staffMember: 'staff_member',
         admin: 'system_admin',
+        customer: 'customer',
       }
       const expectedRole = expectedRoleMap[role] || role
       if (resolvedProfile.role && resolvedProfile.role !== expectedRole) {
