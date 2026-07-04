@@ -19,12 +19,22 @@ export default function TaskCreation() {
 
   useEffect(() => {
     async function loadFormData() {
-      const [{ data }, { data: systemParams }] = await Promise.all([
-        supabase
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: managerProfile } = await supabase
+        .from('profiles')
+        .select('host_admin_id')
+        .eq('id', user?.id)
+        .single()
+
+      const hostAdminId = managerProfile?.host_admin_id
+      const staffQuery = supabase
         .from('staff_profiles')
         .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
         .eq('is_suspended', false)
-          .eq('status', 'active'),
+        .eq('status', 'active')
+
+      const [{ data }, { data: systemParams }] = await Promise.all([
+        hostAdminId ? staffQuery.eq('host_admin_id', hostAdminId) : staffQuery,
         supabase.from('system_parameters').select('*').eq('id', 1).single(),
       ])
       setAllStaff((data || []).map(row => ({

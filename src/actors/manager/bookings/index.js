@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 
 const statusColor = {
@@ -24,15 +24,31 @@ export default function ManagerBookings() {
   const [assigningBookingId, setAssigningBookingId] = useState(null)
 
   const loadBookings = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user?.id)
+      .single()
+
+    const hostAdminId = managerProfile?.host_admin_id
+    if (!hostAdminId) {
+      setBookings([])
+      setStaffRows([])
+      return
+    }
+
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
       supabase
         .from('bookings')
-        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name)')
+        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name)')
+        .eq('host_admin_id', hostAdminId)
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false }),
       supabase
         .from('staff_profiles')
         .select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended')
+        .eq('host_admin_id', hostAdminId)
         .eq('status', 'active')
         .order('staff_name'),
     ])
@@ -84,7 +100,7 @@ export default function ManagerBookings() {
       .update({ status, reviewed_by: user.id, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('status', 'pending')
-      .select('id,customer_id,service_type')
+      .select('id,customer_id,service_type,assigned_staff_id')
       .maybeSingle()
 
     if (!error && reviewedBooking?.customer_id) {
@@ -94,6 +110,25 @@ export default function ManagerBookings() {
         message: `${reviewedBooking.service_type} was ${status} by the manager.`,
       })
     }
+
+    if (!error && reviewedBooking && status === 'approved' && reviewedBooking.assigned_staff_id) {
+      const staff = staffRows.find(item => item.id === reviewedBooking.assigned_staff_id)
+      if (staff) {
+        await supabase
+          .from('staff_profiles')
+          .update({ current_workload: Number(staff.tasks || 0) + 1, updated_at: new Date().toISOString() })
+          .eq('id', staff.id)
+
+        if (staff.userId) {
+          await supabase.from('notifications').insert({
+            user_id: staff.userId,
+            title: 'New booking assignment',
+            message: `${reviewedBooking.service_type} has been assigned to you.`,
+          })
+        }
+      }
+    }
+
     if (!error && reviewedBooking) {
       await supabase.from('audit_logs').insert({ user_id: user?.id, action: 'review_booking', details: `Booking ${id} ${status}` })
     }
@@ -166,7 +201,7 @@ export default function ManagerBookings() {
         .from('staff_profiles')
         .update({ current_workload: Number(staff.tasks || 0) + 1, updated_at: new Date().toISOString() })
         .eq('id', staff.id),
-      previousStaff
+      previousStaff && booking.status === 'approved'
         ? supabase
           .from('staff_profiles')
           .update({ current_workload: Math.max(0, Number(previousStaff.tasks || 0) - 1), updated_at: new Date().toISOString() })
@@ -201,7 +236,7 @@ export default function ManagerBookings() {
     <Layout role="manager">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold">Bookings for Review</h1>
-        <p className="text-gray-500 mb-6">Review customer bookings, then drag available staff onto one to assign it.</p>
+        <p className="text-gray-500 mb-6">AI recommends the best-matched staff for each booking. Approve to confirm, or drag a different staff member onto a booking to override.</p>
         {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
@@ -222,7 +257,14 @@ export default function ManagerBookings() {
                       <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><Calendar className="w-4 h-4" />{booking.scheduled_date} {booking.scheduled_time}</p>
                     )}
                     <p className="text-xs text-gray-400 mt-2">Requested by {booking.customer?.full_name || booking.customer?.email || 'Customer'} on {new Date(booking.created_at).toLocaleDateString()}</p>
-                    <p className="text-sm text-gray-600 mt-2 flex items-center gap-1"><UserCheck className="w-4 h-4" />Assigned staff: {booking.staff_profiles?.staff_name || 'Unassigned'}</p>
+                    {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
+                      <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
+                        <p className="text-sm text-indigo-700 flex items-center gap-1"><Sparkles className="w-4 h-4" />AI Recommended: {booking.staff_profiles.staff_name}</p>
+                        {booking.recommendation_reason && <p className="text-xs text-indigo-500 mt-0.5">{booking.recommendation_reason}</p>}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-600 mt-2 flex items-center gap-1"><UserCheck className="w-4 h-4" />Assigned staff: {booking.staff_profiles?.staff_name || 'Unassigned'}</p>
+                    )}
                     {booking.description && (
                       <p className="text-sm text-gray-600 mt-2"><span className="font-medium text-gray-700">Description:</span> {booking.description}</p>
                     )}

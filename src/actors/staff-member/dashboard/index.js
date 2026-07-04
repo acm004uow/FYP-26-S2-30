@@ -174,6 +174,7 @@ export default function StaffMemberDashboard() {
         .from('bookings')
         .select('id,created_at,service_type,location,scheduled_date,scheduled_time,status,description,notes,customer_id,customer:profiles!bookings_customer_id_fkey(full_name,email)')
         .eq('assigned_staff_id', staffProfile.id)
+        .neq('status', 'pending')
         .order('created_at', { ascending: false }),
     ])
 

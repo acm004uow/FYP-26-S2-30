@@ -139,7 +139,7 @@ const roles = [
     points: ['Update availability', 'View assignments', 'Upload completion proof'],
   },
   {
-    title: 'System Admins',
+    title: 'Owners',
     icon: LockKeyhole,
     accent: 'from-green-500 to-blue-500',
     summary: 'Govern accounts, permissions, security activity, audit trails, and allocation rules.',
@@ -332,7 +332,7 @@ export default function MarketingHome() {
                   href="/login"
                   className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
                 >
-                  Register system admin
+                  Register as owner
                 </Link>
               </div>
 
@@ -543,7 +543,7 @@ export default function MarketingHome() {
                 Admin controls for real workplace accountability.
               </h2>
               <p className="mt-5 max-w-xl leading-8 text-slate-400">
-                System admins can create accounts, manage permissions, reset passwords, configure allocation
+                Owners can create accounts, manage permissions, reset passwords, configure allocation
                 parameters, and review security or audit activity, all in one place.
               </p>
             </div>
@@ -570,7 +570,7 @@ export default function MarketingHome() {
           <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-5 py-12 sm:px-8 md:flex-row md:items-center">
             <div>
               <h2 className="text-xl font-extrabold sm:text-2xl">Ready to manage allocations from one place?</h2>
-              <p className="mt-2 text-slate-600">Sign in with your role or create the first system admin account.</p>
+              <p className="mt-2 text-slate-600">Sign in with your role or create the first owner account.</p>
             </div>
             <Link
               href="/login"

@@ -30,17 +30,27 @@ export default function ManagerTaskRequests() {
   const [assigningTaskId, setAssigningTaskId] = useState(null)
 
   const loadRequests = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user?.id)
+      .single()
+
+    const hostAdminId = managerProfile?.host_admin_id
+    const staffQuery = supabase
+      .from('staff_profiles')
+      .select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended')
+      .eq('status', 'active')
+      .order('staff_name')
+
     const [{ data: tasks }, { data: staff }] = await Promise.all([
       supabase
         .from('task_requests')
         .select('id,created_by,title,location,priority,status,created_at,assigned_staff_id,profiles(full_name,email),staff_profiles(staff_name)')
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false }),
-      supabase
-        .from('staff_profiles')
-        .select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended')
-        .eq('status', 'active')
-        .order('staff_name'),
+      hostAdminId ? staffQuery.eq('host_admin_id', hostAdminId) : staffQuery,
     ])
 
     setRequests(tasks || [])

@@ -4,7 +4,7 @@ import { Bot, MessageCircle, Send, Sparkles, User, X as XIcon } from 'lucide-rea
 const roleNames = {
   manager: 'Manager',
   staffMember: 'Staff Member',
-  admin: 'System Admin',
+  admin: 'Owner',
 }
 
 const assistantSuggestions = {

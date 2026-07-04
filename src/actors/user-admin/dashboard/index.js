@@ -7,7 +7,7 @@ const roleLabel = (role) => ({
   manager: 'Manager',
   department_staff: 'Department Staff',
   staff_member: 'Staff Member',
-  system_admin: 'System Admin',
+  system_admin: 'Owner',
   customer: 'Customer',
   user_admin: 'User Admin',
 }[role] || role)

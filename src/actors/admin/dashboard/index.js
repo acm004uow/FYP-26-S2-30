@@ -222,7 +222,7 @@ export default function AdminPanel() {
   return (
     <Layout role="admin">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold">System Administration</h1>
+        <h1 className="text-2xl font-bold">Owner Dashboard</h1>
         <p className="text-gray-500 text-sm mb-6">Manage users, monitor security, and configure system settings.</p>
         {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
 

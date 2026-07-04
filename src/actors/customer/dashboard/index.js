@@ -17,6 +17,7 @@ export default function CustomerDashboard() {
   const formatBooking = (booking) => ({
     id: booking.id,
     serviceType: booking.service_type,
+    companyName: booking.company?.business_name || 'Unknown company',
     location: booking.location,
     description: booking.description || '',
     scheduledDate: booking.scheduled_date || '',
@@ -34,7 +35,7 @@ export default function CustomerDashboard() {
     if (!user) return
     const { data } = await supabase
       .from('bookings')
-      .select('id,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,staff_profiles(staff_name)')
+      .select('id,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,staff_profiles(staff_name),company:profiles!bookings_host_admin_id_fkey(business_name)')
       .eq('customer_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -142,11 +143,16 @@ export default function CustomerDashboard() {
                   <span className="text-xs font-mono text-gray-400">{booking.id.slice(0, 8)}</span>
                 </div>
                 <p className="font-medium text-gray-800">{booking.serviceType}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{booking.companyName}</p>
                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" /> {booking.location} - Requested {booking.createdAt}</p>
                 {booking.scheduledDate && (
                   <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><Calendar className="w-3 h-3" /> {booking.scheduledDate} {booking.scheduledTime}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-1">Assigned staff: {booking.assignedStaff}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {booking.rawStatus === 'pending' && booking.assignedStaff !== 'Unassigned'
+                    ? `Suggested staff (pending manager approval): ${booking.assignedStaff}`
+                    : `Assigned staff: ${booking.assignedStaff}`}
+                </p>
               </div>
               <div className="text-right">
                 <span className={`text-xs px-2 py-1 rounded-full ${booking.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' : booking.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{booking.status}</span>
@@ -167,6 +173,7 @@ export default function CustomerDashboard() {
           {completedHistory.map(hist => (
             <div key={hist.id} className="p-4 border-b hover:bg-gray-50">
               <p className="text-sm font-medium text-gray-800">{hist.serviceType}</p>
+              <p className="text-xs text-gray-500">{hist.companyName}</p>
               <p className="text-xs text-gray-500">{hist.location} - Completed {hist.createdAt} by {hist.assignedStaff}</p>
             </div>
           ))}

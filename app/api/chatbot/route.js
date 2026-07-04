@@ -3,13 +3,13 @@ import { NextResponse } from 'next/server'
 const roleNames = {
   manager: 'Manager',
   staffMember: 'Staff Member',
-  admin: 'System Admin',
+  admin: 'Owner',
 }
 
 const roleContext = {
   manager: 'Managers review task requests, assign staff, view staff profiles, manage user accounts, monitor availability, and generate operational reports.',
   staffMember: 'Staff members view assigned tasks, update availability, start work, complete tasks, upload proof, and check feedback.',
-  admin: 'System admins manage accounts, reset passwords, monitor security logs, review audit logs, and tune global allocation parameters.',
+  admin: 'Owners manage accounts, reset passwords, monitor security logs, review audit logs, and tune global allocation parameters.',
 }
 
 const normalizeRole = (role) => ({

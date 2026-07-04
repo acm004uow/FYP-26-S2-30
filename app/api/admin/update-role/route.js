@@ -30,11 +30,11 @@ export async function POST(request) {
       .single();
 
     if (profileError || requesterProfile?.role !== "system_admin" || requesterProfile.status !== "active") {
-      return NextResponse.json({ error: "Only active system admins can manage account access" }, { status: 403 });
+      return NextResponse.json({ error: "Only active owners can manage account access" }, { status: 403 });
     }
 
     if (requesterId === user_id && (role || status === "inactive")) {
-      return NextResponse.json({ error: "You cannot change or deactivate your own admin access" }, { status: 400 });
+      return NextResponse.json({ error: "You cannot change or deactivate your own owner access" }, { status: 400 });
     }
 
     const { data: targetProfile, error: targetError } = await supabase
@@ -51,7 +51,7 @@ export async function POST(request) {
     const isSameHost = targetProfile.id === requesterId || targetProfile.host_admin_id === requesterHostAdminId;
     const isSameBusiness = requesterProfile.business_name && targetProfile.business_name === requesterProfile.business_name;
     if (!isSameHost && !isSameBusiness) {
-      return NextResponse.json({ error: "This user is not under your system admin organisation" }, { status: 403 });
+      return NextResponse.json({ error: "This user is not under your organisation" }, { status: 403 });
     }
 
     if (targetProfile.role === "system_admin" && (role && role !== "system_admin" || status === "inactive")) {
@@ -63,7 +63,7 @@ export async function POST(request) {
 
       if (countError) return NextResponse.json({ error: countError.message }, { status: 400 });
       if ((count || 0) <= 1) {
-        return NextResponse.json({ error: "At least one active system admin is required" }, { status: 400 });
+        return NextResponse.json({ error: "At least one active owner is required" }, { status: 400 });
       }
     }
 
@@ -120,7 +120,7 @@ export async function POST(request) {
       await supabase.from("security_logs").insert({
         email: targetProfile.email,
         event_type: action,
-        details: `${requesterProfile.email || "System admin"} changed account status to ${status}`,
+        details: `${requesterProfile.email || "Owner"} changed account status to ${status}`,
       });
     }
 

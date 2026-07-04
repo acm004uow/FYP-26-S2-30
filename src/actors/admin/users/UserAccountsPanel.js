@@ -13,7 +13,7 @@ export const roleOptions = [
   },
   {
     value: 'system_admin',
-    label: 'System Admin',
+    label: 'Owner',
     permissions: 'Manage user roles, access, security logs, audit logs, and system settings.',
   },
 ]
@@ -22,7 +22,7 @@ const roleLabel = (role) => ({
   manager: 'Manager',
   department_staff: 'Department Staff',
   staff_member: 'Staff Member',
-  system_admin: 'System Admin',
+  system_admin: 'Owner',
 }[role] || role)
 
 const permissionsFor = (role) => roleOptions.find(option => option.value === role)?.permissions || 'Custom access level.'

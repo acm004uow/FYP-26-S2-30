@@ -22,7 +22,7 @@ export default function SetPasswordPage() {
       if (urlError) {
         setCheckingSession(false)
         setError(errorCode === 'otp_expired'
-          ? 'This invitation link is invalid or expired. Ask your manager or system admin to send a new invite.'
+          ? 'This invitation link is invalid or expired. Ask your manager or account owner to send a new invite.'
           : urlError.replace(/\+/g, ' '))
         return
       }

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { ClipboardList, MapPin, Calendar, CheckCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { generateRecommendations } from '../../../../lib/recommendationEngine'
 
 const SERVICE_TYPES = ['Home Cleaning', 'Office Cleaning', 'Deep Cleaning', 'Move-Out Cleaning', 'Carpet Cleaning']
 
@@ -14,10 +15,25 @@ export default function CustomerBooking() {
   const [postalCode, setPostalCode] = useState('')
   const [postalLookupStatus, setPostalLookupStatus] = useState('')
   const [address, setAddress] = useState({ blockNo: '', streetName: '', building: '', unitNo: '' })
+  const [companies, setCompanies] = useState([])
   const [form, setForm] = useState({
-    serviceType: SERVICE_TYPES[0], description: '',
+    companyId: '', serviceType: SERVICE_TYPES[0], description: '',
     scheduledDate: '', scheduledTime: '', estimatedHours: 2, notes: '',
   })
+
+  useEffect(() => {
+    async function loadCompanies() {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id,business_name')
+        .eq('role', 'system_admin')
+        .eq('status', 'active')
+        .not('business_name', 'is', null)
+        .order('business_name')
+      setCompanies(data || [])
+    }
+    loadCompanies()
+  }, [])
 
   useEffect(() => {
     if (postalCode.length !== 6) {
@@ -62,6 +78,10 @@ export default function CustomerBooking() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (submitting) return
+    if (!form.companyId) {
+      setError('Please select which company you want to book with.')
+      return
+    }
     if (postalCode.length !== 6 || !address.blockNo || !address.streetName) {
       setError('Please provide a postal code, block number, and street name.')
       return
@@ -71,6 +91,7 @@ export default function CustomerBooking() {
     const { data: { user } } = await supabase.auth.getUser()
     const { data: createdBooking, error: insertError } = await supabase.from('bookings').insert({
       customer_id: user?.id,
+      host_admin_id: form.companyId,
       service_type: form.serviceType,
       description: form.description,
       location: composedLocation,
@@ -90,6 +111,31 @@ export default function CustomerBooking() {
     await supabase.from('audit_logs').insert({ user_id: user?.id, action: 'create_booking', details: form.serviceType })
 
     if (createdBooking?.id) {
+      const [{ data: staffRows }, { data: systemParams }] = await Promise.all([
+        supabase
+          .from('staff_profiles')
+          .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
+          .eq('host_admin_id', form.companyId)
+          .eq('is_suspended', false)
+          .eq('status', 'active'),
+        supabase.from('system_parameters').select('*').eq('id', 1).single(),
+      ])
+
+      const recommendations = generateRecommendations(
+        staffRows || [],
+        { required_skill: 'Cleaning', location: composedLocation, estimated_hours: form.estimatedHours },
+        systemParams || {}
+      )
+      const topMatch = recommendations[0]
+
+      if (topMatch) {
+        await supabase.from('bookings').update({
+          assigned_staff_id: topMatch.staff_id,
+          recommendation_reason: topMatch.reason,
+          updated_at: new Date().toISOString(),
+        }).eq('id', createdBooking.id)
+      }
+
       let { data: customerProfile } = await supabase
         .from('profiles')
         .select('full_name,email')
@@ -101,12 +147,13 @@ export default function CustomerBooking() {
         .select('id')
         .eq('role', 'manager')
         .eq('status', 'active')
+        .eq('host_admin_id', form.companyId)
 
       const customerName = customerProfile?.full_name || customerProfile?.email || 'A customer'
       const managerNotifications = (managers || []).map(manager => ({
         user_id: manager.id,
         title: 'New booking request',
-        message: `${customerName} booked ${form.serviceType} at ${composedLocation}.`,
+        message: `${customerName} booked ${form.serviceType} at ${composedLocation}.${topMatch ? ` AI recommends ${topMatch.staff_name} for this booking.` : ''}`,
       }))
 
       if (managerNotifications.length) {
@@ -149,6 +196,14 @@ export default function CustomerBooking() {
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-blue-500" /> Service Details</h3>
             <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
+                <select required value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50">
+                  <option value="">Select a company...</option>
+                  {companies.map(company => <option key={company.id} value={company.id}>{company.business_name}</option>)}
+                </select>
+                {companies.length === 0 && <p className="mt-1 text-xs text-gray-400">No companies are available to book with yet.</p>}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Service Type *</label>
                 <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50">

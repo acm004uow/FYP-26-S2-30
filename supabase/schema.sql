@@ -47,6 +47,7 @@ where profile.host_admin_id is null
 create table if not exists staff_profiles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references profiles(id) on delete set null,
+  host_admin_id uuid references profiles(id) on delete set null,
   staff_name text not null,
   email text,
   phone text,
@@ -62,6 +63,15 @@ create table if not exists staff_profiles (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table staff_profiles add column if not exists host_admin_id uuid references profiles(id) on delete set null;
+
+update staff_profiles sp
+set host_admin_id = p.host_admin_id
+from profiles p
+where sp.user_id = p.id
+  and sp.host_admin_id is null
+  and p.host_admin_id is not null;
 
 create table if not exists task_requests (
   id uuid primary key default gen_random_uuid(),
@@ -86,6 +96,7 @@ create table if not exists task_requests (
 create table if not exists bookings (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid references profiles(id) on delete cascade,
+  host_admin_id uuid references profiles(id) on delete set null,
   service_type text not null,
   description text,
   location text not null,
@@ -95,11 +106,15 @@ create table if not exists bookings (
   notes text,
   status booking_status default 'pending',
   assigned_staff_id uuid references staff_profiles(id) on delete set null,
+  recommendation_reason text,
   reviewed_by uuid references profiles(id) on delete set null,
   rejection_reason text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+alter table bookings add column if not exists host_admin_id uuid references profiles(id) on delete set null;
+alter table bookings add column if not exists recommendation_reason text;
 
 create table if not exists availability_requests (
   id uuid primary key default gen_random_uuid(),
@@ -292,8 +307,8 @@ begin
   on conflict (id) do nothing;
 
   if requested_role = 'staff_member' then
-    insert into public.staff_profiles (user_id, staff_name, email, skills, status)
-    values (new.id, requested_name, new.email, '{}', 'active')
+    insert into public.staff_profiles (user_id, host_admin_id, staff_name, email, skills, status)
+    values (new.id, requested_host_admin_id, requested_name, new.email, '{}', 'active')
     on conflict do nothing;
   end if;
 

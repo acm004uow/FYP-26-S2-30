@@ -9,7 +9,7 @@ import { navMap } from '../config/navigation'
 const roleDisplayMap = {
   manager: 'Manager',
   staffMember: 'Staff Member',
-  admin: 'System Admin',
+  admin: 'Owner',
   customer: 'Customer',
   userAdmin: 'User Admin',
 }
@@ -19,8 +19,8 @@ const profileRoleDisplayMap = {
   department_staff: 'Department Staff',
   staff_member: 'Staff Member',
   staffMember: 'Staff Member',
-  system_admin: 'System Admin',
-  admin: 'System Admin',
+  system_admin: 'Owner',
+  admin: 'Owner',
   customer: 'Customer',
   user_admin: 'User Admin',
   userAdmin: 'User Admin',

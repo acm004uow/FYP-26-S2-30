@@ -1,26 +1,23 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
-import { Eye, EyeOff, LayoutDashboard, UserCheck, Shield, UserRound, Globe } from 'lucide-react'
+import { Eye, EyeOff, LayoutDashboard } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
+
+const signupRoleLabels = {
+  system_admin: 'Owner',
+  customer: 'Customer',
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
-  const [role, setRole] = useState('manager')
   const [form, setForm] = useState({ email: '', password: '' })
   const [signupForm, setSignupForm] = useState({ fullName: '', businessName: '', email: '', password: '' })
   const [verificationCode, setVerificationCode] = useState('')
   const [signupStep, setSignupStep] = useState('details')
-  const [showSignup, setShowSignup] = useState(false)
+  const [signupRole, setSignupRole] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
-
-  const handleRoleChange = (newRole) => {
-    setRole(newRole)
-    setForm({ email: '', password: '' })
-    setError('')
-    setMessage('')
-  }
 
   const routeByRole = {
     manager: '/manager',
@@ -28,14 +25,6 @@ export default function LoginPage() {
     system_admin: '/admin',
     customer: '/customer',
     user_admin: '/user-admin',
-  }
-
-  const selectedRoleMap = {
-    manager: 'manager',
-    staffMember: 'staff_member',
-    admin: 'system_admin',
-    customer: 'customer',
-    userAdmin: 'user_admin',
   }
 
   const ensureProfile = async (accessToken, fallbackRole) => {
@@ -80,7 +69,7 @@ export default function LoginPage() {
       .single()
 
     if (profileError || !profile) {
-      const { data: createdProfile, error: createProfileError } = await ensureProfile(data.session?.access_token, selectedRoleMap[role])
+      const { data: createdProfile, error: createProfileError } = await ensureProfile(data.session?.access_token)
       if (createProfileError) {
         setError(`Account profile was not found and could not be created: ${createProfileError}`)
         return
@@ -90,40 +79,42 @@ export default function LoginPage() {
 
     if (profile.status !== 'active') {
       await supabase.auth.signOut()
-      setError('This account is inactive. Contact a system admin.')
-      return
-    }
-
-    if (profile.role !== selectedRoleMap[role]) {
-      setError('Selected login role does not match this account.')
+      setError('This account is inactive. Contact the account owner.')
       return
     }
 
     router.push(routeByRole[profile.role] || '/login')
   }
 
-  const targetSignupRole = role === 'admin' ? 'system_admin' : 'customer'
-  const signupRoleLabel = role === 'admin' ? 'System Admin' : 'Customer'
+  const signupRoleLabel = signupRoleLabels[signupRole] || ''
+
+  const openSignup = (nextRole) => {
+    setSignupRole(nextRole)
+    setSignupStep('details')
+    setVerificationCode('')
+    setError('')
+    setMessage('')
+  }
 
   const handleSignup = async (e) => {
     e.preventDefault()
     setError('')
     setMessage('')
 
-    if (targetSignupRole === 'system_admin' && (!signupForm.fullName || !signupForm.businessName || !signupForm.email || !signupForm.password)) {
+    if (signupRole === 'system_admin' && (!signupForm.fullName || !signupForm.businessName || !signupForm.email || !signupForm.password)) {
       setError('Please fill in name, business name, email, and password.')
       return
     }
-    if (targetSignupRole === 'customer' && (!signupForm.fullName || !signupForm.email || !signupForm.password)) {
+    if (signupRole === 'customer' && (!signupForm.fullName || !signupForm.email || !signupForm.password)) {
       setError('Please fill in name, email, and password.')
       return
     }
 
     const metadata = {
       full_name: signupForm.fullName,
-      role: targetSignupRole,
+      role: signupRole,
     }
-    if (targetSignupRole === 'system_admin') metadata.business_name = signupForm.businessName
+    if (signupRole === 'system_admin') metadata.business_name = signupForm.businessName
 
     const { error: signupError } = await supabase.auth.signUp({
       email: signupForm.email,
@@ -168,7 +159,7 @@ export default function LoginPage() {
     }
 
     if (verifyData.session?.access_token) {
-      const { error: profileError } = await ensureProfile(verifyData.session.access_token, targetSignupRole)
+      const { error: profileError } = await ensureProfile(verifyData.session.access_token, signupRole)
       if (profileError) {
         setError(`Email verified, but profile could not be created: ${profileError}`)
         return
@@ -177,15 +168,15 @@ export default function LoginPage() {
 
     await supabase.from('audit_logs').insert({
       action: 'verify_signup',
-      details: `${signupForm.email} as ${targetSignupRole}`,
+      details: `${signupForm.email} as ${signupRole}`,
     })
 
     setForm({ email: signupForm.email, password: signupForm.password })
     setSignupForm({ fullName: '', businessName: '', email: '', password: '' })
     setVerificationCode('')
     setSignupStep('details')
-    setShowSignup(false)
     setMessage(`Email verified. You can sign in as ${signupRoleLabel} now.`)
+    setSignupRole(null)
   }
 
   const handleResendCode = async () => {
@@ -232,27 +223,6 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Login As</label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { id: 'manager', label: 'Manager', icon: LayoutDashboard, color: 'from-blue-500 to-blue-600' },
-                  { id: 'staffMember', label: 'Staff Member', icon: UserCheck, color: 'from-purple-500 to-purple-600' },
-                  { id: 'admin', label: 'System Admin', icon: Shield, color: 'from-red-500 to-red-600' },
-                  { id: 'customer', label: 'Customer', icon: UserRound, color: 'from-teal-500 to-teal-600' },
-                  { id: 'userAdmin', label: 'User Admin', icon: Globe, color: 'from-indigo-500 to-indigo-600' }
-                ].map(r => (
-                  <button key={r.id} type="button" onClick={() => handleRoleChange(r.id)}
-                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${role === r.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
-                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${r.color} flex items-center justify-center`}>
-                      <r.icon className="w-6 h-6 text-white" />
-                    </div>
-                    <span className="text-sm font-medium text-gray-700">{r.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
               <input
                 type="email"
@@ -293,21 +263,22 @@ export default function LoginPage() {
               Sign In
             </button>
 
-            {(role === 'admin' || role === 'customer') && (
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  setShowSignup(true)
-                  setSignupStep('details')
-                  setVerificationCode('')
-                  setError('')
-                  setMessage('')
-                }}
+                onClick={() => openSignup('system_admin')}
                 className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
               >
-                Sign Up as {signupRoleLabel}
+                Sign Up as Owner
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => openSignup('customer')}
+                className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
+              >
+                Sign Up as Customer
+              </button>
+            </div>
           </form>
 
           <p className="text-center text-xs text-gray-400 mt-6">
@@ -316,21 +287,21 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {showSignup && (
+      {signupRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Create {signupRoleLabel} Account</h3>
                 <p className="text-sm text-gray-500">
-                  {targetSignupRole === 'system_admin'
+                  {signupRole === 'system_admin'
                     ? 'Register your SME and create the first admin account.'
                     : 'Register as a customer to start booking cleaning services.'}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowSignup(false)}
+                onClick={() => setSignupRole(null)}
                 className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
               >
                 x
@@ -348,7 +319,7 @@ export default function LoginPage() {
                     placeholder="Enter your full name"
                   />
                 </div>
-                {targetSignupRole === 'system_admin' && (
+                {signupRole === 'system_admin' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Business / SME Name</label>
                     <input
@@ -366,7 +337,7 @@ export default function LoginPage() {
                     value={signupForm.email}
                     onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
-                    placeholder={targetSignupRole === 'system_admin' ? 'admin@example.com' : 'you@example.com'}
+                    placeholder={signupRole === 'system_admin' ? 'admin@example.com' : 'you@example.com'}
                   />
                 </div>
                 <div>
