@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
-import { Eye, EyeOff, LayoutDashboard, Users, UserCheck, Shield, UserRound } from 'lucide-react'
+import { Eye, EyeOff, LayoutDashboard, Users, UserCheck, Shield, UserRound, Globe } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 
 export default function LoginPage() {
@@ -28,6 +28,7 @@ export default function LoginPage() {
     staff_member: '/staffMember',
     system_admin: '/admin',
     customer: '/customer',
+    user_admin: '/user-admin',
   }
 
   const selectedRoleMap = {
@@ -36,6 +37,7 @@ export default function LoginPage() {
     staffMember: 'staff_member',
     admin: 'system_admin',
     customer: 'customer',
+    userAdmin: 'user_admin',
   }
 
   const ensureProfile = async (accessToken, fallbackRole) => {
@@ -239,7 +241,8 @@ export default function LoginPage() {
                   { id: 'department', label: 'Department Staff', icon: Users, color: 'from-green-500 to-green-600' },
                   { id: 'staffMember', label: 'Staff Member', icon: UserCheck, color: 'from-purple-500 to-purple-600' },
                   { id: 'admin', label: 'System Admin', icon: Shield, color: 'from-red-500 to-red-600' },
-                  { id: 'customer', label: 'Customer', icon: UserRound, color: 'from-teal-500 to-teal-600' }
+                  { id: 'customer', label: 'Customer', icon: UserRound, color: 'from-teal-500 to-teal-600' },
+                  { id: 'userAdmin', label: 'User Admin', icon: Globe, color: 'from-indigo-500 to-indigo-600' }
                 ].map(r => (
                   <button key={r.id} type="button" onClick={() => handleRoleChange(r.id)}
                     className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${role === r.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>

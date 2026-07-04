@@ -12,6 +12,7 @@ const roleDisplayMap = {
   staffMember: 'Staff Member',
   admin: 'System Admin',
   customer: 'Customer',
+  userAdmin: 'User Admin',
 }
 
 const profileRoleDisplayMap = {
@@ -23,6 +24,8 @@ const profileRoleDisplayMap = {
   system_admin: 'System Admin',
   admin: 'System Admin',
   customer: 'Customer',
+  user_admin: 'User Admin',
+  userAdmin: 'User Admin',
 }
 
 export default function Layout({ children, role = 'manager' }) {
@@ -78,7 +81,7 @@ export default function Layout({ children, role = 'manager' }) {
       }
 
       let resolvedBusinessName = resolvedProfile.business_name
-      if (!resolvedBusinessName) {
+      if (!resolvedBusinessName && !['customer', 'userAdmin'].includes(role)) {
         const { data: adminProfiles } = await supabase
           .from('profiles')
           .select('business_name,created_at')
@@ -102,6 +105,7 @@ export default function Layout({ children, role = 'manager' }) {
         staffMember: 'staff_member',
         admin: 'system_admin',
         customer: 'customer',
+        userAdmin: 'user_admin',
       }
       const expectedRole = expectedRoleMap[role] || role
       if (resolvedProfile.role && resolvedProfile.role !== expectedRole) {

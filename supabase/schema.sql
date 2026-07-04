@@ -7,6 +7,9 @@ create type user_role as enum ('manager', 'department_staff', 'staff_member', 's
 do $$ begin
   alter type user_role add value if not exists 'customer';
 exception when duplicate_object then null; end $$;
+do $$ begin
+  alter type user_role add value if not exists 'user_admin';
+exception when duplicate_object then null; end $$;
 create type availability_status as enum ('available', 'unavailable', 'time_off');
 create type availability_request_status as enum ('pending', 'approved', 'rejected');
 create type task_status as enum ('pending', 'approved', 'rejected', 'in_progress', 'completed', 'cancelled');
