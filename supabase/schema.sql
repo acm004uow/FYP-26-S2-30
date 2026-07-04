@@ -150,21 +150,27 @@ create table if not exists notifications (
 create table if not exists task_proofs (
   id uuid primary key default gen_random_uuid(),
   task_id uuid references task_requests(id) on delete cascade,
+  booking_id uuid references bookings(id) on delete cascade,
   staff_id uuid references staff_profiles(id) on delete cascade,
   file_url text not null,
   file_name text,
   created_at timestamptz default now()
 );
 
+alter table task_proofs add column if not exists booking_id uuid references bookings(id) on delete cascade;
+
 create table if not exists performance_reviews (
   id uuid primary key default gen_random_uuid(),
   task_id uuid references task_requests(id) on delete cascade,
+  booking_id uuid references bookings(id) on delete cascade,
   staff_id uuid references staff_profiles(id) on delete cascade,
   manager_id uuid references profiles(id) on delete set null,
   rating integer check (rating between 1 and 5),
   feedback text,
   created_at timestamptz default now()
 );
+
+alter table performance_reviews add column if not exists booking_id uuid references bookings(id) on delete cascade;
 
 create table if not exists system_parameters (
   id integer primary key default 1,

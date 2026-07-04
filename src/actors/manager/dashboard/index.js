@@ -42,12 +42,6 @@ const statusColor = {
   'Cancelled': 'bg-gray-100 text-gray-600',
 }
 
-const priorityColor = {
-  'High': 'bg-red-100 text-red-600',
-  'Medium': 'bg-orange-100 text-orange-600',
-  'Low': 'bg-gray-100 text-gray-600',
-}
-
 const staffStatusColor = {
   'Available': 'bg-green-100 text-green-700',
   'Busy': 'bg-blue-100 text-blue-700',
@@ -57,10 +51,10 @@ const staffStatusColor = {
 export default function ManagerDashboard() {
   const router = useRouter()
   const [operationStats, setOperationStats] = useState([
-    { label: 'active tasks today', value: '24', path: '/manager-task-requests' },
+    { label: 'active bookings today', value: '24', path: '/manager-bookings' },
     { label: 'staff utilisation', value: '87%', path: '/manager-availability', featured: true },
-    { label: 'pending approvals', value: '6', path: '/manager-task-requests' },
-    { label: 'completed tasks', value: '0', path: '/manager-reports?section=completed' },
+    { label: 'pending approvals', value: '6', path: '/manager-bookings' },
+    { label: 'completed bookings', value: '0', path: '/manager-reports?section=completed' },
     { label: 'avg. performance', value: '4.3★', path: '/manager-reports' },
   ])
   const [recentTaskRows, setRecentTaskRows] = useState([])
@@ -70,9 +64,18 @@ export default function ManagerDashboard() {
   const [workloadBalanceData, setWorkloadBalanceData] = useState(fallbackWorkloadData)
 
   const loadDashboard = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user?.id)
+      .single()
+
+    const hostAdminId = managerProfile?.host_admin_id
+
     const [{ data: staff }, { data: tasks }] = await Promise.all([
-      supabase.from('staff_profiles').select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,assigned_region,status,is_suspended').limit(8),
-      supabase.from('task_requests').select('id,title,location,status,priority,created_at,assigned_staff_id,staff_profiles(staff_name)').order('created_at', { ascending: false }).limit(30),
+      supabase.from('staff_profiles').select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,assigned_region,status,is_suspended').eq('host_admin_id', hostAdminId).limit(8),
+      supabase.from('bookings').select('id,service_type,location,status,created_at,assigned_staff_id,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).order('created_at', { ascending: false }).limit(30),
     ])
 
     const staffData = staff || []
@@ -91,22 +94,21 @@ export default function ManagerDashboard() {
       : '4.3'
 
     setOperationStats([
-      { label: 'active tasks today', value: String(activeTodayCount || 24), path: '/manager-task-requests' },
+      { label: 'active bookings today', value: String(activeTodayCount || 24), path: '/manager-bookings' },
       { label: 'staff utilisation', value: `${utilisation}%`, path: '/manager-availability', featured: true },
-      { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-task-requests' },
-      { label: 'completed tasks', value: String(completedTasks.length), path: '/manager-reports?section=completed' },
+      { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-bookings' },
+      { label: 'completed bookings', value: String(completedTasks.length), path: '/manager-reports?section=completed' },
       { label: 'avg. performance', value: `${averageRating}★`, path: '/manager-reports' },
     ])
     setRecentTaskRows(taskData.slice(0, 3).map(t => ({
       id: t.id,
       shortId: t.id.slice(0, 8),
-      title: t.title,
+      title: t.service_type,
       location: t.location,
       assignedStaffId: t.assigned_staff_id,
       assignee: t.staff_profiles?.staff_name || 'Unassigned',
       rawStatus: t.status,
       status: t.status === 'in_progress' ? 'In Progress' : t.status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase()),
-      priority: t.priority,
     })))
     setStaffRows(staffData
       .sort((a, b) => Number(b.availability === 'available') - Number(a.availability === 'available'))
@@ -151,12 +153,6 @@ export default function ManagerDashboard() {
               Manager dashboard
             </h1>
             <p className="text-gray-500 text-sm mt-3">Welcome back! Here's an overview of today's operations.</p>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => router.push('/tasks/create')}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium hover:from-blue-600 hover:to-green-600 transition shadow-sm">
-              + Create Task
-            </button>
           </div>
         </div>
 
@@ -224,8 +220,8 @@ export default function ManagerDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-800">Recent Tasks</h3>
-              <button onClick={() => router.push('/manager-task-requests')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
+              <h3 className="font-semibold text-gray-800">Recent Bookings</h3>
+              <button onClick={() => router.push('/manager-bookings')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
             </div>
             <div className="divide-y divide-gray-50">
               {recentTaskRows.map(task => (
@@ -235,9 +231,6 @@ export default function ManagerDashboard() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${priorityColor[task.priority]}`}>{task.priority}</span>
-                      </div>
                       <p className="text-sm font-medium text-gray-800 truncate">{task.title}</p>
                       <div className="flex items-center gap-3 mt-1">
                         <span className="text-xs text-gray-500 flex items-center gap-1"><MapPin className="w-3 h-3" />{task.location}</span>

@@ -7,7 +7,7 @@ const roleNames = {
 }
 
 const roleContext = {
-  manager: 'Managers review task requests, assign staff, view staff profiles, manage user accounts, monitor availability, and generate operational reports.',
+  manager: 'Managers review customer bookings, assign staff, view staff profiles, manage user accounts, monitor availability, and generate operational reports.',
   staffMember: 'Staff members view assigned tasks, update availability, start work, complete tasks, upload proof, and check feedback.',
   admin: 'Owners manage accounts, reset passwords, monitor security logs, review audit logs, and tune global allocation parameters.',
 }
@@ -26,10 +26,8 @@ const cleanHistory = (messages = []) => messages
   }))
 
 const compactTask = (task) => ({
-  title: task.title,
+  service_type: task.service_type,
   status: task.status,
-  priority: task.priority,
-  required_skill: task.required_skill,
   location: task.location,
   assigned_staff: task.staff_profiles?.staff_name || 'Unassigned',
   created_at: task.created_at,
@@ -92,8 +90,8 @@ async function buildLiveContext(role, userId) {
   }
 
   const [tasks, staff, reports] = await Promise.all([
-    fetchSupabaseRows('task_requests', {
-      select: 'title,status,priority,required_skill,location,created_at,staff_profiles(staff_name)',
+    fetchSupabaseRows('bookings', {
+      select: 'service_type,status,location,created_at,staff_profiles(staff_name)',
       order: 'created_at.desc',
       limit: '50',
     }),
@@ -180,7 +178,7 @@ export async function POST(request) {
               'The chat is read-only, but you can still guide users step by step on how to use pages, buttons, filters, and forms in the application.',
               'For report questions, explain how to use the Reports section. Tell the user to choose the report type, select filters such as date range or department if available, click Generate Report, then review or export the result if the page provides those options.',
               'Do not refuse to give navigation guidance. Only refuse when the user asks chat to directly perform the action for them.',
-              normalizedRole === 'manager' ? 'For managers who ask about allocation status, tell them to open the Manager Task Requests page and review each request status, assigned staff, priority, and recent updates.' : '',
+              normalizedRole === 'manager' ? 'For managers who ask about allocation status, tell them to open the Bookings page and review each booking status, AI-recommended staff, and recent updates.' : '',
               normalizedRole === 'manager' ? 'For managers who ask about staff availability, tell them to open the Staff Availability page to see available, busy, or on leave staff and current workload.' : '',
               normalizedRole === 'manager' ? 'For managers who ask for a quick report, tell them to open the Reports section, choose the report type and filters, then generate the report.' : '',
               'For normal greetings or general app questions, answer naturally.',

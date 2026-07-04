@@ -26,7 +26,6 @@ export default function ManagerReports() {
       ['Total Tasks', reportData.totalTasks],
       ['Completed', reportData.completed],
       ['Pending', reportData.pending],
-      ['Urgent', reportData.urgent],
       ['Efficiency', reportData.efficiency],
       ['Staff Utilization', reportData.staffUtilization],
       ['Top Performer', reportData.topStaff],
@@ -48,9 +47,17 @@ export default function ManagerReports() {
     .replace(/'/g, '&#039;')
 
   const loadCompletedTasks = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user?.id)
+      .single()
+
     const { data: tasks, error } = await supabase
-      .from('task_requests')
-      .select('id,title,location,priority,updated_at,assigned_staff_id,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id)')
+      .from('bookings')
+      .select('id,service_type,location,updated_at,assigned_staff_id,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id)')
+      .eq('host_admin_id', managerProfile?.host_admin_id)
       .eq('status', 'completed')
       .order('updated_at', { ascending: false })
 
@@ -99,7 +106,7 @@ export default function ManagerReports() {
     setSavingReviewId(task.id)
     const { data: { user } } = await supabase.auth.getUser()
     const payload = {
-      task_id: task.id,
+      booking_id: task.id,
       staff_id: task.assigned_staff_id,
       manager_id: user?.id,
       rating,
@@ -137,9 +144,17 @@ export default function ManagerReports() {
   const generate = async () => {
     const days = reportType === 'daily' ? 1 : reportType === 'weekly' ? 7 : 30
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user?.id)
+      .single()
+    const hostAdminId = managerProfile?.host_admin_id
+
     const [{ data: tasks }, { data: staff }, { data: reviews }] = await Promise.all([
-      supabase.from('task_requests').select('status,priority,required_skill,assigned_staff_id,staff_profiles(staff_name)').gte('created_at', since),
-      supabase.from('staff_profiles').select('id,staff_name,current_workload'),
+      supabase.from('bookings').select('status,service_type,assigned_staff_id,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).gte('created_at', since),
+      supabase.from('staff_profiles').select('id,staff_name,current_workload').eq('host_admin_id', hostAdminId),
       supabase.from('performance_reviews').select('rating').gte('created_at', since),
     ])
 
@@ -154,7 +169,7 @@ export default function ManagerReports() {
     }, {})
     const topEntry = Object.entries(assignedCounts).sort((a, b) => b[1] - a[1])[0]
     const tasksByCategory = taskRows.reduce((acc, task) => {
-      const category = task.required_skill || 'General'
+      const category = task.service_type || 'General'
       acc[category] = (acc[category] || 0) + 1
       return acc
     }, {})
@@ -164,7 +179,6 @@ export default function ManagerReports() {
       totalTasks,
       completed,
       pending: taskRows.filter(task => task.status === 'pending').length,
-      urgent: taskRows.filter(task => task.priority === 'High').length,
       efficiency: totalTasks ? `${Math.round((completed / totalTasks) * 100)}%` : '0%',
       staffUtilization: staffRows.length ? `${Math.round((taskRows.filter(task => task.assigned_staff_id).length / staffRows.length) * 100)}%` : '0%',
       topStaff: topEntry ? `${topEntry[0]} (${topEntry[1]} tasks)` : 'No assigned tasks',
@@ -213,7 +227,7 @@ export default function ManagerReports() {
             h1 { margin: 0 0 6px; font-size: 24px; }
             h2 { margin-top: 24px; font-size: 18px; }
             .meta { color: #4b5563; margin-bottom: 24px; }
-            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+            .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
             .metric { border: 1px solid #e5e7eb; border-radius: 8px; padding: 14px; }
             .metric span { display: block; color: #6b7280; font-size: 12px; margin-bottom: 6px; }
             .metric strong { font-size: 22px; }
@@ -230,7 +244,6 @@ export default function ManagerReports() {
             <div class="metric"><span>Total Tasks</span><strong>${escapeHtml(data.totalTasks)}</strong></div>
             <div class="metric"><span>Completed</span><strong>${escapeHtml(data.completed)}</strong></div>
             <div class="metric"><span>Pending</span><strong>${escapeHtml(data.pending)}</strong></div>
-            <div class="metric"><span>Urgent</span><strong>${escapeHtml(data.urgent)}</strong></div>
           </div>
           <table>
             <thead><tr><th>Metric</th><th>Value</th></tr></thead>
@@ -280,11 +293,10 @@ export default function ManagerReports() {
 
           {data && (
             <div className="mt-6 space-y-4">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Total Tasks</p><p className="text-xl font-bold">{data.totalTasks}</p></div>
                 <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Completed</p><p className="text-xl font-bold text-green-600">{data.completed}</p></div>
                 <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Pending</p><p className="text-xl font-bold text-orange-500">{data.pending}</p></div>
-                <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Urgent</p><p className="text-xl font-bold text-red-500">{data.urgent}</p></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 p-3 rounded-lg"><p className="text-xs text-gray-500">Efficiency</p><p className="text-lg font-semibold">{data.efficiency}</p><p className="text-xs">(Completed / Total)</p></div>
@@ -328,7 +340,7 @@ export default function ManagerReports() {
                 <div key={task.id} className="rounded-xl border border-gray-100 p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <h3 className="font-semibold text-gray-900">{task.title}</h3>
+                      <h3 className="font-semibold text-gray-900">{task.service_type}</h3>
                       <p className="text-sm text-gray-500">{task.location} - Completed {task.updated_at ? new Date(task.updated_at).toLocaleString() : 'recently'}</p>
                       <p className="text-sm text-gray-500">Assigned staff: {task.staff_profiles?.staff_name || 'Unassigned'}</p>
                     </div>
