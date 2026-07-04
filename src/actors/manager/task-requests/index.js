@@ -106,7 +106,7 @@ export default function ManagerTaskRequests() {
     showNotification(error
       ? error.message
       : reviewedRequest
-        ? `Task ${id.slice(0, 8)} ${decision}. Department staff notified.`
+        ? `Task ${id.slice(0, 8)} ${decision}. Requester notified.`
         : 'This task request is no longer pending.')
     await loadRequests()
   }
@@ -226,7 +226,7 @@ export default function ManagerTaskRequests() {
                     </div>
                     <h3 className="font-semibold text-gray-900">{req.title}</h3>
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{req.location}</p>
-                    <p className="text-xs text-gray-400 mt-2">Submitted by {req.profiles?.full_name || req.profiles?.email || 'Department Staff'} on {new Date(req.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-400 mt-2">Submitted by {req.profiles?.full_name || req.profiles?.email || 'the requester'} on {new Date(req.created_at).toLocaleDateString()}</p>
                     <p className="text-sm text-gray-600 mt-2 flex items-center gap-1"><UserCheck className="w-4 h-4" />Assigned staff: {req.staff_profiles?.staff_name || 'Unassigned'}</p>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${statusColor[req.status] || 'bg-gray-100 text-gray-600'}`}>

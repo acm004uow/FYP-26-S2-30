@@ -14,8 +14,8 @@ import {
   MessageSquareText,
   ShieldCheck,
   Sparkles,
+  UserRound,
   UsersRound,
-  Workflow,
 } from 'lucide-react'
 
 const metrics = [
@@ -125,11 +125,11 @@ const roles = [
     points: ['Approve task requests', 'Review recommended staff', 'Generate operational reports'],
   },
   {
-    title: 'Department Staff',
-    icon: Workflow,
+    title: 'Customers',
+    icon: UserRound,
     accent: 'from-green-500 to-emerald-500',
-    summary: 'Submit task requests with priority, timing, requirements, and location context.',
-    points: ['Submit task requests', 'Track approvals', 'Search task history'],
+    summary: 'Book cleaning services online and track booking status from request to completion.',
+    points: ['Book a service', 'Track booking status', 'View booking history'],
   },
   {
     title: 'Staff Members',
@@ -148,7 +148,7 @@ const roles = [
 ]
 
 const steps = [
-  'Department staff submit a task with priority, timing, location, and requirements.',
+  'Customers book a service or managers create a task with priority, timing, and location.',
   'The system ranks available staff using workload, proximity, skills, and policy weights.',
   'Managers approve, assign, monitor progress, and close the loop with reports.',
 ]

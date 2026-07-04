@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/router'
-import { Eye, EyeOff, LayoutDashboard, Users, UserCheck, Shield, UserRound, Globe } from 'lucide-react'
+import { Eye, EyeOff, LayoutDashboard, UserCheck, Shield, UserRound, Globe } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 
 export default function LoginPage() {
@@ -24,7 +24,6 @@ export default function LoginPage() {
 
   const routeByRole = {
     manager: '/manager',
-    department_staff: '/department',
     staff_member: '/staffMember',
     system_admin: '/admin',
     customer: '/customer',
@@ -33,7 +32,6 @@ export default function LoginPage() {
 
   const selectedRoleMap = {
     manager: 'manager',
-    department: 'department_staff',
     staffMember: 'staff_member',
     admin: 'system_admin',
     customer: 'customer',
@@ -238,7 +236,6 @@ export default function LoginPage() {
               <div className="grid grid-cols-2 gap-3">
                 {[
                   { id: 'manager', label: 'Manager', icon: LayoutDashboard, color: 'from-blue-500 to-blue-600' },
-                  { id: 'department', label: 'Department Staff', icon: Users, color: 'from-green-500 to-green-600' },
                   { id: 'staffMember', label: 'Staff Member', icon: UserCheck, color: 'from-purple-500 to-purple-600' },
                   { id: 'admin', label: 'System Admin', icon: Shield, color: 'from-red-500 to-red-600' },
                   { id: 'customer', label: 'Customer', icon: UserRound, color: 'from-teal-500 to-teal-600' },

@@ -8,7 +8,6 @@ import { navMap } from '../config/navigation'
 
 const roleDisplayMap = {
   manager: 'Manager',
-  department: 'Department Staff',
   staffMember: 'Staff Member',
   admin: 'System Admin',
   customer: 'Customer',
@@ -18,7 +17,6 @@ const roleDisplayMap = {
 const profileRoleDisplayMap = {
   manager: 'Manager',
   department_staff: 'Department Staff',
-  department: 'Department Staff',
   staff_member: 'Staff Member',
   staffMember: 'Staff Member',
   system_admin: 'System Admin',
@@ -101,7 +99,6 @@ export default function Layout({ children, role = 'manager' }) {
 
       const expectedRoleMap = {
         manager: 'manager',
-        department: 'department_staff',
         staffMember: 'staff_member',
         admin: 'system_admin',
         customer: 'customer',

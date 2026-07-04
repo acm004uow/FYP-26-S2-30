@@ -3,14 +3,12 @@ import { Bot, MessageCircle, Send, Sparkles, User, X as XIcon } from 'lucide-rea
 
 const roleNames = {
   manager: 'Manager',
-  department: 'Department Staff',
   staffMember: 'Staff Member',
   admin: 'System Admin',
 }
 
 const assistantSuggestions = {
   manager: ['Generate quick report', 'Check allocation status', 'Show availability'],
-  department: ['How to create urgent request', 'Track my request', 'Cancel a request'],
   staffMember: ['Update availability', 'Start a task', 'Upload proof'],
   admin: ['Reset a password', 'Review security logs', 'Explain audit logs'],
 }
@@ -18,7 +16,6 @@ const assistantSuggestions = {
 const normalizeRole = (role) => ({
   system_admin: 'admin',
   staff_member: 'staffMember',
-  department_staff: 'department',
 }[role] || role)
 
 const formatChatText = (text) => String(text || '')

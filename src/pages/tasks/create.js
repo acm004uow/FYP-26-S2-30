@@ -1,13 +1,12 @@
 import Layout from '../../components/Layout'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { ClipboardList, MapPin, Users, Calendar, AlertCircle, CheckCircle, Star, TrendingUp } from 'lucide-react'
+import { ClipboardList, MapPin, CheckCircle, TrendingUp } from 'lucide-react'
 import { supabase } from '../../../lib/supabaseClient'
-import { generateRecommendations, formatRecommendationExplanation } from '../../../lib/recommendationEngine'
+import { generateRecommendations } from '../../../lib/recommendationEngine'
 
-export default function TaskCreation({ initialRole = 'manager' }) {
+export default function TaskCreation() {
   const router = useRouter()
-  const role = initialRole
   const [submitted, setSubmitted] = useState(false)
   const [allStaff, setAllStaff] = useState([])
   const [error, setError] = useState('')
@@ -84,7 +83,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (role === 'manager' && !form.assignee && recommendations.length > 0) {
+    if (!form.assignee && recommendations.length > 0) {
       setError('Please select a staff member from recommendations.')
       return
     }
@@ -100,79 +99,15 @@ export default function TaskCreation({ initialRole = 'manager' }) {
       estimated_hours: 1,
       instructions: form.notes,
       scheduled_end,
-      assigned_staff_id: role === 'manager' ? form.assignee || null : null,
-      status: role === 'manager' ? 'approved' : 'pending',
+      assigned_staff_id: form.assignee || null,
+      status: 'approved',
     }).select('id').single()
     await supabase.from('audit_logs').insert({ user_id: user?.id, action: 'create_task', details: form.title })
     if (insertError) {
       setError(insertError.message)
       return
     }
-    if (role === 'department' && createdTask?.id) {
-      let { data: requesterProfile, error: requesterProfileError } = await supabase
-        .from('profiles')
-        .select('full_name,email,business_name,host_admin_id')
-        .eq('id', user?.id)
-        .single()
-
-      if (requesterProfileError) {
-        const fallbackProfile = await supabase
-          .from('profiles')
-          .select('full_name,email,business_name')
-          .eq('id', user?.id)
-          .single()
-        requesterProfile = fallbackProfile.data
-      }
-
-      const managerQueries = []
-      if (requesterProfile?.host_admin_id) {
-        managerQueries.push(
-          supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'manager')
-            .eq('status', 'active')
-            .eq('host_admin_id', requesterProfile.host_admin_id)
-        )
-      }
-      if (requesterProfile?.business_name) {
-        managerQueries.push(
-          supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'manager')
-            .eq('status', 'active')
-            .eq('business_name', requesterProfile.business_name)
-        )
-      }
-      if (managerQueries.length === 0) {
-        managerQueries.push(
-          supabase
-            .from('profiles')
-            .select('id')
-            .eq('role', 'manager')
-            .eq('status', 'active')
-        )
-      }
-
-      const managerResults = await Promise.all(managerQueries)
-      const managersById = new Map()
-      managerResults.forEach(({ data }) => {
-        ;(data || []).forEach(manager => managersById.set(manager.id, manager))
-      })
-
-      const requesterName = requesterProfile?.full_name || requesterProfile?.email || 'Department staff'
-      const managerNotifications = Array.from(managersById.values()).map(manager => ({
-        user_id: manager.id,
-        title: 'New task request',
-        message: `${requesterName} submitted ${form.title} for review.`,
-      }))
-
-      if (managerNotifications.length) {
-        await supabase.from('notifications').insert(managerNotifications)
-      }
-    }
-    if (role === 'manager' && form.assignee && createdTask?.id) {
+    if (form.assignee && createdTask?.id) {
       const { data: assignedStaff } = await supabase
         .from('staff_profiles')
         .select('user_id,staff_name,current_workload')
@@ -206,13 +141,13 @@ export default function TaskCreation({ initialRole = 'manager' }) {
     }
     setSubmitted(true)
     setTimeout(() => {
-      router.push(role === 'manager' ? '/manager' : '/department')
+      router.push('/manager')
     }, 2000)
   }
 
   if (submitted) {
     return (
-      <Layout role={role}>
+      <Layout role="manager">
         <div className="min-h-[80vh] flex items-center justify-center">
           <div className="text-center">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -227,7 +162,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
   }
 
   return (
-    <Layout role={role}>
+    <Layout role="manager">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Create New Task</h1>
@@ -266,7 +201,7 @@ export default function TaskCreation({ initialRole = 'manager' }) {
                 {recommendations.length > 0 ? (
                   <div className="space-y-3">
                     {recommendations.map((rec, idx) => (
-                      <div key={rec.id} onClick={() => role === 'manager' && setForm({ ...form, assignee: rec.id.toString() })} className={`p-3 rounded-xl border-2 transition ${role === 'manager' ? 'cursor-pointer' : ''} ${form.assignee === rec.id.toString() ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-300 bg-gray-50'}`}>
+                      <div key={rec.id} onClick={() => setForm({ ...form, assignee: rec.id.toString() })} className={`p-3 rounded-xl border-2 transition cursor-pointer ${form.assignee === rec.id.toString() ? 'border-blue-500 bg-blue-50' : 'border-gray-100 hover:border-gray-300 bg-gray-50'}`}>
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-green-400 rounded-full flex items-center justify-center text-white text-xs font-bold">{rec.name.split(' ').map(n=>n[0]).join('')}</div>
                           <div className="flex-1"><p className="text-sm font-medium text-gray-800">{rec.name} <span className="text-xs text-gray-400">(Score: {rec.score})</span></p><p className="text-xs text-gray-500">{rec.role} • {rec.tasks} tasks • ⭐{rec.rating}</p></div>
@@ -289,13 +224,12 @@ export default function TaskCreation({ initialRole = 'manager' }) {
                 ) : (
                   <p className="text-sm text-gray-500">Enter a location to see staff recommendations.</p>
                 )}
-                {role === 'manager' && form.assignee && <div className="mt-3 p-2 bg-green-50 text-green-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Staff selected</div>}
-                {role === 'department' && recommendations.length > 0 && <div className="mt-3 p-2 bg-blue-50 text-blue-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Recommendations will be sent with this request</div>}
+                {form.assignee && <div className="mt-3 p-2 bg-green-50 text-green-700 text-xs rounded-lg flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Staff selected</div>}
               </div>
 
               <div className="space-y-3">
-                <button type="submit" className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md">{role === 'manager' ? 'Create & Assign Task' : 'Submit Task Request'}</button>
-                <button type="button" onClick={() => router.push(role === 'manager' ? '/manager' : '/department')} className="w-full py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>
+                <button type="submit" className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md">Create & Assign Task</button>
+                <button type="button" onClick={() => router.push('/manager')} className="w-full py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>
               </div>
             </div>
           </div>
@@ -303,12 +237,4 @@ export default function TaskCreation({ initialRole = 'manager' }) {
       </div>
     </Layout>
   )
-}
-
-export async function getServerSideProps({ query }) {
-  return {
-    props: {
-      initialRole: query.role === 'dept' ? 'department' : 'manager',
-    },
-  }
 }

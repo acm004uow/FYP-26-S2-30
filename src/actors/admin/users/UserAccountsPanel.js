@@ -7,11 +7,6 @@ export const roleOptions = [
     permissions: 'Approve requests, assign tasks, manage staff profiles, and view reports.',
   },
   {
-    value: 'department_staff',
-    label: 'Department Staff',
-    permissions: 'Create task requests and track department task history.',
-  },
-  {
     value: 'staff_member',
     label: 'Staff Member',
     permissions: 'View assigned tasks, update availability, and submit task proof.',

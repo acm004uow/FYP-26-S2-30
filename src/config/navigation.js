@@ -9,10 +9,6 @@ export const navMap = {
     { name: 'Availability', path: '/manager-availability', icon: Activity },
     { name: 'Reports', path: '/manager-reports', icon: FileText },
   ],
-  department: [
-    { name: 'My Tasks', path: '/department', icon: ClipboardList },
-    { name: 'New Request', path: '/tasks/create?role=dept', icon: ClipboardList },
-  ],
   staffMember: [
     { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
   ],

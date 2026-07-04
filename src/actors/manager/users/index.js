@@ -10,9 +10,9 @@ export default function ManagerUserAccounts() {
   const [suspendTarget, setSuspendTarget] = useState(null)
   const [message, setMessage] = useState('')
 
-  const toUiRole = (role) => role === 'staff_member' ? 'staffMember' : role === 'department_staff' ? 'department' : role
-  const toDbRole = (role) => role === 'staffMember' ? 'staff_member' : role === 'department' ? 'department_staff' : role
-  const permissionsFor = (role) => role === 'manager' ? 'Full Access' : role === 'department' ? 'Create Tasks, View History, Request Allocation' : 'View Tasks, Update Availability'
+  const toUiRole = (role) => role === 'staff_member' ? 'staffMember' : role
+  const toDbRole = (role) => role === 'staffMember' ? 'staff_member' : role
+  const permissionsFor = (role) => role === 'manager' ? 'Full Access' : 'View Tasks, Update Availability'
 
   const loadUsers = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -135,7 +135,7 @@ export default function ManagerUserAccounts() {
 
   const filtered = users.filter(u => u.username.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || u.role.toLowerCase().includes(search.toLowerCase()))
 
-  const roleIcon = { manager: <Shield className="w-4 h-4" />, department: <Users className="w-4 h-4" />, staffMember: <User className="w-4 h-4" /> }
+  const roleIcon = { manager: <Shield className="w-4 h-4" />, staffMember: <User className="w-4 h-4" /> }
 
   return (
     <Layout role="manager">
@@ -181,7 +181,7 @@ export default function ManagerUserAccounts() {
                     <div>
                       <h3 className="font-bold text-gray-800 text-lg">{u.username}</h3>
                       <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
-                        {roleIcon[u.role]} {u.role === 'staffMember' ? 'Staff Member' : u.role === 'department' ? 'Department Staff' : 'Manager'}
+                        {roleIcon[u.role]} {u.role === 'staffMember' ? 'Staff Member' : 'Manager'}
                       </p>
                     </div>
                   </div>
@@ -271,7 +271,6 @@ export default function ManagerUserAccounts() {
                 <input name="email" defaultValue={modal.editing?.email} placeholder="Email" className="w-full border rounded-lg p-3 my-2 text-sm" required />
                 <select name="role" defaultValue={modal.editing?.role || 'staffMember'} className="w-full border rounded-lg p-3 my-2 text-sm">
                   <option value="staffMember">Staff Member</option>
-                  <option value="department">Department Staff</option>
                   <option value="manager">Manager</option>
                 </select>
                 <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-3 rounded-lg font-medium mt-2">{modal.editing?.id ? 'Update Account' : 'Send Invite'}</button>
