@@ -204,6 +204,18 @@ create table if not exists audit_logs (
   created_at timestamptz default now()
 );
 
+-- Auto-generated weekly schedule proposals (from the Sunday-7pm cron job), pending manager review.
+-- Deliberately has no RLS policy below: only ever read/written server-side with the service-role key.
+create table if not exists schedule_proposals (
+  id uuid primary key default gen_random_uuid(),
+  host_admin_id uuid references profiles(id) on delete cascade,
+  week_start date not null,
+  week_end date not null,
+  proposal jsonb not null,
+  status text not null default 'pending',
+  created_at timestamptz default now()
+);
+
 alter table profiles enable row level security;
 alter table staff_profiles enable row level security;
 alter table task_requests enable row level security;
@@ -216,6 +228,7 @@ alter table performance_reviews enable row level security;
 alter table system_parameters enable row level security;
 alter table security_logs enable row level security;
 alter table audit_logs enable row level security;
+alter table schedule_proposals enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin

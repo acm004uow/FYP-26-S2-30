@@ -21,8 +21,8 @@ const cleanHistory = (messages = []) => messages
   .filter(message => ['user', 'bot'].includes(message.role) && message.content)
   .slice(-8)
   .map(message => ({
-    role: message.role === 'bot' ? 'model' : 'user',
-    parts: [{ text: String(message.content).slice(0, 1000) }],
+    role: message.role === 'bot' ? 'assistant' : 'user',
+    content: String(message.content).slice(0, 1000),
   }))
 
 const compactTask = (task) => ({
@@ -57,6 +57,7 @@ async function fetchSupabaseRows(table, params) {
   Object.entries(params).forEach(([name, value]) => requestUrl.searchParams.set(name, value))
 
   const response = await fetch(requestUrl, {
+    cache: 'no-store',
     headers: {
       apikey: key,
       Authorization: `Bearer ${key}`,
@@ -71,6 +72,7 @@ async function getUserIdFromToken(token) {
   if (!token) return null
   const { url, key } = getSupabaseConfig()
   const response = await fetch(`${url}/auth/v1/user`, {
+    cache: 'no-store',
     headers: {
       apikey: key,
       Authorization: `Bearer ${token}`,
@@ -139,8 +141,8 @@ export async function POST(request) {
     const userMessage = String(message || '').trim()
     if (!userMessage) return NextResponse.json({ error: 'Message is required.' }, { status: 400 })
 
-    const apiKey = process.env.GEMINI_API_KEY
-    if (!apiKey) return NextResponse.json({ error: 'GEMINI_API_KEY is not configured.' }, { status: 500 })
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) return NextResponse.json({ error: 'OPENAI_API_KEY is not configured.' }, { status: 500 })
 
     const normalizedRole = normalizeRole(role)
     const token = request.headers.get('authorization')?.replace('Bearer ', '')
@@ -156,66 +158,60 @@ export async function POST(request) {
       })
     }
 
-    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`
-    const contents = cleanHistory(history)
-    contents.push({ role: 'user', parts: [{ text: userMessage }] })
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
+    const systemPrompt = [
+      'You are the Smart Task Allocation assistant.',
+      `Current user role: ${roleNames[normalizedRole] || normalizedRole}.`,
+      roleContext[normalizedRole] || roleContext.manager,
+      'Answer using the live application context below when the question asks about tasks, assignments, staff, availability, or reports.',
+      'The chat is read-only, but you can still guide users step by step on how to use pages, buttons, filters, and forms in the application.',
+      'For report questions, explain how to use the Reports section. Tell the user to choose the report type, select filters such as date range or department if available, click Generate Report, then review or export the result if the page provides those options.',
+      'Do not refuse to give navigation guidance. Only refuse when the user asks chat to directly perform the action for them.',
+      normalizedRole === 'manager' ? 'For managers who ask about allocation status, tell them to open the Bookings page and review each booking status, AI-recommended staff, and recent updates.' : '',
+      normalizedRole === 'manager' ? 'For managers who ask about staff availability, tell them to open the Staff Availability page to see available, busy, or on leave staff and current workload.' : '',
+      normalizedRole === 'manager' ? 'For managers who ask for a quick report, tell them to open the Reports section, choose the report type and filters, then generate the report.' : '',
+      'For normal greetings or general app questions, answer naturally.',
+      'If the user says hello, hi, thanks, or asks a general question, do not search records. Reply naturally.',
+      'Only say a record cannot be found when the user clearly asks for a specific task, staff member, report, or assignment that is not in the live context.',
+      'Do not invent task names, staff names, counts, assignments, ratings, or statuses.',
+      'Keep replies concise and practical.',
+      'Use plain text only. Do not use Markdown formatting, backticks, bullet syntax, headings, or code blocks.',
+      `Live application context JSON: ${liveContext}`,
+    ].join(' ')
+
+    const messages = [{ role: 'system', content: systemPrompt }, ...cleanHistory(history), { role: 'user', content: userMessage }]
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 15000)
-    const response = await fetch(endpoint, {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
       signal: controller.signal,
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [{
-            text: [
-              'You are the Smart Task Allocation assistant.',
-              `Current user role: ${roleNames[normalizedRole] || normalizedRole}.`,
-              roleContext[normalizedRole] || roleContext.manager,
-              'Answer using the live application context below when the question asks about tasks, assignments, staff, availability, or reports.',
-              'The chat is read-only, but you can still guide users step by step on how to use pages, buttons, filters, and forms in the application.',
-              'For report questions, explain how to use the Reports section. Tell the user to choose the report type, select filters such as date range or department if available, click Generate Report, then review or export the result if the page provides those options.',
-              'Do not refuse to give navigation guidance. Only refuse when the user asks chat to directly perform the action for them.',
-              normalizedRole === 'manager' ? 'For managers who ask about allocation status, tell them to open the Bookings page and review each booking status, AI-recommended staff, and recent updates.' : '',
-              normalizedRole === 'manager' ? 'For managers who ask about staff availability, tell them to open the Staff Availability page to see available, busy, or on leave staff and current workload.' : '',
-              normalizedRole === 'manager' ? 'For managers who ask for a quick report, tell them to open the Reports section, choose the report type and filters, then generate the report.' : '',
-              'For normal greetings or general app questions, answer naturally.',
-              'If the user says hello, hi, thanks, or asks a general question, do not search records. Reply naturally.',
-              'Only say a record cannot be found when the user clearly asks for a specific task, staff member, report, or assignment that is not in the live context.',
-              'Do not invent task names, staff names, counts, assignments, ratings, or statuses.',
-              'Keep replies concise and practical.',
-              'Use plain text only. Do not use Markdown formatting, backticks, bullet syntax, headings, or code blocks.',
-              `Live application context JSON: ${liveContext}`,
-            ].join(' '),
-          }],
-        },
-        contents,
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 350,
-        },
+        model,
+        messages,
+        temperature: 0.2,
+        max_tokens: 350,
       }),
     })
     clearTimeout(timeoutId)
 
     const data = await response.json().catch(() => null)
-    if (!data) return NextResponse.json({ error: 'Gemini returned a non-JSON response.' }, { status: 502 })
+    if (!data) return NextResponse.json({ error: 'OpenAI returned a non-JSON response.' }, { status: 502 })
     if (!response.ok) {
-      return NextResponse.json({ error: data.error?.message || 'Gemini request failed.' }, { status: response.status })
+      return NextResponse.json({ error: data.error?.message || 'OpenAI request failed.' }, { status: response.status })
     }
 
-    const reply = data.candidates?.[0]?.content?.parts
-      ?.map(part => part.text || '')
-      .join('')
-      .trim()
+    const reply = data.choices?.[0]?.message?.content?.trim()
 
-    if (!reply) return NextResponse.json({ error: 'Gemini returned an empty reply.' }, { status: 502 })
+    if (!reply) return NextResponse.json({ error: 'OpenAI returned an empty reply.' }, { status: 502 })
     return NextResponse.json({ reply })
   } catch (error) {
     if (error.name === 'AbortError') {
-      return NextResponse.json({ error: 'Gemini request timed out. Check your network connection, API key, and model name.' }, { status: 504 })
+      return NextResponse.json({ error: 'OpenAI request timed out. Check your network connection, API key, and model name.' }, { status: 504 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

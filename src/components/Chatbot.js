@@ -76,7 +76,7 @@ export default function Chatbot({ role, addNotification }) {
       }),
     })
     const data = await readChatbotResponse(response)
-    if (!response.ok) throw new Error(data.error || 'Gemini request failed.')
+    if (!response.ok) throw new Error(data.error || 'AI request failed.')
     return data.reply
   }
 

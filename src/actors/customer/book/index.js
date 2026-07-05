@@ -4,6 +4,7 @@ import { useRouter } from 'next/router'
 import { ClipboardList, MapPin, Calendar, CheckCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
+import { getMinBookableDate } from '../../../../lib/businessWeek'
 
 const SERVICE_TYPES = ['Home Cleaning', 'Office Cleaning', 'Deep Cleaning', 'Move-Out Cleaning', 'Carpet Cleaning']
 
@@ -68,6 +69,8 @@ export default function CustomerBooking() {
     return () => { cancelled = true }
   }, [postalCode])
 
+  const minDate = getMinBookableDate()
+
   const composedLocation = [
     [address.blockNo, address.streetName].filter(Boolean).join(' '),
     address.building,
@@ -84,6 +87,10 @@ export default function CustomerBooking() {
     }
     if (postalCode.length !== 6 || !address.blockNo || !address.streetName) {
       setError('Please provide a postal code, block number, and street name.')
+      return
+    }
+    if (form.scheduledDate && form.scheduledDate < minDate) {
+      setError(`Bookings are only open from ${minDate} onward. This week's schedule has already been finalized.`)
       return
     }
     setSubmitting(true)
@@ -284,7 +291,11 @@ export default function CustomerBooking() {
               </div>
               <p className="text-xs text-gray-400">Enter the postal code above to auto-fill block, street, and building. Add your unit number manually.</p>
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Preferred Date</label><input type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" /></div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Preferred Date</label>
+                  <input type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
+                  <p className="mt-1 text-xs text-gray-400">Bookings open from {minDate} onward — this week's schedule is already finalized.</p>
+                </div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><input type="time" value={form.scheduledTime} onChange={e => setForm({ ...form, scheduledTime: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" /></div>
               </div>
               <div><label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Any special instructions..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" /></div>

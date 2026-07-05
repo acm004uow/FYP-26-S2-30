@@ -2,6 +2,7 @@ import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
 import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { assignStaffToBooking } from '../../../../lib/assignBooking'
 
 const statusColor = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -176,57 +177,18 @@ export default function ManagerBookings() {
     const previousStaff = booking.assigned_staff_id
       ? staffRows.find(item => item.id === booking.assigned_staff_id)
       : null
-    const { data: assignedBooking, error } = await supabase
-      .from('bookings')
-      .update({
-        assigned_staff_id: staff.id,
-        status: booking.status === 'pending' ? 'approved' : booking.status,
-        reviewed_by: user.id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', booking.id)
-      .in('status', ['pending', 'approved'])
-      .select('id,customer_id,service_type,status')
-      .maybeSingle()
 
-    if (error || !assignedBooking) {
-      setAssigningBookingId(null)
-      showNotification(error?.message || 'This booking cannot be assigned.')
-      await loadBookings()
-      return
-    }
-
-    await Promise.all([
-      supabase
-        .from('staff_profiles')
-        .update({ current_workload: Number(staff.tasks || 0) + 1, updated_at: new Date().toISOString() })
-        .eq('id', staff.id),
-      previousStaff && booking.status === 'approved'
-        ? supabase
-          .from('staff_profiles')
-          .update({ current_workload: Math.max(0, Number(previousStaff.tasks || 0) - 1), updated_at: new Date().toISOString() })
-          .eq('id', previousStaff.id)
-        : Promise.resolve(),
-      staff.userId
-        ? supabase.from('notifications').insert({
-          user_id: staff.userId,
-          title: 'New booking assignment',
-          message: `${assignedBooking.service_type} has been assigned to you.`,
-        })
-        : Promise.resolve(),
-      booking.status === 'pending' && assignedBooking.customer_id
-        ? supabase.from('notifications').insert({
-          user_id: assignedBooking.customer_id,
-          title: 'Booking approved',
-          message: `${assignedBooking.service_type} was approved and assigned to ${staff.name}.`,
-        })
-        : Promise.resolve(),
-      supabase.from('audit_logs').insert({ user_id: user?.id, action: 'assign_booking_drag_drop', details: `${staff.name} assigned to ${assignedBooking.service_type}` }),
-    ])
+    const result = await assignStaffToBooking({
+      booking,
+      staff,
+      managerUserId: user.id,
+      previousStaff,
+      action: 'assign_booking_drag_drop',
+    })
 
     setAssigningBookingId(null)
     setDraggedStaffId(null)
-    showNotification(`${staff.name} assigned to ${assignedBooking.service_type}.`)
+    showNotification(result.message)
     await loadBookings()
   }
 
