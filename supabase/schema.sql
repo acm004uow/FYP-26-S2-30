@@ -216,6 +216,20 @@ create table if not exists schedule_proposals (
   created_at timestamptz default now()
 );
 
+-- A frozen snapshot of a week's schedule taken when the manager clicks "Finalize Schedule".
+-- Re-finalizing the same week overwrites its snapshot (one row per host_admin_id + week_start),
+-- so viewing a past week always shows exactly what was finalized, even if bookings changed since.
+create table if not exists finalized_schedules (
+  id uuid primary key default gen_random_uuid(),
+  host_admin_id uuid references profiles(id) on delete cascade,
+  week_start date not null,
+  week_end date not null,
+  finalized_by uuid references profiles(id) on delete set null,
+  finalized_at timestamptz default now(),
+  snapshot jsonb not null,
+  unique (host_admin_id, week_start)
+);
+
 alter table profiles enable row level security;
 alter table staff_profiles enable row level security;
 alter table task_requests enable row level security;
@@ -229,6 +243,7 @@ alter table system_parameters enable row level security;
 alter table security_logs enable row level security;
 alter table audit_logs enable row level security;
 alter table schedule_proposals enable row level security;
+alter table finalized_schedules enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin
@@ -279,6 +294,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all audit logs" on audit_logs for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all finalized schedules" on finalized_schedules for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 insert into storage.buckets (id, name, public)
