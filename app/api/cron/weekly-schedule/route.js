@@ -24,7 +24,8 @@ export async function GET(request) {
 
     for (const business of businesses) {
       const proposal = await buildScheduleProposal(business.id, range)
-      if (proposal.length === 0) {
+      const needsReview = proposal.some((row) => !row.already_assigned)
+      if (!needsReview) {
         results.push({ host_admin_id: business.id, skipped: true })
         continue
       }

@@ -1,8 +1,8 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Calendar, CheckCircle, Loader2, MapPin, Send, Sparkles, User, XCircle } from 'lucide-react'
+import { Bot, Calendar, CheckCircle, Loader2, MapPin, Send, Sparkles, User, X, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
-import { assignStaffToBooking } from '../../../../lib/assignBooking'
+import { assignStaffToBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
 
 const suggestions = ['Create schedule for one week', 'Build a schedule for the next 3 days', 'Schedule bookings for next week']
 
@@ -43,6 +43,12 @@ export default function ManagerAiAgent() {
   const [hostAdminId, setHostAdminId] = useState(null)
   const [weekAnchor, setWeekAnchor] = useState(new Date().toISOString().slice(0, 10))
   const [weekBookings, setWeekBookings] = useState([])
+  const [editingBooking, setEditingBooking] = useState(null)
+  const [editStaffId, setEditStaffId] = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editTime, setEditTime] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -95,7 +101,7 @@ export default function ManagerAiAgent() {
     const dates = getWeekDates(anchorIso)
     const { data } = await supabase
       .from('bookings')
-      .select('assigned_staff_id,service_type,location,scheduled_date,scheduled_time,estimated_hours,status')
+      .select('id,assigned_staff_id,service_type,location,scheduled_date,scheduled_time,estimated_hours,status')
       .eq('host_admin_id', hostAdminIdParam)
       .not('assigned_staff_id', 'is', null)
       .not('status', 'in', '(rejected,cancelled)')
@@ -115,7 +121,7 @@ export default function ManagerAiAgent() {
       const data = await response.json().catch(() => null)
       if (!response.ok || !data?.proposal) return
 
-      setProposal(data.proposal.map(row => ({ ...row, uiStatus: 'pending', errorMessage: null })))
+      setProposal(data.proposal.map(row => ({ ...row, uiStatus: row.already_assigned ? 'scheduled' : 'pending', errorMessage: null })))
       setMessages(prev => [...prev, {
         role: 'bot',
         content: `An automatically generated schedule for the week of ${data.range.start_date} to ${data.range.end_date} is ready for review below.`,
@@ -142,6 +148,60 @@ export default function ManagerAiAgent() {
     return user
   }
 
+  const openEditModal = (booking) => {
+    setEditingBooking(booking)
+    setEditStaffId(booking.assigned_staff_id || '')
+    setEditDate(booking.scheduled_date || '')
+    setEditTime(booking.scheduled_time || '')
+    setEditError('')
+  }
+
+  const closeEditModal = () => {
+    setEditingBooking(null)
+    setEditError('')
+  }
+
+  const saveEdit = async () => {
+    if (!editingBooking) return
+    setEditSaving(true)
+    setEditError('')
+
+    const manager = await getActiveManager()
+    if (!manager) {
+      setEditError('Only an active manager can update the schedule.')
+      setEditSaving(false)
+      return
+    }
+
+    const staff = editStaffId ? staffRows.find(item => item.id === editStaffId) : null
+    const previousStaff = staffRows.find(item => item.id === editingBooking.assigned_staff_id) || null
+
+    const result = await updateBookingAssignment({
+      booking: { id: editingBooking.id, status: editingBooking.status },
+      staff,
+      scheduledDate: editDate,
+      scheduledTime: editTime,
+      managerUserId: manager.id,
+      previousStaff,
+    })
+
+    setEditSaving(false)
+    if (!result.success) {
+      setEditError(result.message)
+      return
+    }
+
+    setProposal(prev => prev.map(row => row.booking_id === editingBooking.id
+      ? (staff
+        ? { ...row, recommended_staff_id: staff.id, recommended_staff_name: staff.name, already_assigned: true, uiStatus: 'scheduled', reason: 'Already scheduled', score: null, scheduled_date: editDate, scheduled_time: editTime, errorMessage: null }
+        : { ...row, recommended_staff_id: null, recommended_staff_name: null, already_assigned: false, uiStatus: 'pending', reason: 'No recommendation yet — ask the agent to re-schedule this booking.', score: 0, scheduled_date: editDate, scheduled_time: editTime, errorMessage: null })
+      : row))
+
+    closeEditModal()
+    await loadStaff()
+    await loadWeeklyGrid(hostAdminId, weekAnchor)
+  }
+
   const sendMessage = async (text) => {
     const trimmed = text.trim()
     if (!trimmed || isSending) return
@@ -166,7 +226,7 @@ export default function ManagerAiAgent() {
 
       setMessages(prev => [...prev, { role: 'bot', content: data.reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
       if (Array.isArray(data.proposal)) {
-        setProposal(data.proposal.map(row => ({ ...row, uiStatus: 'pending', errorMessage: null })))
+        setProposal(data.proposal.map(row => ({ ...row, uiStatus: row.already_assigned ? 'scheduled' : 'pending', errorMessage: null })))
         if (data.range?.start_date) {
           setWeekAnchor(data.range.start_date)
           await loadWeeklyGrid(hostAdminId, data.range.start_date)
@@ -245,7 +305,7 @@ export default function ManagerAiAgent() {
           <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="p-5 border-b">
               <h2 className="font-semibold text-gray-900">Proposed Schedule</h2>
-              <p className="text-sm text-gray-500 mt-1">{proposal.length === 0 ? 'Ask the agent to create a schedule to see proposed assignments here.' : `${pendingCount} pending review`}</p>
+              <p className="text-sm text-gray-500 mt-1">{proposal.length === 0 ? 'Ask the agent to create a schedule to see this week\'s bookings here.' : `${proposal.length} booking${proposal.length === 1 ? '' : 's'} this week — ${pendingCount} pending review`}</p>
             </div>
             {proposal.length > 0 && (
               <div className="p-4 border-b bg-gray-50 flex justify-end">
@@ -268,17 +328,25 @@ export default function ManagerAiAgent() {
                       {row.scheduled_date && (
                         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><Calendar className="w-4 h-4" />{row.scheduled_date} {row.scheduled_time}</p>
                       )}
-                      <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
-                        <p className="text-sm text-indigo-700 flex items-center gap-1">
-                          <Sparkles className="w-4 h-4" />
-                          {row.recommended_staff_name ? `Recommended: ${row.recommended_staff_name}` : 'No suitable staff found'}
-                        </p>
-                        <p className="text-xs text-indigo-500 mt-0.5">{row.reason} (score {row.score})</p>
-                      </div>
+                      {row.already_assigned ? (
+                        <div className="mt-2 rounded-lg bg-green-50 border border-green-100 px-3 py-2">
+                          <p className="text-sm text-green-700 flex items-center gap-1">
+                            <CheckCircle className="w-4 h-4" /> Scheduled: {row.recommended_staff_name}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
+                          <p className="text-sm text-indigo-700 flex items-center gap-1">
+                            <Sparkles className="w-4 h-4" />
+                            {row.recommended_staff_name ? `Recommended: ${row.recommended_staff_name}` : 'No suitable staff found'}
+                          </p>
+                          <p className="text-xs text-indigo-500 mt-0.5">{row.reason} (score {row.score})</p>
+                        </div>
+                      )}
                       {row.errorMessage && <p className="text-sm text-red-500 mt-2">{row.errorMessage}</p>}
                     </div>
                     <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
-                      row.uiStatus === 'assigned' ? 'bg-green-100 text-green-700'
+                      row.uiStatus === 'assigned' || row.uiStatus === 'scheduled' ? 'bg-green-100 text-green-700'
                         : row.uiStatus === 'skipped' ? 'bg-gray-100 text-gray-500'
                           : row.uiStatus === 'error' ? 'bg-red-100 text-red-700'
                             : 'bg-yellow-100 text-yellow-700'
@@ -296,6 +364,24 @@ export default function ManagerAiAgent() {
                     <div className="flex gap-3 mt-4">
                       <button onClick={() => approveRow(row)} className="flex items-center gap-1 px-4 py-2 bg-green-500 text-white rounded-lg text-sm"><CheckCircle className="w-4 h-4" /> Retry</button>
                       <button onClick={() => skipRow(row)} className="flex items-center gap-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm"><XCircle className="w-4 h-4" /> Skip</button>
+                    </div>
+                  )}
+                  {row.uiStatus === 'scheduled' && (
+                    <div className="flex gap-3 mt-4">
+                      <button
+                        onClick={() => openEditModal({
+                          id: row.booking_id,
+                          assigned_staff_id: row.recommended_staff_id,
+                          scheduled_date: row.scheduled_date,
+                          scheduled_time: row.scheduled_time,
+                          status: row.status,
+                          service_type: row.service_type,
+                          location: row.location,
+                        })}
+                        className="flex items-center gap-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm"
+                      >
+                        <User className="w-4 h-4" /> Reassign
+                      </button>
                     </div>
                   )}
                 </div>
@@ -388,13 +474,18 @@ export default function ManagerAiAgent() {
                           {dayBookings.length === 0
                             ? <span className="text-gray-300">–</span>
                             : dayBookings.map((b, i) => (
-                              <div key={i} className={i > 0 ? 'mt-2' : ''}>
+                              <button
+                                type="button"
+                                key={b.id}
+                                onClick={() => openEditModal(b)}
+                                className={`block w-full text-left rounded-lg px-2 py-1 -mx-2 hover:bg-blue-50 transition ${i > 0 ? 'mt-2' : ''}`}
+                              >
                                 <p className="text-xs font-medium text-gray-800 whitespace-nowrap">
                                   {b.scheduled_time}{b.scheduled_time && `–${addHoursToTime(b.scheduled_time, b.estimated_hours)}`}
                                 </p>
                                 <p className="text-xs text-gray-500">{b.service_type}</p>
                                 <p className="text-xs text-gray-400">{b.location}</p>
-                              </div>
+                              </button>
                             ))}
                         </td>
                       )
@@ -409,6 +500,48 @@ export default function ManagerAiAgent() {
           </div>
         </div>
       </div>
+
+      {editingBooking && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="p-5 border-b flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">{editingBooking.service_type}</h3>
+                <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{editingBooking.location}</p>
+              </div>
+              <button onClick={closeEditModal} className="p-1 rounded-lg hover:bg-gray-100" aria-label="Close"><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Staff</label>
+                <select value={editStaffId} onChange={e => setEditStaffId(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm">
+                  <option value="">Unassign</option>
+                  {staffRows.map(staff => (
+                    <option key={staff.id} value={staff.id}>{staff.name}{!staff.canAssign ? ' (unavailable)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                  <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
+                  <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+                </div>
+              </div>
+              {editError && <p className="text-sm text-red-500">{editError}</p>}
+            </div>
+            <div className="p-5 border-t flex gap-3">
+              <button onClick={saveEdit} disabled={editSaving} className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                {editSaving ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={closeEditModal} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }
