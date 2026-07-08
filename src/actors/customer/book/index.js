@@ -130,7 +130,12 @@ export default function CustomerBooking() {
 
       const recommendations = generateRecommendations(
         staffRows || [],
-        { required_skill: 'Cleaning', location: composedLocation, estimated_hours: form.estimatedHours },
+        {
+          required_skill: 'Cleaning',
+          location: composedLocation,
+          estimated_hours: form.estimatedHours,
+          requested_text: `${form.description || ''} ${form.notes || ''}`,
+        },
         systemParams || {}
       )
       const topMatch = recommendations[0]
