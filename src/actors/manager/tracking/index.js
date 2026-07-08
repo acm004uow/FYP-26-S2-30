@@ -25,31 +25,46 @@ function getScheduledDateTime(booking) {
   return new Date(`${booking.scheduled_date}T${booking.scheduled_time || '00:00'}:00`)
 }
 
+function getLateMinutes(booking) {
+  if (booking.attendance_status !== 'late') return null
+
+  const scheduled = getScheduledDateTime(booking)
+  const checkedIn = booking.checked_in_at ? new Date(booking.checked_in_at) : null
+
+  if (!scheduled || !checkedIn || Number.isNaN(checkedIn.getTime())) return null
+
+  const diffMinutes = Math.round((checkedIn - scheduled) / 60000)
+  return diffMinutes > 0 ? diffMinutes : 0
+}
+
 function getAttendanceInfo(booking, now) {
   const scheduled = getScheduledDateTime(booking)
   const attendance = ['present', 'late'].includes(booking.attendance_status) ? booking.attendance_status : null
+  const lateMinutes = getLateMinutes(booking)
 
   if (booking.status === 'completed' && booking.checked_out_at) {
     const checkedIn = booking.checked_in_at ? new Date(booking.checked_in_at) : null
     const checkedOut = new Date(booking.checked_out_at)
     const duration = checkedIn ? formatDuration(checkedOut - checkedIn) : null
-    return { label: 'Completed', color: 'bg-green-100 text-green-700', detail: duration ? `Worked ${duration}` : 'Completed', attendance }
+    const detailSuffix = lateMinutes !== null ? ` • Late by ${lateMinutes}m` : ''
+    return { label: 'Completed', color: 'bg-green-100 text-green-700', detail: duration ? `Worked ${duration}${detailSuffix}` : `Completed${detailSuffix}`, attendance, lateMinutes }
   }
 
   if (booking.status === 'in_progress' && booking.checked_in_at) {
     const checkedIn = new Date(booking.checked_in_at)
     const elapsed = formatDuration(now - checkedIn)
-    return { label: 'Checked in', color: 'bg-blue-100 text-blue-700', detail: `${elapsed} ago`, attendance }
+    const detailSuffix = lateMinutes !== null ? ` • Late by ${lateMinutes}m` : ''
+    return { label: 'Checked in', color: 'bg-blue-100 text-blue-700', detail: `${elapsed} ago${detailSuffix}`, attendance, lateMinutes }
   }
 
   if (['pending', 'approved'].includes(booking.status)) {
     if (scheduled && scheduled < now) {
-      return { label: 'Not checked in', color: 'bg-red-100 text-red-700', detail: `Overdue since ${scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, attendance: null }
+      return { label: 'Not checked in', color: 'bg-red-100 text-red-700', detail: `Overdue since ${scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, attendance: null, lateMinutes: null }
     }
-    return { label: 'Scheduled', color: 'bg-gray-100 text-gray-600', detail: scheduled ? scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No time set', attendance: null }
+    return { label: 'Scheduled', color: 'bg-gray-100 text-gray-600', detail: scheduled ? scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No time set', attendance: null, lateMinutes: null }
   }
 
-  return { label: booking.status, color: 'bg-gray-100 text-gray-600', detail: '', attendance: null }
+  return { label: booking.status, color: 'bg-gray-100 text-gray-600', detail: '', attendance: null, lateMinutes: null }
 }
 
 export default function ManagerTracking() {
@@ -178,9 +193,9 @@ export default function ManagerTracking() {
                             </div>
                             <div className="text-right flex-shrink-0">
                               <div className="flex items-center justify-end gap-1.5">
-                                {info.attendance && (
-                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${info.attendance === 'late' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                    {info.attendance === 'late' ? 'Late' : 'Present'}
+                                {info.attendance === 'late' && info.lateMinutes !== null && (
+                                  <span className="text-xs px-2 py-1 rounded-full font-medium bg-red-100 text-red-700">
+                                    {info.lateMinutes}m Late
                                   </span>
                                 )}
                                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${info.color}`}>{info.label}</span>
