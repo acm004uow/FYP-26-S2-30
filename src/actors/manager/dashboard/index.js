@@ -52,7 +52,6 @@ export default function ManagerDashboard() {
   const router = useRouter()
   const [operationStats, setOperationStats] = useState([
     { label: 'active bookings today', value: '24', path: '/manager-bookings' },
-    { label: 'staff utilisation', value: '87%', path: '/manager-availability', featured: true },
     { label: 'pending approvals', value: '6', path: '/manager-bookings' },
     { label: 'completed bookings', value: '0', path: '/manager-completed-tasks' },
     { label: 'avg. performance', value: '4.3★', path: '/manager-reports' },
@@ -87,7 +86,6 @@ export default function ManagerDashboard() {
     const activeTodayCount = activeTasks.filter(t => t.created_at?.slice(0, 10) === todayKey).length || activeTasks.length
     const availableStaff = staffData.filter(s => s.availability === 'available' && !s.is_suspended).length
     setAvailableStaffCount(availableStaff)
-    const utilisation = staffData.length ? Math.round(((staffData.length - availableStaff) / staffData.length) * 100) : 87
     const ratings = staffData.map(s => Number(s.performance_rating || 0)).filter(Boolean)
     const averageRating = ratings.length
       ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1)
@@ -95,7 +93,6 @@ export default function ManagerDashboard() {
 
     setOperationStats([
       { label: 'active bookings today', value: String(activeTodayCount || 24), path: '/manager-bookings' },
-      { label: 'staff utilisation', value: `${utilisation}%`, path: '/manager-availability', featured: true },
       { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-bookings' },
       { label: 'completed bookings', value: String(completedTasks.length), path: '/manager-completed-tasks' },
       { label: 'avg. performance', value: `${averageRating}★`, path: '/manager-reports' },
@@ -156,7 +153,7 @@ export default function ManagerDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 mb-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-5 mb-8 sm:grid-cols-2 lg:grid-cols-4">
           {operationStats.map(stat => (
             <button
               key={stat.label}
