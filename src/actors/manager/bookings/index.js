@@ -1,8 +1,9 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
+import { generateRecommendations } from '../../../../lib/recommendationEngine'
 
 const statusColor = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -68,6 +69,7 @@ export default function ManagerBookings() {
   const [assigningBookingId, setAssigningBookingId] = useState(null)
   const [selectedStaffId, setSelectedStaffId] = useState({})
   const [reassigningId, setReassigningId] = useState(null)
+  const [rerunningId, setRerunningId] = useState(null)
 
   const loadBookings = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -81,7 +83,7 @@ export default function ManagerBookings() {
     if (!hostAdminId) {
       setBookings([])
       setStaffRows([])
-      return
+      return null
     }
 
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
@@ -110,10 +112,29 @@ export default function ManagerBookings() {
       tasks: row.current_workload || 0,
       rating: row.performance_rating || 0,
     })))
+    return hostAdminId
   }
 
   useEffect(() => {
-    loadBookings()
+    let bookingsChannel = null
+    let cancelled = false
+
+    loadBookings().then(hostAdminId => {
+      if (cancelled || !hostAdminId) return
+      bookingsChannel = supabase
+        .channel(`manager-bookings-${hostAdminId}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'bookings', filter: `host_admin_id=eq.${hostAdminId}` },
+          () => { if (!cancelled) loadBookings() }
+        )
+        .subscribe()
+    })
+
+    return () => {
+      cancelled = true
+      if (bookingsChannel) supabase.removeChannel(bookingsChannel)
+    }
   }, [])
 
   const showNotification = (message) => {
@@ -249,6 +270,53 @@ export default function ManagerBookings() {
     setReassigningId(null)
   }
 
+  const handleRerunMatch = async (booking) => {
+    setRerunningId(booking.id)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user?.id)
+      .single()
+    const hostAdminId = managerProfile?.host_admin_id
+
+    const [{ data: freshStaff }, { data: systemParams }] = await Promise.all([
+      supabase
+        .from('staff_profiles')
+        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
+        .eq('host_admin_id', hostAdminId)
+        .eq('is_suspended', false)
+        .eq('status', 'active'),
+      supabase.from('system_parameters').select('*').eq('id', 1).single(),
+    ])
+
+    const recommendations = generateRecommendations(
+      freshStaff || [],
+      {
+        required_skill: 'Cleaning',
+        location: booking.location,
+        estimated_hours: booking.estimated_hours,
+        requested_text: `${booking.description || ''} ${booking.notes || ''}`,
+      },
+      systemParams || {}
+    )
+    const topMatch = recommendations[0]
+
+    if (topMatch) {
+      await supabase.from('bookings').update({
+        assigned_staff_id: topMatch.staff_id,
+        recommendation_reason: topMatch.reason,
+        updated_at: new Date().toISOString(),
+      }).eq('id', booking.id)
+      showNotification(`AI match refreshed: ${topMatch.staff_name}.`)
+    } else {
+      showNotification('No suitable staff match found.')
+    }
+
+    setRerunningId(null)
+    await loadBookings()
+  }
+
   const statusLabel = (status) => status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())
 
   return (
@@ -285,13 +353,24 @@ export default function ManagerBookings() {
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{booking.location}</p>
                     <p className="text-xs text-gray-400 mt-2">Requested by {booking.customer?.full_name || booking.customer?.email || 'Customer'} on {new Date(booking.created_at).toLocaleDateString()}</p>
                     {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
-                      <p className="text-sm text-indigo-700 mt-2 flex items-start gap-1">
-                        <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
-                        <span>
-                          AI Recommended: <span className="font-medium">{booking.staff_profiles.staff_name}</span>
-                          {booking.recommendation_reason && <span className="block text-xs text-indigo-400 font-normal">{booking.recommendation_reason}</span>}
-                        </span>
-                      </p>
+                      <div className="mt-2 flex items-start justify-between gap-2">
+                        <p className="text-sm text-indigo-700 flex items-start gap-1">
+                          <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>
+                            AI Recommended: <span className="font-medium">{booking.staff_profiles.staff_name}</span>
+                            {booking.recommendation_reason && <span className="block text-xs text-indigo-400 font-normal">{booking.recommendation_reason}</span>}
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleRerunMatch(booking)}
+                          disabled={rerunningId === booking.id}
+                          title="Re-run AI match using the latest notes and staff availability"
+                          className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${rerunningId === booking.id ? 'animate-spin' : ''}`} /> Re-run match
+                        </button>
+                      </div>
                     ) : (
                       <p className="text-sm text-gray-600 mt-2 flex items-center gap-1"><UserCheck className="w-4 h-4" />Assigned staff: {booking.staff_profiles?.staff_name || 'Unassigned'}</p>
                     )}
