@@ -67,6 +67,7 @@ export default function ManagerBookings() {
   const [dropTargetId, setDropTargetId] = useState(null)
   const [assigningBookingId, setAssigningBookingId] = useState(null)
   const [selectedStaffId, setSelectedStaffId] = useState({})
+  const [reassigningId, setReassigningId] = useState(null)
 
   const loadBookings = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -245,6 +246,7 @@ export default function ManagerBookings() {
     if (!staffId) return
     await performAssignment(booking, staffId, 'assign_booking_manual')
     setSelectedStaffId(prev => ({ ...prev, [booking.id]: '' }))
+    setReassigningId(null)
   }
 
   const statusLabel = (status) => status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())
@@ -283,10 +285,13 @@ export default function ManagerBookings() {
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{booking.location}</p>
                     <p className="text-xs text-gray-400 mt-2">Requested by {booking.customer?.full_name || booking.customer?.email || 'Customer'} on {new Date(booking.created_at).toLocaleDateString()}</p>
                     {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
-                      <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
-                        <p className="text-sm text-indigo-700 flex items-center gap-1"><Sparkles className="w-4 h-4" />AI Recommended: {booking.staff_profiles.staff_name}</p>
-                        {booking.recommendation_reason && <p className="text-xs text-indigo-500 mt-0.5">{booking.recommendation_reason}</p>}
-                      </div>
+                      <p className="text-sm text-indigo-700 mt-2 flex items-start gap-1">
+                        <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span>
+                          AI Recommended: <span className="font-medium">{booking.staff_profiles.staff_name}</span>
+                          {booking.recommendation_reason && <span className="block text-xs text-indigo-400 font-normal">{booking.recommendation_reason}</span>}
+                        </span>
+                      </p>
                     ) : (
                       <p className="text-sm text-gray-600 mt-2 flex items-center gap-1"><UserCheck className="w-4 h-4" />Assigned staff: {booking.staff_profiles?.staff_name || 'Unassigned'}</p>
                     )}
@@ -307,33 +312,62 @@ export default function ManagerBookings() {
                   </div>
                 </div>
                 {booking.status !== 'rejected' && (
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    <select
-                      value={selectedStaffId[booking.id] || ''}
-                      onChange={(event) => setSelectedStaffId(prev => ({ ...prev, [booking.id]: event.target.value }))}
-                      className="min-w-[180px] flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700"
-                    >
-                      <option value="">Assign staff...</option>
-                      {staffRows.map(staff => (
-                        <option key={staff.id} value={staff.id} disabled={!staff.canAssign}>
-                          {staff.name}{staff.canAssign ? '' : ` (${staff.status})`}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex gap-2">
+                      {booking.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => handleReview(booking.id, 'Approved')}
+                            className="flex items-center gap-1.5 rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-600 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-1"
+                          >
+                            <CheckCircle className="w-4 h-4" /> Approve
+                          </button>
+                          <button
+                            onClick={() => handleReview(booking.id, 'Rejected')}
+                            className="flex items-center gap-1.5 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-1"
+                          >
+                            <XCircle className="w-4 h-4" /> Reject
+                          </button>
+                        </>
+                      )}
+                    </div>
                     <button
                       type="button"
-                      onClick={() => handleManualAssign(booking)}
-                      disabled={!selectedStaffId[booking.id] || assigningBookingId === booking.id}
-                      className="flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                      onClick={() => setReassigningId(prev => prev === booking.id ? null : booking.id)}
+                      className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                     >
-                      <UserCheck className="w-4 h-4" /> Assign
+                      <UserCheck className="w-4 h-4" />
+                      {reassigningId === booking.id ? 'Cancel' : booking.status === 'pending' ? 'Choose different staff' : 'Reassign staff'}
                     </button>
                   </div>
                 )}
-                {booking.status === 'pending' && (
-                  <div className="flex gap-3 mt-3">
-                    <button onClick={() => handleReview(booking.id, 'Approved')} className="flex items-center gap-1 px-4 py-2 bg-green-500 text-white rounded-lg text-sm"><CheckCircle className="w-4 h-4" /> Approve</button>
-                    <button onClick={() => handleReview(booking.id, 'Rejected')} className="flex items-center gap-1 px-4 py-2 bg-red-500 text-white rounded-lg text-sm"><XCircle className="w-4 h-4" /> Reject</button>
+                {reassigningId === booking.id && (
+                  <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    {booking.status === 'pending' && (
+                      <p className="text-xs text-gray-500 mb-2">Assigning will also approve this booking.</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={selectedStaffId[booking.id] || ''}
+                        onChange={(event) => setSelectedStaffId(prev => ({ ...prev, [booking.id]: event.target.value }))}
+                        className="min-w-[180px] flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
+                      >
+                        <option value="">Choose staff...</option>
+                        {staffRows.map(staff => (
+                          <option key={staff.id} value={staff.id} disabled={!staff.canAssign}>
+                            {staff.name}{staff.canAssign ? '' : ` (${staff.status})`}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleManualAssign(booking)}
+                        disabled={!selectedStaffId[booking.id] || assigningBookingId === booking.id}
+                        className="flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                      >
+                        <UserCheck className="w-4 h-4" /> {booking.status === 'pending' ? 'Assign & Approve' : 'Confirm'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

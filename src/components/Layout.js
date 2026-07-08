@@ -31,6 +31,7 @@ export default function Layout({ children, role = 'manager' }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
+  const [pendingBookingsCount, setPendingBookingsCount] = useState(0)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [businessName, setBusinessName] = useState('Smart Task Allocation')
   const [profileInfo, setProfileInfo] = useState(null)
@@ -45,6 +46,7 @@ export default function Layout({ children, role = 'manager' }) {
 
   useEffect(() => {
     let notificationChannel = null
+    let bookingsChannel = null
     let cancelled = false
 
     async function loadSessionData() {
@@ -58,7 +60,7 @@ export default function Layout({ children, role = 'manager' }) {
       const [{ data: profile }, { data: notificationRows }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('full_name,email,role,business_name,status')
+          .select('full_name,email,role,business_name,status,host_admin_id')
           .eq('id', user.id)
           .single(),
         supabase
@@ -134,6 +136,28 @@ export default function Layout({ children, role = 'manager' }) {
         )
         .subscribe()
 
+      if (role === 'manager' && resolvedProfile.host_admin_id) {
+        const hostAdminId = resolvedProfile.host_admin_id
+        const refreshPendingCount = async () => {
+          const { count } = await supabase
+            .from('bookings')
+            .select('id', { count: 'exact', head: true })
+            .eq('host_admin_id', hostAdminId)
+            .eq('status', 'pending')
+          if (!cancelled) setPendingBookingsCount(count || 0)
+        }
+
+        await refreshPendingCount()
+
+        bookingsChannel = supabase
+          .channel(`bookings-badge-${hostAdminId}-${Date.now()}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'bookings', filter: `host_admin_id=eq.${hostAdminId}` },
+            refreshPendingCount
+          )
+          .subscribe()
+      }
     }
 
     loadSessionData()
@@ -152,6 +176,7 @@ export default function Layout({ children, role = 'manager' }) {
       cancelled = true
       document.removeEventListener('mousedown', handleClickOutside)
       if (notificationChannel) supabase.removeChannel(notificationChannel)
+      if (bookingsChannel) supabase.removeChannel(bookingsChannel)
     }
   }, [role, router])
 
@@ -169,12 +194,18 @@ export default function Layout({ children, role = 'manager' }) {
     const isActive = itemQuery
       ? router.pathname === itemPath && router.asPath.includes(itemQuery)
       : router.pathname === itemPath && !(itemPath === '/admin' && router.asPath.includes('section='))
+    const badgeCount = itemPath === '/manager-bookings' ? pendingBookingsCount : 0
     return (
       <Link key={item.path} href={item.path}
         onClick={options.onClick}
         className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition ${isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}>
         <item.icon className="h-5 w-5 shrink-0" />
-        <span>{item.name}</span>
+        <span className="flex-1">{item.name}</span>
+        {badgeCount > 0 && (
+          <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">
+            {badgeCount > 9 ? '9+' : badgeCount}
+          </span>
+        )}
       </Link>
     )
   }
