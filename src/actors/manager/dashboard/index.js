@@ -51,7 +51,7 @@ const staffStatusColor = {
 export default function ManagerDashboard() {
   const router = useRouter()
   const [operationStats, setOperationStats] = useState([
-    { label: 'active bookings today', value: '24', path: '/manager-bookings' },
+    { label: 'active bookings', value: '24', path: '/manager-bookings' },
     { label: 'pending approvals', value: '6', path: '/manager-bookings' },
     { label: 'completed bookings', value: '0', path: '/manager-completed-tasks' },
     { label: 'avg. performance', value: '4.3★', path: '/manager-reports' },
@@ -82,8 +82,6 @@ export default function ManagerDashboard() {
     const activeTasks = taskData.filter(t => !['completed', 'cancelled', 'rejected'].includes(t.status))
     const completedTasks = taskData.filter(t => t.status === 'completed')
     const pendingTasks = taskData.filter(t => t.status === 'pending')
-    const todayKey = new Date().toISOString().slice(0, 10)
-    const activeTodayCount = activeTasks.filter(t => t.created_at?.slice(0, 10) === todayKey).length || activeTasks.length
     const availableStaff = staffData.filter(s => s.availability === 'available' && !s.is_suspended).length
     setAvailableStaffCount(availableStaff)
     const ratings = staffData.map(s => Number(s.performance_rating || 0)).filter(Boolean)
@@ -92,7 +90,7 @@ export default function ManagerDashboard() {
       : '4.3'
 
     setOperationStats([
-      { label: 'active bookings today', value: String(activeTodayCount || 24), path: '/manager-bookings' },
+      { label: 'active bookings', value: String(activeTasks.length || 24), path: '/manager-bookings' },
       { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-bookings' },
       { label: 'completed bookings', value: String(completedTasks.length), path: '/manager-completed-tasks' },
       { label: 'avg. performance', value: `${averageRating}★`, path: '/manager-reports' },

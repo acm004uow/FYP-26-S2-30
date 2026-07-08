@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 
@@ -16,6 +16,49 @@ const staffStatusColor = {
   'On Leave': 'bg-gray-100 text-gray-600',
 }
 
+const dateToneColor = {
+  overdue: 'bg-red-50 text-red-700',
+  today: 'bg-orange-50 text-orange-700',
+  tomorrow: 'bg-blue-50 text-blue-700',
+  upcoming: 'bg-gray-100 text-gray-600',
+  none: 'bg-gray-100 text-gray-400',
+}
+
+const formatTime = (time) => {
+  if (!time) return null
+  const [h, m] = time.split(':').map(Number)
+  if (Number.isNaN(h)) return time
+  const period = h >= 12 ? 'PM' : 'AM'
+  const hour12 = h % 12 || 12
+  return `${hour12}:${String(m).padStart(2, '0')} ${period}`
+}
+
+const getScheduleBadge = (booking) => {
+  if (!booking.scheduled_date) return { label: 'No date set', tone: 'none' }
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const scheduled = new Date(`${booking.scheduled_date}T00:00:00`)
+  const diffDays = Math.round((scheduled - today) / 86400000)
+  const time = formatTime(booking.scheduled_time)
+
+  let dayLabel
+  let tone
+  if (diffDays < 0) {
+    dayLabel = scheduled.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    tone = 'overdue'
+  } else if (diffDays === 0) {
+    dayLabel = 'Today'
+    tone = 'today'
+  } else if (diffDays === 1) {
+    dayLabel = 'Tomorrow'
+    tone = 'tomorrow'
+  } else {
+    dayLabel = scheduled.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    tone = 'upcoming'
+  }
+  return { label: time ? `${dayLabel} · ${time}` : dayLabel, tone }
+}
+
 export default function ManagerBookings() {
   const [bookings, setBookings] = useState([])
   const [staffRows, setStaffRows] = useState([])
@@ -23,6 +66,7 @@ export default function ManagerBookings() {
   const [draggedStaffId, setDraggedStaffId] = useState(null)
   const [dropTargetId, setDropTargetId] = useState(null)
   const [assigningBookingId, setAssigningBookingId] = useState(null)
+  const [selectedStaffId, setSelectedStaffId] = useState({})
 
   const loadBookings = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -155,10 +199,7 @@ export default function ManagerBookings() {
     setDropTargetId(booking.id)
   }
 
-  const handleAssignStaff = async (event, booking) => {
-    event.preventDefault()
-    setDropTargetId(null)
-    const staffId = event.dataTransfer.getData('text/plain') || draggedStaffId
+  const performAssignment = async (booking, staffId, action) => {
     const staff = staffRows.find(item => item.id === staffId)
     if (!staff || booking.status === 'rejected') return
     if (!staff.canAssign) {
@@ -183,13 +224,27 @@ export default function ManagerBookings() {
       staff,
       managerUserId: user.id,
       previousStaff,
-      action: 'assign_booking_drag_drop',
+      action,
     })
 
     setAssigningBookingId(null)
-    setDraggedStaffId(null)
     showNotification(result.message)
     await loadBookings()
+  }
+
+  const handleAssignStaff = async (event, booking) => {
+    event.preventDefault()
+    setDropTargetId(null)
+    const staffId = event.dataTransfer.getData('text/plain') || draggedStaffId
+    setDraggedStaffId(null)
+    await performAssignment(booking, staffId, 'assign_booking_drag_drop')
+  }
+
+  const handleManualAssign = async (booking) => {
+    const staffId = selectedStaffId[booking.id]
+    if (!staffId) return
+    await performAssignment(booking, staffId, 'assign_booking_manual')
+    setSelectedStaffId(prev => ({ ...prev, [booking.id]: '' }))
   }
 
   const statusLabel = (status) => status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())
@@ -198,12 +253,23 @@ export default function ManagerBookings() {
     <Layout role="manager">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold">Bookings for Review</h1>
-        <p className="text-gray-500 mb-6">AI recommends the best-matched staff for each booking. Approve to confirm, or drag a different staff member onto a booking to override.</p>
+        <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
+        <div className="mt-3 mb-6 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+            <ListChecks className="w-3.5 h-3.5" /> Select staff from the dropdown
+          </span>
+          <span className="text-xs text-gray-400">or</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+            <Move className="w-3.5 h-3.5" /> Drag a staff member onto a booking
+          </span>
+        </div>
         {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
           <div className="space-y-4">
-            {bookings.map(booking => (
+            {bookings.map(booking => {
+              const scheduleBadge = getScheduleBadge(booking)
+              return (
               <div
                 key={booking.id}
                 onDragOver={(event) => handleBookingDragOver(event, booking)}
@@ -215,9 +281,6 @@ export default function ManagerBookings() {
                   <div className="min-w-0">
                     <h3 className="font-semibold text-gray-900">{booking.service_type}</h3>
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{booking.location}</p>
-                    {booking.scheduled_date && (
-                      <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><Calendar className="w-4 h-4" />{booking.scheduled_date} {booking.scheduled_time}</p>
-                    )}
                     <p className="text-xs text-gray-400 mt-2">Requested by {booking.customer?.full_name || booking.customer?.email || 'Customer'} on {new Date(booking.created_at).toLocaleDateString()}</p>
                     {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
                       <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
@@ -234,18 +297,48 @@ export default function ManagerBookings() {
                       <p className="text-sm text-gray-600 mt-1"><span className="font-medium text-gray-700">Notes:</span> {booking.notes}</p>
                     )}
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
-                    {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}
-                  </span>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
+                      {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}
+                    </span>
+                    <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${dateToneColor[scheduleBadge.tone]}`}>
+                      <Calendar className="w-3.5 h-3.5" />{scheduleBadge.label}
+                    </span>
+                  </div>
                 </div>
+                {booking.status !== 'rejected' && (
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <select
+                      value={selectedStaffId[booking.id] || ''}
+                      onChange={(event) => setSelectedStaffId(prev => ({ ...prev, [booking.id]: event.target.value }))}
+                      className="min-w-[180px] flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700"
+                    >
+                      <option value="">Assign staff...</option>
+                      {staffRows.map(staff => (
+                        <option key={staff.id} value={staff.id} disabled={!staff.canAssign}>
+                          {staff.name}{staff.canAssign ? '' : ` (${staff.status})`}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => handleManualAssign(booking)}
+                      disabled={!selectedStaffId[booking.id] || assigningBookingId === booking.id}
+                      className="flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                    >
+                      <UserCheck className="w-4 h-4" /> Assign
+                    </button>
+                  </div>
+                )}
                 {booking.status === 'pending' && (
-                  <div className="flex gap-3 mt-4">
+                  <div className="flex gap-3 mt-3">
                     <button onClick={() => handleReview(booking.id, 'Approved')} className="flex items-center gap-1 px-4 py-2 bg-green-500 text-white rounded-lg text-sm"><CheckCircle className="w-4 h-4" /> Approve</button>
                     <button onClick={() => handleReview(booking.id, 'Rejected')} className="flex items-center gap-1 px-4 py-2 bg-red-500 text-white rounded-lg text-sm"><XCircle className="w-4 h-4" /> Reject</button>
                   </div>
                 )}
               </div>
-            ))}
+              )
+            })}
             {bookings.length === 0 && <div className="bg-white rounded-xl border p-8 text-center text-gray-400">No bookings found.</div>}
           </div>
 
