@@ -1,12 +1,15 @@
 import Layout from '../../../components/Layout'
+import AddressFields from '../../../components/AddressFields'
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Calendar, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Plus, Printer, Send, Sparkles, User, X, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
-import { assignStaffToBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
+import { assignStaffToBooking, createManualBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
 
 const suggestions = ['Create schedule for one week', 'Build a schedule for the next 3 days', 'Schedule bookings for next week']
 
 const availabilityLabel = { unavailable: 'UNAVAILABLE', time_off: 'TIME OFF' }
+
+const SERVICE_TYPES = ['Home Cleaning', 'Office Cleaning', 'Deep Cleaning', 'Move-Out Cleaning', 'Carpet Cleaning']
 
 // Dates are kept entirely in UTC arithmetic (parse with a "Z" suffix, use getUTC*/setUTC*).
 // Mixing local-time parsing with .toISOString() (always UTC) would silently shift every
@@ -75,8 +78,15 @@ export default function ManagerAiAgent() {
   const [finalizing, setFinalizing] = useState(false)
   const [unassignedBookings, setUnassignedBookings] = useState([])
   const [schedulingSlot, setSchedulingSlot] = useState(null)
+  const [scheduleMode, setScheduleMode] = useState('existing')
   const [scheduleBookingId, setScheduleBookingId] = useState('')
+  const [scheduleDate, setScheduleDate] = useState('')
   const [scheduleTime, setScheduleTime] = useState('')
+  const [newTaskServiceType, setNewTaskServiceType] = useState(SERVICE_TYPES[0])
+  const [newTaskLocation, setNewTaskLocation] = useState('')
+  const [newTaskCoordinates, setNewTaskCoordinates] = useState(null)
+  const [newTaskDescription, setNewTaskDescription] = useState('')
+  const [newTaskHours, setNewTaskHours] = useState(2)
   const [scheduleSaving, setScheduleSaving] = useState(false)
   const [scheduleError, setScheduleError] = useState('')
   const messagesEndRef = useRef(null)
@@ -181,9 +191,16 @@ export default function ManagerAiAgent() {
   }
 
   const openScheduleModal = (staff, date) => {
-    setSchedulingSlot({ staffId: staff.id, staffName: staff.name, date })
+    setSchedulingSlot({ staffId: staff.id, staffName: staff.name })
+    setScheduleMode('existing')
     setScheduleBookingId('')
+    setScheduleDate(date)
     setScheduleTime('')
+    setNewTaskServiceType(SERVICE_TYPES[0])
+    setNewTaskLocation('')
+    setNewTaskCoordinates(null)
+    setNewTaskDescription('')
+    setNewTaskHours(2)
     setScheduleError('')
   }
 
@@ -193,7 +210,9 @@ export default function ManagerAiAgent() {
   }
 
   const saveManualSchedule = async () => {
-    if (!schedulingSlot || !scheduleBookingId) return
+    if (!schedulingSlot || !scheduleDate) return
+    if (scheduleMode === 'existing' && !scheduleBookingId) return
+    if (scheduleMode === 'new' && !newTaskLocation.trim()) return
     setScheduleSaving(true)
     setScheduleError('')
 
@@ -205,16 +224,29 @@ export default function ManagerAiAgent() {
     }
 
     const staff = staffRows.find(item => item.id === schedulingSlot.staffId)
-    const booking = unassignedBookings.find(item => item.id === scheduleBookingId)
 
-    const result = await updateBookingAssignment({
-      booking: { id: scheduleBookingId, status: booking?.status || 'pending' },
-      staff,
-      scheduledDate: schedulingSlot.date,
-      scheduledTime: scheduleTime || booking?.scheduled_time || '',
-      managerUserId: manager.id,
-      previousStaff: null,
-    })
+    const result = scheduleMode === 'new'
+      ? await createManualBooking({
+        hostAdminId,
+        serviceType: newTaskServiceType,
+        location: newTaskLocation.trim(),
+        latitude: newTaskCoordinates?.latitude,
+        longitude: newTaskCoordinates?.longitude,
+        description: newTaskDescription.trim(),
+        estimatedHours: Number(newTaskHours) || 2,
+        scheduledDate: scheduleDate,
+        scheduledTime: scheduleTime,
+        staff,
+        managerUserId: manager.id,
+      })
+      : await updateBookingAssignment({
+        booking: { id: scheduleBookingId, status: unassignedBookings.find(item => item.id === scheduleBookingId)?.status || 'pending' },
+        staff,
+        scheduledDate: scheduleDate,
+        scheduledTime: scheduleTime,
+        managerUserId: manager.id,
+        previousStaff: null,
+      })
 
     setScheduleSaving(false)
     if (!result.success) {
@@ -847,46 +879,105 @@ export default function ManagerAiAgent() {
 
       {schedulingSlot && (
         <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
-            <div className="p-5 border-b flex items-center justify-between">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="p-5 border-b flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-semibold text-gray-900">Schedule task</h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  {schedulingSlot.staffName} — {new Date(`${schedulingSlot.date}T00:00:00`).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
-                </p>
+                <p className="text-sm text-gray-500 mt-1">{schedulingSlot.staffName}</p>
               </div>
               <button onClick={closeScheduleModal} className="p-1 rounded-lg hover:bg-gray-100" aria-label="Close"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Unassigned booking</label>
-                <select
-                  value={scheduleBookingId}
-                  onChange={e => {
-                    const selected = unassignedBookings.find(b => b.id === e.target.value)
-                    setScheduleBookingId(e.target.value)
-                    setScheduleTime(selected?.scheduled_time || '')
-                  }}
-                  className="w-full px-4 py-2 border rounded-lg text-sm"
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="inline-flex rounded-lg bg-gray-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode('existing')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${scheduleMode === 'existing' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
                 >
-                  <option value="">Select a booking...</option>
-                  {unassignedBookings.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {b.service_type} — {locationLabel(b.location)}{b.scheduled_date ? ` (requested ${b.scheduled_date})` : ''}
-                    </option>
-                  ))}
-                </select>
-                {unassignedBookings.length === 0 && <p className="text-xs text-gray-400 mt-2">No unassigned bookings right now.</p>}
+                  Existing booking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleMode('new')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${scheduleMode === 'new' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                  New task
+                </button>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+
+              {scheduleMode === 'existing' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Unassigned booking</label>
+                  <select
+                    value={scheduleBookingId}
+                    onChange={e => {
+                      const selected = unassignedBookings.find(b => b.id === e.target.value)
+                      setScheduleBookingId(e.target.value)
+                      if (selected?.scheduled_date) setScheduleDate(selected.scheduled_date)
+                      if (selected?.scheduled_time) setScheduleTime(selected.scheduled_time)
+                    }}
+                    className="w-full px-4 py-2 border rounded-lg text-sm"
+                  >
+                    <option value="">Select a booking...</option>
+                    {unassignedBookings.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {b.service_type} — {locationLabel(b.location)}{b.scheduled_date ? ` (requested ${b.scheduled_date})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {unassignedBookings.length === 0 && <p className="text-xs text-gray-400 mt-2">No unassigned bookings right now.</p>}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Service type</label>
+                    <select value={newTaskServiceType} onChange={e => setNewTaskServiceType(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm">
+                      {SERVICE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                  </div>
+                  <AddressFields compact onLocationChange={setNewTaskLocation} onCoordinatesChange={setNewTaskCoordinates} />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Description (optional)</label>
+                    <textarea
+                      value={newTaskDescription}
+                      onChange={e => setNewTaskDescription(e.target.value)}
+                      rows={2}
+                      className="w-full px-4 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Estimated hours</label>
+                    <input
+                      type="number"
+                      min="0.5"
+                      step="0.5"
+                      value={newTaskHours}
+                      onChange={e => setNewTaskHours(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                  <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
+                  <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+                </div>
               </div>
               {scheduleError && <p className="text-sm text-red-500">{scheduleError}</p>}
             </div>
-            <div className="p-5 border-t flex gap-3">
-              <button onClick={saveManualSchedule} disabled={scheduleSaving || !scheduleBookingId} className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60">
-                {scheduleSaving ? 'Scheduling...' : 'Schedule'}
+            <div className="p-5 border-t flex gap-3 shrink-0">
+              <button
+                onClick={saveManualSchedule}
+                disabled={scheduleSaving || !scheduleDate || (scheduleMode === 'existing' ? !scheduleBookingId : !newTaskLocation.trim())}
+                className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {scheduleSaving ? 'Saving...' : scheduleMode === 'new' ? 'Create & Assign' : 'Schedule'}
               </button>
               <button onClick={closeScheduleModal} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
             </div>

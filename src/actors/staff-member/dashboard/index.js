@@ -4,6 +4,7 @@ import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, Calendar,
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
 import { getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
+import { CHECK_IN_RADIUS_METERS, getCurrentPosition, getDistanceMeters } from '../../../../lib/geolocation'
 
 const getTaskDisplayStatus = (task) => {
   if (task.rawStatus === 'overdue' || isTaskPastDue(task)) {
@@ -50,6 +51,7 @@ export default function StaffMemberDashboard() {
   const [pendingAvailability, setPendingAvailability] = useState(null)
   const [pendingAvailabilityReason, setPendingAvailabilityReason] = useState('')
   const [dismissedOverdueAlert, setDismissedOverdueAlert] = useState(false)
+  const [checkingInTaskId, setCheckingInTaskId] = useState(null)
 
   const loadDashboard = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -67,7 +69,7 @@ export default function StaffMemberDashboard() {
 
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,status,description,notes,customer_id,checked_in_at,checked_out_at,customer:profiles!bookings_customer_id_fkey(full_name,email),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
+      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,estimated_hours,status,description,notes,customer_id,checked_in_at,checked_out_at,latitude,longitude,customer:profiles!bookings_customer_id_fkey(full_name,email),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
       .eq('assigned_staff_id', staffProfile.id)
       .neq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -130,6 +132,30 @@ export default function StaffMemberDashboard() {
       setNotification('You can only start this task on its assigned day.')
       setTimeout(() => setNotification(null), 3000)
       return
+    }
+
+    // Only enforce proximity when the booking has stored coordinates — older bookings
+    // created before geo-lookup was added have none, so they fall back to trusting the
+    // check-in (can't verify what was never captured).
+    if (Number.isFinite(task.latitude) && Number.isFinite(task.longitude)) {
+      setCheckingInTaskId(taskId)
+      let position
+      try {
+        position = await getCurrentPosition()
+      } catch (error) {
+        setCheckingInTaskId(null)
+        setNotification(error.message)
+        setTimeout(() => setNotification(null), 4000)
+        return
+      }
+
+      const distance = getDistanceMeters(position.latitude, position.longitude, task.latitude, task.longitude)
+      setCheckingInTaskId(null)
+      if (distance > CHECK_IN_RADIUS_METERS) {
+        setNotification(`You're ${Math.round(distance)}m from the job site — get within ${CHECK_IN_RADIUS_METERS}m to check in.`)
+        setTimeout(() => setNotification(null), 4000)
+        return
+      }
     }
 
     const checkInAt = new Date()
@@ -373,7 +399,10 @@ export default function StaffMemberDashboard() {
     ? (completedTasks.reduce((sum, task) => sum + Number(task.rating || 0), 0) / completedTasks.length).toFixed(1)
     : Number(profile?.performance_rating || 0).toFixed(1)
 
-  const todayTasks = myTasks.filter((task) => isTaskAssignedToday(task) && !isTaskPastDue(task))
+  // Today's tasks stay visible (and actionable) here even once past due — a job scheduled
+  // for today shouldn't disappear from "Today Tasks" just because its time has passed; it
+  // still shows an "Overdue" badge and also appears in the dedicated Overdue tab.
+  const todayTasks = myTasks.filter((task) => isTaskAssignedToday(task))
   const otherActiveTasks = myTasks.filter((task) => !isTaskAssignedToday(task) && !isTaskPastDue(task))
 
   const allTasks = useMemo(() => {
@@ -525,11 +554,11 @@ export default function StaffMemberDashboard() {
                     event.stopPropagation()
                     handleStartTask(task.id)
                   }}
-                  disabled={!canStartToday}
+                  disabled={!canStartToday || checkingInTaskId === task.id}
                   title={canStartToday ? 'Check in and start this task' : 'This task can only be started on its assigned day'}
                   className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-500"
                 >
-                  {canStartToday ? 'Check In' : 'Check In on Assigned Day'}
+                  {checkingInTaskId === task.id ? 'Checking location...' : canStartToday ? 'Check In' : 'Check In on Assigned Day'}
                 </button>
               )}
 
