@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Calendar, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Printer, Send, Sparkles, User, X, XCircle } from 'lucide-react'
+import { Bot, Calendar, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Plus, Printer, Send, Sparkles, User, X, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
 
@@ -73,12 +73,21 @@ export default function ManagerAiAgent() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState('')
   const [finalizing, setFinalizing] = useState(false)
+  const [unassignedBookings, setUnassignedBookings] = useState([])
+  const [schedulingSlot, setSchedulingSlot] = useState(null)
+  const [scheduleBookingId, setScheduleBookingId] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const [scheduleSaving, setScheduleSaving] = useState(false)
+  const [scheduleError, setScheduleError] = useState('')
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
     (async () => {
       const id = await loadStaff()
-      if (id) await loadWeeklyGrid(id, weekAnchor)
+      if (id) {
+        await loadWeeklyGrid(id, weekAnchor)
+        await loadUnassignedBookings(id)
+      }
       await checkPendingAutoProposal(id)
     })()
   }, [])
@@ -157,6 +166,66 @@ export default function ManagerAiAgent() {
     const newAnchor = shiftWeek(weekAnchor, days)
     setWeekAnchor(newAnchor)
     await loadWeeklyGrid(hostAdminId, newAnchor)
+  }
+
+  const loadUnassignedBookings = async (hostAdminIdParam) => {
+    if (!hostAdminIdParam) return
+    const { data } = await supabase
+      .from('bookings')
+      .select('id,service_type,location,scheduled_date,scheduled_time,estimated_hours,status')
+      .eq('host_admin_id', hostAdminIdParam)
+      .is('assigned_staff_id', null)
+      .in('status', ['pending', 'approved'])
+      .order('created_at', { ascending: false })
+    setUnassignedBookings(data || [])
+  }
+
+  const openScheduleModal = (staff, date) => {
+    setSchedulingSlot({ staffId: staff.id, staffName: staff.name, date })
+    setScheduleBookingId('')
+    setScheduleTime('')
+    setScheduleError('')
+  }
+
+  const closeScheduleModal = () => {
+    setSchedulingSlot(null)
+    setScheduleError('')
+  }
+
+  const saveManualSchedule = async () => {
+    if (!schedulingSlot || !scheduleBookingId) return
+    setScheduleSaving(true)
+    setScheduleError('')
+
+    const manager = await getActiveManager()
+    if (!manager) {
+      setScheduleError('Only an active manager can schedule bookings.')
+      setScheduleSaving(false)
+      return
+    }
+
+    const staff = staffRows.find(item => item.id === schedulingSlot.staffId)
+    const booking = unassignedBookings.find(item => item.id === scheduleBookingId)
+
+    const result = await updateBookingAssignment({
+      booking: { id: scheduleBookingId, status: booking?.status || 'pending' },
+      staff,
+      scheduledDate: schedulingSlot.date,
+      scheduledTime: scheduleTime || booking?.scheduled_time || '',
+      managerUserId: manager.id,
+      previousStaff: null,
+    })
+
+    setScheduleSaving(false)
+    if (!result.success) {
+      setScheduleError(result.message)
+      return
+    }
+
+    closeScheduleModal()
+    await loadStaff()
+    await loadWeeklyGrid(hostAdminId, weekAnchor)
+    await loadUnassignedBookings(hostAdminId)
   }
 
   const checkPendingAutoProposal = async (hostAdminIdParam) => {
@@ -346,6 +415,10 @@ export default function ManagerAiAgent() {
   const scheduledStaffRows = pastSnapshot
     ? pastSnapshot.snapshot.staff
     : staffRows.filter(staff => weekBookings.some(b => b.assigned_staff_id === staff.id))
+  // The live grid shows every active staff member (not just those with jobs already)
+  // so a manager can manually schedule an unexpected task onto anyone's empty day.
+  // Finalized past weeks keep showing only the staff captured in that week's snapshot.
+  const gridStaffRows = pastSnapshot ? scheduledStaffRows : staffRows
 
   const exportSchedulePdf = () => {
     const theadHtml = `
@@ -657,7 +730,7 @@ export default function ManagerAiAgent() {
                 </tr>
               </thead>
               <tbody>
-                {scheduledStaffRows.map(staff => {
+                {gridStaffRows.map(staff => {
                   const staffBookingCount = weekBookings.filter(b => b.assigned_staff_id === staff.id).length
                   return (
                     <tr key={staff.id} className="border-b hover:bg-gray-50/60 transition">
@@ -675,30 +748,54 @@ export default function ManagerAiAgent() {
                         return (
                           <td key={date} className={`p-3 align-top ${date === today ? 'bg-blue-50/40' : ''}`}>
                             {dayBookings.length === 0
-                              ? <span className="text-gray-300">–</span>
-                              : dayBookings.map((b, i) => (
-                                <button
-                                  type="button"
-                                  key={b.id}
-                                  onClick={pastSnapshot ? undefined : () => openEditModal(b)}
-                                  disabled={!!pastSnapshot}
-                                  className={`block w-full text-left rounded-lg px-2 py-1.5 -mx-2 transition ${pastSnapshot ? 'cursor-default' : 'hover:bg-blue-100'} ${i > 0 ? 'mt-1.5 border-t border-gray-100 pt-2' : ''}`}
-                                >
-                                  <p className="text-xs font-medium text-gray-800 whitespace-nowrap">
-                                    {b.scheduled_time}{b.scheduled_time && `–${addHoursToTime(b.scheduled_time, b.estimated_hours)}`}
-                                  </p>
-                                  <p className="text-xs text-gray-500">{b.service_type}</p>
-                                  <p className="text-xs text-gray-400">{locationLabel(b.location)}</p>
-                                </button>
-                              ))}
+                              ? (pastSnapshot
+                                ? <span className="text-gray-300">–</span>
+                                : (
+                                  <button
+                                    type="button"
+                                    onClick={() => openScheduleModal(staff, date)}
+                                    title={`Schedule a task for ${staff.name}`}
+                                    className="flex h-6 w-6 items-center justify-center rounded text-gray-300 transition hover:bg-blue-100 hover:text-blue-500"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                  </button>
+                                ))
+                              : (
+                                <>
+                                  {dayBookings.map((b, i) => (
+                                    <button
+                                      type="button"
+                                      key={b.id}
+                                      onClick={pastSnapshot ? undefined : () => openEditModal(b)}
+                                      disabled={!!pastSnapshot}
+                                      className={`block w-full text-left rounded-lg px-2 py-1.5 -mx-2 transition ${pastSnapshot ? 'cursor-default' : 'hover:bg-blue-100'} ${i > 0 ? 'mt-1.5 border-t border-gray-100 pt-2' : ''}`}
+                                    >
+                                      <p className="text-xs font-medium text-gray-800 whitespace-nowrap">
+                                        {b.scheduled_time}{b.scheduled_time && `–${addHoursToTime(b.scheduled_time, b.estimated_hours)}`}
+                                      </p>
+                                      <p className="text-xs text-gray-500">{b.service_type}</p>
+                                      <p className="text-xs text-gray-400">{locationLabel(b.location)}</p>
+                                    </button>
+                                  ))}
+                                  {!pastSnapshot && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openScheduleModal(staff, date)}
+                                      className="mt-1.5 flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500"
+                                    >
+                                      <Plus className="w-3 h-3" /> Add
+                                    </button>
+                                  )}
+                                </>
+                              )}
                           </td>
                         )
                       })}
                     </tr>
                   )
                 })}
-                {scheduledStaffRows.length === 0 && (
-                  <tr><td colSpan={8} className="p-8 text-center text-gray-400">No staff have bookings scheduled this week.</td></tr>
+                {gridStaffRows.length === 0 && (
+                  <tr><td colSpan={8} className="p-8 text-center text-gray-400">No active staff found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -743,6 +840,55 @@ export default function ManagerAiAgent() {
                 {editSaving ? 'Saving...' : 'Save'}
               </button>
               <button onClick={closeEditModal} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {schedulingSlot && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="p-5 border-b flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-900">Schedule task</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  {schedulingSlot.staffName} — {new Date(`${schedulingSlot.date}T00:00:00`).toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+                </p>
+              </div>
+              <button onClick={closeScheduleModal} className="p-1 rounded-lg hover:bg-gray-100" aria-label="Close"><X className="w-5 h-5 text-gray-500" /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Unassigned booking</label>
+                <select
+                  value={scheduleBookingId}
+                  onChange={e => {
+                    const selected = unassignedBookings.find(b => b.id === e.target.value)
+                    setScheduleBookingId(e.target.value)
+                    setScheduleTime(selected?.scheduled_time || '')
+                  }}
+                  className="w-full px-4 py-2 border rounded-lg text-sm"
+                >
+                  <option value="">Select a booking...</option>
+                  {unassignedBookings.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.service_type} — {locationLabel(b.location)}{b.scheduled_date ? ` (requested ${b.scheduled_date})` : ''}
+                    </option>
+                  ))}
+                </select>
+                {unassignedBookings.length === 0 && <p className="text-xs text-gray-400 mt-2">No unassigned bookings right now.</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
+                <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+              </div>
+              {scheduleError && <p className="text-sm text-red-500">{scheduleError}</p>}
+            </div>
+            <div className="p-5 border-t flex gap-3">
+              <button onClick={saveManualSchedule} disabled={scheduleSaving || !scheduleBookingId} className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                {scheduleSaving ? 'Scheduling...' : 'Schedule'}
+              </button>
+              <button onClick={closeScheduleModal} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
             </div>
           </div>
         </div>

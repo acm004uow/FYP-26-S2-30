@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, Calendar, FileUp } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
+import { getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
 
 const getTaskDisplayStatus = (task) => {
   if (task.rawStatus === 'overdue' || isTaskPastDue(task)) {
@@ -131,9 +132,12 @@ export default function StaffMemberDashboard() {
       return
     }
 
+    const checkInAt = new Date()
+    const attendanceStatus = getAttendanceStatusFromDateTime(task.scheduledStartRaw, checkInAt)
+
     await supabase
       .from('bookings')
-      .update({ status: 'in_progress', checked_in_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ status: 'in_progress', checked_in_at: checkInAt.toISOString(), attendance_status: attendanceStatus, updated_at: checkInAt.toISOString() })
       .eq('id', taskId)
 
     await supabase.from('audit_logs').insert({
@@ -143,8 +147,8 @@ export default function StaffMemberDashboard() {
 
     await loadDashboard()
 
-    setNotification('Task started.')
-    setTimeout(() => setNotification(null), 2000)
+    setNotification(attendanceStatus === 'late' ? "Task started — you're outside the customer's preferred check-in window." : 'Task started.')
+    setTimeout(() => setNotification(null), 3000)
   }
 
   const handleCompleteTask = (taskId) => {

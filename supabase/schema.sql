@@ -117,6 +117,7 @@ alter table bookings add column if not exists host_admin_id uuid references prof
 alter table bookings add column if not exists recommendation_reason text;
 alter table bookings add column if not exists checked_in_at timestamptz;
 alter table bookings add column if not exists checked_out_at timestamptz;
+alter table bookings add column if not exists attendance_status text;
 
 create table if not exists availability_requests (
   id uuid primary key default gen_random_uuid(),

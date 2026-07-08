@@ -27,33 +27,29 @@ function getScheduledDateTime(booking) {
 
 function getAttendanceInfo(booking, now) {
   const scheduled = getScheduledDateTime(booking)
+  const attendance = ['present', 'late'].includes(booking.attendance_status) ? booking.attendance_status : null
 
   if (booking.status === 'completed' && booking.checked_out_at) {
     const checkedIn = booking.checked_in_at ? new Date(booking.checked_in_at) : null
     const checkedOut = new Date(booking.checked_out_at)
     const duration = checkedIn ? formatDuration(checkedOut - checkedIn) : null
-    return { label: 'Completed', color: 'bg-green-100 text-green-700', detail: duration ? `Worked ${duration}` : 'Completed' }
+    return { label: 'Completed', color: 'bg-green-100 text-green-700', detail: duration ? `Worked ${duration}` : 'Completed', attendance }
   }
 
   if (booking.status === 'in_progress' && booking.checked_in_at) {
     const checkedIn = new Date(booking.checked_in_at)
     const elapsed = formatDuration(now - checkedIn)
-    let punctuality = null
-    if (scheduled) {
-      const lateMs = checkedIn - scheduled
-      punctuality = lateMs > 15 * 60 * 1000 ? `Late by ${formatDuration(lateMs)}` : 'On time'
-    }
-    return { label: 'Checked in', color: 'bg-blue-100 text-blue-700', detail: `${elapsed} ago${punctuality ? ` — ${punctuality}` : ''}` }
+    return { label: 'Checked in', color: 'bg-blue-100 text-blue-700', detail: `${elapsed} ago`, attendance }
   }
 
   if (['pending', 'approved'].includes(booking.status)) {
     if (scheduled && scheduled < now) {
-      return { label: 'Not checked in', color: 'bg-red-100 text-red-700', detail: `Overdue since ${scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` }
+      return { label: 'Not checked in', color: 'bg-red-100 text-red-700', detail: `Overdue since ${scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`, attendance: null }
     }
-    return { label: 'Scheduled', color: 'bg-gray-100 text-gray-600', detail: scheduled ? scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No time set' }
+    return { label: 'Scheduled', color: 'bg-gray-100 text-gray-600', detail: scheduled ? scheduled.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No time set', attendance: null }
   }
 
-  return { label: booking.status, color: 'bg-gray-100 text-gray-600', detail: '' }
+  return { label: booking.status, color: 'bg-gray-100 text-gray-600', detail: '', attendance: null }
 }
 
 export default function ManagerTracking() {
@@ -105,7 +101,7 @@ export default function ManagerTracking() {
     if (!hostAdminIdParam) return
     const { data } = await supabase
       .from('bookings')
-      .select('id,service_type,location,scheduled_date,scheduled_time,estimated_hours,status,assigned_staff_id,checked_in_at,checked_out_at')
+      .select('id,service_type,location,scheduled_date,scheduled_time,estimated_hours,status,assigned_staff_id,checked_in_at,checked_out_at,attendance_status')
       .eq('host_admin_id', hostAdminIdParam)
       .not('assigned_staff_id', 'is', null)
       .not('status', 'in', '(rejected,cancelled)')
@@ -181,7 +177,14 @@ export default function ManagerTracking() {
                               <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" />{job.location} — {job.scheduled_time || 'No time set'}</p>
                             </div>
                             <div className="text-right flex-shrink-0">
-                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${info.color}`}>{info.label}</span>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {info.attendance && (
+                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${info.attendance === 'late' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                    {info.attendance === 'late' ? 'Late' : 'Present'}
+                                  </span>
+                                )}
+                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${info.color}`}>{info.label}</span>
+                              </div>
                               <p className="text-xs text-gray-400 mt-1">{info.detail}</p>
                             </div>
                           </div>
