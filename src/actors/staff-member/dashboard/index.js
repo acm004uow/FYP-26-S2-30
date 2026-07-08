@@ -2,21 +2,7 @@ import Layout from '../../../components/Layout'
 import { useEffect, useMemo, useState } from 'react'
 import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, Calendar, FileUp } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
-
-const statusColor = {
-  'In Progress': 'bg-blue-100 text-blue-700',
-  Pending: 'bg-yellow-100 text-yellow-700',
-  Completed: 'bg-green-100 text-green-700',
-  Approved: 'bg-green-100 text-green-700',
-  Overdue: 'bg-red-100 text-red-700',
-}
-
-const parseDate = (value) => (value ? new Date(value) : null)
-
-const isTaskPastDue = (task) => {
-  const dueDate = parseDate(task.scheduledEndRaw)
-  return dueDate && dueDate < new Date() && task.rawStatus !== 'completed'
-}
+import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
 
 const getTaskDisplayStatus = (task) => {
   if (task.rawStatus === 'overdue' || isTaskPastDue(task)) {
@@ -44,26 +30,6 @@ const availabilityDot = {
   time_off: 'bg-gray-300',
 }
 
-const getTaskAssignedDate = (task) => {
-  const dateValue =
-    task.scheduled_start ||
-    task.scheduledStartRaw ||
-    task.scheduled_end ||
-    task.scheduledEndRaw
-
-  return dateValue ? new Date(dateValue) : null
-}
-
-const isSameLocalDay = (first, second) =>
-  first &&
-  second &&
-  first.getFullYear() === second.getFullYear() &&
-  first.getMonth() === second.getMonth() &&
-  first.getDate() === second.getDate()
-
-const isTaskAssignedToday = (task) =>
-  isSameLocalDay(getTaskAssignedDate(task), new Date())
-
 export default function StaffMemberDashboard() {
   const [availability, setAvailability] = useState('available')
   const [profile, setProfile] = useState(null)
@@ -84,39 +50,6 @@ export default function StaffMemberDashboard() {
   const [pendingAvailabilityReason, setPendingAvailabilityReason] = useState('')
   const [dismissedOverdueAlert, setDismissedOverdueAlert] = useState(false)
 
-  const titleCase = (value) =>
-    value === 'in_progress'
-      ? 'In Progress'
-      : value.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())
-
-  const formatBookingAsTask = (booking) => {
-    const scheduledIso = booking.scheduled_date
-      ? new Date(`${booking.scheduled_date}T${booking.scheduled_time || '09:00'}`).toISOString()
-      : null
-
-    return {
-      id: booking.id,
-      createdAt: booking.created_at,
-      title: booking.service_type,
-      location: booking.location,
-      scheduledStartRaw: scheduledIso,
-      scheduledEndRaw: scheduledIso,
-      scheduledStart: scheduledIso ? new Date(scheduledIso).toLocaleString() : 'Not set',
-      due: scheduledIso ? new Date(scheduledIso).toLocaleString() : 'No due date',
-      assignedDate: scheduledIso ? new Date(scheduledIso).toLocaleDateString() : 'Not scheduled',
-      status: titleCase(booking.status),
-      rawStatus: booking.status,
-      description: booking.description || '',
-      requiredSkill: booking.service_type,
-      instructions: booking.notes || 'No special instructions.',
-      supervisor: booking.customer?.full_name || booking.customer?.email || 'Customer',
-      customerId: booking.customer_id,
-      rating: booking.performance_reviews?.[0]?.rating || 0,
-      feedback: booking.performance_reviews?.[0]?.feedback || 'No feedback yet',
-      proof: booking.task_proofs?.[0] || null,
-    }
-  }
-
   const loadDashboard = async () => {
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -133,7 +66,7 @@ export default function StaffMemberDashboard() {
 
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,status,description,notes,customer_id,customer:profiles!bookings_customer_id_fkey(full_name,email),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
+      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,status,description,notes,customer_id,checked_in_at,checked_out_at,customer:profiles!bookings_customer_id_fkey(full_name,email),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
       .eq('assigned_staff_id', staffProfile.id)
       .neq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -200,7 +133,7 @@ export default function StaffMemberDashboard() {
 
     await supabase
       .from('bookings')
-      .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+      .update({ status: 'in_progress', checked_in_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', taskId)
 
     await supabase.from('audit_logs').insert({
@@ -269,7 +202,7 @@ export default function StaffMemberDashboard() {
 
       const { error: taskError } = await supabase
         .from('bookings')
-        .update({ status: 'completed', updated_at: new Date().toISOString() })
+        .update({ status: 'completed', checked_out_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq('id', proofTask.id)
         .eq('assigned_staff_id', profile.id)
 
@@ -517,10 +450,6 @@ export default function StaffMemberDashboard() {
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-mono text-gray-400">
-                {task.id.slice(0, 8)}
-              </span>
-
               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColor[getTaskDisplayStatus(task)] || statusColor.Pending}`}>
                 {getTaskDisplayStatus(task)}
               </span>
@@ -573,6 +502,13 @@ export default function StaffMemberDashboard() {
               <p className="mt-1">{task.instructions}</p>
             </div>
 
+            {(task.checkedInAt || task.checkedOutAt) && (
+              <div className="my-3 rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-700 space-y-1">
+                {task.checkedInAt && <p>Checked in: {task.checkedInAt}</p>}
+                {task.checkedOutAt && <p>Checked out: {task.checkedOutAt}</p>}
+              </div>
+            )}
+
             <p className="text-xs text-gray-500 mb-4">
               Assigned by: {task.supervisor}
             </p>
@@ -586,10 +522,10 @@ export default function StaffMemberDashboard() {
                     handleStartTask(task.id)
                   }}
                   disabled={!canStartToday}
-                  title={canStartToday ? 'Start task' : 'This task can only be started on its assigned day'}
+                  title={canStartToday ? 'Check in and start this task' : 'This task can only be started on its assigned day'}
                   className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-500"
                 >
-                  {canStartToday ? 'Start Task' : 'Start on Assigned Day'}
+                  {canStartToday ? 'Check In' : 'Check In on Assigned Day'}
                 </button>
               )}
 
@@ -602,7 +538,7 @@ export default function StaffMemberDashboard() {
                   }}
                   className="flex-1 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg text-sm font-medium"
                 >
-                  Mark Complete
+                  Check Out &amp; Complete
                 </button>
               )}
             </div>
@@ -993,7 +929,21 @@ export default function StaffMemberDashboard() {
 
                 {selectedTask?.id === task.id && (
                   <div className="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-600">
-                    <p>
+                    {task.checkedInAt && (
+                      <p>
+                        <span className="font-medium text-gray-800">Checked in:</span>{' '}
+                        {task.checkedInAt}
+                      </p>
+                    )}
+
+                    {task.checkedOutAt && (
+                      <p className="mt-1">
+                        <span className="font-medium text-gray-800">Checked out:</span>{' '}
+                        {task.checkedOutAt}
+                      </p>
+                    )}
+
+                    <p className="mt-1">
                       <span className="font-medium text-gray-800">Rating:</span>{' '}
                       {task.rating || 'Not graded yet'}/5
                     </p>
@@ -1026,7 +976,7 @@ export default function StaffMemberDashboard() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-sm w-full p-6">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-semibold">Confirm Completion</h3>
+              <h3 className="font-semibold">Check Out &amp; Confirm Completion</h3>
               <button type="button" onClick={() => setShowProofModal(false)}>
                 <X className="w-5 h-5" />
               </button>
@@ -1058,7 +1008,7 @@ export default function StaffMemberDashboard() {
               disabled={uploadingProof}
               className="w-full py-2 bg-blue-500 text-white rounded-lg text-sm disabled:opacity-60"
             >
-              {uploadingProof ? 'Uploading...' : 'Complete Booking'}
+              {uploadingProof ? 'Uploading...' : 'Check Out & Complete'}
             </button>
           </div>
         </div>

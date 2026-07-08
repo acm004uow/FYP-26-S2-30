@@ -1,4 +1,4 @@
-import { Activity, ClipboardList, FileText, Globe, LayoutDashboard, Settings, ShieldAlert, Sparkles, UserCog, Users } from 'lucide-react'
+import { Activity, Calendar, CheckCircle2, ClipboardList, FileText, Globe, LayoutDashboard, Settings, ShieldAlert, Sparkles, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
@@ -6,11 +6,14 @@ export const navMap = {
     { name: 'User Accounts', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'Availability', path: '/manager-availability', icon: Activity },
+    { name: 'Tracking', path: '/manager-tracking', icon: UserCheck },
     { name: 'Reports', path: '/manager-reports', icon: FileText },
+    { name: 'Completed Tasks', path: '/manager-completed-tasks', icon: CheckCircle2 },
     { name: 'AI Agent', path: '/manager-ai-agent', icon: Sparkles },
   ],
   staffMember: [
     { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
+    { name: 'Next Week', path: '/staff-next-week', icon: Calendar },
   ],
   customer: [
     { name: 'My Bookings', path: '/customer', icon: ClipboardList },
