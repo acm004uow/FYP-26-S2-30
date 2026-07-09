@@ -30,6 +30,8 @@ create table if not exists profiles (
 );
 
 alter table profiles add column if not exists host_admin_id uuid references profiles(id) on delete set null;
+alter table profiles add column if not exists attendance_qr_token text;
+alter table profiles add column if not exists attendance_qr_rotated_at timestamptz;
 
 update profiles
 set host_admin_id = id
@@ -65,6 +67,7 @@ create table if not exists staff_profiles (
 );
 
 alter table staff_profiles add column if not exists host_admin_id uuid references profiles(id) on delete set null;
+alter table staff_profiles add column if not exists manager_id uuid references profiles(id) on delete set null;
 
 update staff_profiles sp
 set host_admin_id = p.host_admin_id
@@ -120,6 +123,10 @@ alter table bookings add column if not exists checked_out_at timestamptz;
 alter table bookings add column if not exists attendance_status text;
 alter table bookings add column if not exists latitude double precision;
 alter table bookings add column if not exists longitude double precision;
+alter table bookings add column if not exists created_by uuid references profiles(id) on delete set null;
+alter table bookings add column if not exists source text not null default 'customer';
+alter table bookings add column if not exists guest_name text;
+alter table bookings add column if not exists guest_contact text;
 
 create table if not exists availability_requests (
   id uuid primary key default gen_random_uuid(),
@@ -235,8 +242,23 @@ create table if not exists finalized_schedules (
   unique (host_admin_id, week_start)
 );
 
+-- Daily office attendance (QR clock-in/out), one row per person per day. Distinct from the
+-- per-booking checked_in_at/checked_out_at on `bookings`, which tracks arrival at a specific job.
+create table if not exists attendance_records (
+  id uuid primary key default gen_random_uuid(),
+  host_admin_id uuid references profiles(id) on delete cascade,
+  profile_id uuid references profiles(id) on delete cascade,
+  work_date date not null,
+  clocked_in_at timestamptz,
+  clocked_out_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (profile_id, work_date)
+);
+
 alter table profiles enable row level security;
 alter table staff_profiles enable row level security;
+alter table attendance_records enable row level security;
 alter table task_requests enable row level security;
 alter table bookings enable row level security;
 alter table task_recommendations enable row level security;
@@ -302,6 +324,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all finalized schedules" on finalized_schedules for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all attendance" on attendance_records for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 insert into storage.buckets (id, name, public)

@@ -14,6 +14,7 @@ export const navMap = {
   staffMember: [
     { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
     { name: 'Next Week', path: '/staff-next-week', icon: Calendar },
+    { name: 'Attendance', path: '/staff-attendance', icon: UserCheck },
   ],
   customer: [
     { name: 'My Bookings', path: '/customer', icon: ClipboardList },
@@ -21,6 +22,7 @@ export const navMap = {
   ],
   admin: [
     { name: 'User Accounts', path: '/admin', icon: UserCog },
+    { name: 'Attendance', path: '/admin?section=attendance', icon: UserCheck },
     { name: 'Security Logs', path: '/admin?section=security', icon: ShieldAlert },
     { name: 'Audit Logs', path: '/admin?section=audit', icon: FileText },
     { name: 'Global Parameters', path: '/admin?section=parameters', icon: Settings },

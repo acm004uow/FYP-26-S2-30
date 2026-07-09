@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
+import AttendancePanel from '../attendance/AttendancePanel'
 import AuditLogsPanel from '../audit-logs/AuditLogsPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
 import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
@@ -11,6 +12,7 @@ import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 export default function AdminPanel() {
   const router = useRouter()
   const [users, setUsers] = useState([])
+  const [staffProfiles, setStaffProfiles] = useState([])
   const [securityLogs, setSecurityLogs] = useState([])
   const [auditLogs, setAuditLogs] = useState([])
   const [activeSection, setActiveSection] = useState('users')
@@ -66,11 +68,12 @@ export default function AdminPanel() {
       profileRequests.push(supabase.from('profiles').select(baseProfileSelect).eq('business_name', businessName))
     }
 
-    const [profileResults, { data: security }, { data: audit }, { data: systemParams }] = await Promise.all([
+    const [profileResults, { data: security }, { data: audit }, { data: systemParams }, { data: staff }] = await Promise.all([
       Promise.all(profileRequests),
       supabase.from('security_logs').select('id,email,event_type,details,created_at').order('created_at', { ascending: false }).limit(20),
       supabase.from('audit_logs').select('id,action,details,created_at,profiles(email)').order('created_at', { ascending: false }).limit(20),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
+      hostAdminId ? supabase.from('staff_profiles').select('id,user_id,manager_id').eq('host_admin_id', hostAdminId) : Promise.resolve({ data: [] }),
     ])
 
     const profilesById = new Map()
@@ -84,6 +87,7 @@ export default function AdminPanel() {
     setCurrentUserId(user?.id || '')
     setCurrentBusinessName(businessName)
     setUsers(profiles || [])
+    setStaffProfiles(staff || [])
     setSecurityLogs(security || [])
     setAuditLogs(audit || [])
     if (systemParams) {
@@ -131,7 +135,7 @@ export default function AdminPanel() {
   }, [])
 
   useEffect(() => {
-    const validSections = ['users', 'security', 'audit', 'parameters']
+    const validSections = ['users', 'attendance', 'security', 'audit', 'parameters']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
@@ -172,6 +176,26 @@ export default function AdminPanel() {
 
   const handleRoleChange = async (id, role) => {
     await updateUserAccess({ userId: id, role })
+  }
+
+  const handleSetManager = async (staffProfileId, managerId) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setMessage('Your admin session has expired. Please log in again.')
+      return
+    }
+
+    const response = await fetch('/api/attendance/set-manager', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ staff_profile_id: staffProfileId, manager_id: managerId }),
+    })
+    const result = await response.json()
+    setMessage(response.ok ? 'Manager assignment updated.' : result.error)
+    if (response.ok) await loadAdminData()
   }
 
   const handleToggleStatus = (user) => {
@@ -230,13 +254,17 @@ export default function AdminPanel() {
           {activeSection === 'users' && (
             <UserAccountsPanel
               users={users}
+              staffProfiles={staffProfiles}
+              managers={users.filter(u => u.role === 'manager' && u.status === 'active')}
               onAddUser={() => setShowCreate(true)}
               onResetUser={(user) => { setShowReset(user); setResetPassword('') }}
               onChangeRole={handleRoleChange}
               onToggleStatus={handleToggleStatus}
+              onSetManager={handleSetManager}
               currentUserId={currentUserId}
             />
           )}
+          {activeSection === 'attendance' && <AttendancePanel />}
           {activeSection === 'security' && <SecurityLogsPanel logs={securityLogs} />}
           {activeSection === 'audit' && <AuditLogsPanel logs={auditLogs} />}
           {activeSection === 'parameters' && <ParametersPanel params={params} setParams={setParams} onSave={saveParameters} />}

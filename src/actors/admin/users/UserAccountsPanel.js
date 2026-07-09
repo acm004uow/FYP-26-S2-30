@@ -27,7 +27,7 @@ const roleLabel = (role) => ({
 
 const permissionsFor = (role) => roleOptions.find(option => option.value === role)?.permissions || 'Custom access level.'
 
-export default function UserAccountsPanel({ users, onAddUser, onResetUser, onChangeRole, onToggleStatus, currentUserId }) {
+export default function UserAccountsPanel({ users, staffProfiles = [], managers = [], onAddUser, onResetUser, onChangeRole, onToggleStatus, onSetManager, currentUserId }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border p-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -71,6 +71,26 @@ export default function UserAccountsPanel({ users, onAddUser, onResetUser, onCha
             </div>
 
             <p className="mt-3 min-h-[48px] text-xs leading-relaxed text-gray-500">{user.status === 'active' ? permissionsFor(user.role) : 'Access disabled. This user cannot sign in to the system.'}</p>
+
+            {user.role === 'staff_member' && (() => {
+              const staffProfile = staffProfiles.find(sp => sp.user_id === user.id)
+              if (!staffProfile) return null
+              return (
+                <div className="mt-3 w-full">
+                  <label htmlFor={`manager-${user.id}`} className="sr-only">Supervising manager</label>
+                  <select
+                    id={`manager-${user.id}`}
+                    value={staffProfile.manager_id || ''}
+                    onChange={event => onSetManager(staffProfile.id, event.target.value || null)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-center text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    aria-label={`Supervising manager for ${user.full_name}`}
+                  >
+                    <option value="">— No manager assigned —</option>
+                    {managers.map(manager => <option key={manager.id} value={manager.id}>{manager.full_name}</option>)}
+                  </select>
+                </div>
+              )
+            })()}
 
             <div className="mt-auto flex w-full flex-col items-center gap-3 pt-5">
               <button onClick={() => onResetUser(user)} className="inline-flex items-center gap-1 rounded-full border border-green-200 bg-white px-5 py-2 text-xs font-medium text-green-700 hover:bg-green-50">

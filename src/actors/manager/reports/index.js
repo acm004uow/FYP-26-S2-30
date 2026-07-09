@@ -2,6 +2,7 @@ import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
 import { Award, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock, Download, FileText, Printer, Star, Sun, TrendingUp, Users } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { formatDuration } from '../../../../lib/attendance'
 
 const REPORT_TYPES = [
   { value: 'daily', label: 'Daily', icon: Sun },
@@ -57,6 +58,7 @@ export default function ManagerReports() {
       ['Top Performer', reportData.topStaff],
       ['Average Rating', reportData.avgRating],
       ...Object.entries(reportData.tasksByCategory).map(([category, value]) => [`Category: ${category}`, value]),
+      ...reportData.attendanceSummary.map(row => [`Attendance: ${row.name}`, `${row.daysPresent} days present, avg clock-in ${row.avgClockIn}, ${row.totalHours} worked`]),
     ]
   }
 
@@ -84,11 +86,43 @@ export default function ManagerReports() {
       .single()
     const hostAdminId = managerProfile?.host_admin_id
 
-    const [{ data: tasks }, { data: staff }, { data: reviews }] = await Promise.all([
+    const [{ data: tasks }, { data: staff }, { data: reviews }, { data: teamStaff }] = await Promise.all([
       supabase.from('bookings').select('status,service_type,assigned_staff_id,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).gte('created_at', since),
       supabase.from('staff_profiles').select('id,staff_name,current_workload').eq('host_admin_id', hostAdminId),
       supabase.from('performance_reviews').select('rating').gte('created_at', since),
+      supabase.from('staff_profiles').select('id,user_id,staff_name').eq('host_admin_id', hostAdminId).eq('manager_id', user?.id),
     ])
+
+    let attendanceSummary = []
+    const teamUserIds = (teamStaff || []).map(s => s.user_id).filter(Boolean)
+    if (teamUserIds.length > 0) {
+      const { data: attendance } = await supabase
+        .from('attendance_records')
+        .select('profile_id,clocked_in_at,clocked_out_at')
+        .eq('host_admin_id', hostAdminId)
+        .in('profile_id', teamUserIds)
+        .gte('work_date', since.slice(0, 10))
+
+      attendanceSummary = teamStaff.map(member => {
+        const rows = (attendance || []).filter(row => row.profile_id === member.user_id && row.clocked_in_at)
+        const daysPresent = rows.length
+        const avgClockInMinutes = daysPresent
+          ? rows.reduce((sum, row) => {
+              const d = new Date(row.clocked_in_at)
+              return sum + d.getHours() * 60 + d.getMinutes()
+            }, 0) / daysPresent
+          : null
+        const totalHoursMs = rows.reduce((sum, row) => row.clocked_out_at ? sum + (new Date(row.clocked_out_at) - new Date(row.clocked_in_at)) : sum, 0)
+        return {
+          name: member.staff_name,
+          daysPresent,
+          avgClockIn: avgClockInMinutes !== null
+            ? `${String(Math.floor(avgClockInMinutes / 60)).padStart(2, '0')}:${String(Math.round(avgClockInMinutes % 60)).padStart(2, '0')}`
+            : '—',
+          totalHours: formatDuration(totalHoursMs),
+        }
+      })
+    }
 
     const taskRows = tasks || []
     const staffRows = staff || []
@@ -116,6 +150,7 @@ export default function ManagerReports() {
       topStaff: topEntry ? `${topEntry[0]} (${topEntry[1]} tasks)` : 'No assigned tasks',
       avgRating,
       tasksByCategory: Object.keys(tasksByCategory).length ? tasksByCategory : { General: 0 },
+      attendanceSummary,
       generatedAt: new Date().toLocaleString(),
     })
     setMessage('')
@@ -298,6 +333,21 @@ export default function ManagerReports() {
                     </div>
                   ))}
                 </div>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                <p className="text-xs font-medium text-gray-500 mb-3">Team Attendance Summary ({reportLabel})</p>
+                {data.attendanceSummary.length > 0 ? (
+                  <div className="space-y-2.5">
+                    {data.attendanceSummary.map(row => (
+                      <div key={row.name} className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">{row.name}</span>
+                        <span className="text-gray-900 font-medium">{row.daysPresent} days • Avg in {row.avgClockIn} • {row.totalHours} worked</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400">No team members assigned to you yet.</p>
+                )}
               </div>
             </div>
           ) : (

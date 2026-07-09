@@ -1,9 +1,29 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
+import { SERVICE_TYPES } from '../../../../lib/serviceTypes'
+
+const TIME_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'today', label: 'Today' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'overdue', label: 'Overdue' },
+]
+
+const SOURCE_FILTERS = [
+  { value: 'all', label: 'All Sources' },
+  { value: 'manager', label: 'Manager Created' },
+  { value: 'customer', label: 'Customer Booked' },
+]
+
+const emptyNewBooking = {
+  customerEmail: '', guestName: '', serviceType: SERVICE_TYPES[0], location: '',
+  description: '', notes: '', scheduledDate: '', scheduledTime: '', estimatedHours: 2,
+}
 
 const statusColor = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -70,6 +90,11 @@ export default function ManagerBookings() {
   const [selectedStaffId, setSelectedStaffId] = useState({})
   const [reassigningId, setReassigningId] = useState(null)
   const [rerunningId, setRerunningId] = useState(null)
+  const [timeFilter, setTimeFilter] = useState('all')
+  const [sourceFilter, setSourceFilter] = useState('all')
+  const [showNewBooking, setShowNewBooking] = useState(false)
+  const [newBookingForm, setNewBookingForm] = useState(emptyNewBooking)
+  const [creatingBooking, setCreatingBooking] = useState(false)
 
   const loadBookings = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -89,7 +114,7 @@ export default function ManagerBookings() {
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
       supabase
         .from('bookings')
-        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name)')
+        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name)')
         .eq('host_admin_id', hostAdminId)
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false }),
@@ -317,14 +342,99 @@ export default function ManagerBookings() {
     await loadBookings()
   }
 
+  const handleCreateBooking = async (event) => {
+    event.preventDefault()
+    if (!newBookingForm.guestName || !newBookingForm.location) {
+      showNotification('Please enter a customer name and location.')
+      return
+    }
+
+    const user = await getActiveManager()
+    if (!user) return
+
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user.id)
+      .single()
+    const hostAdminId = managerProfile?.host_admin_id
+    if (!hostAdminId) {
+      showNotification('Could not resolve your company.')
+      return
+    }
+
+    let customerId = null
+    if (newBookingForm.customerEmail) {
+      const { data: matchedCustomer } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'customer')
+        .eq('email', newBookingForm.customerEmail.trim().toLowerCase())
+        .maybeSingle()
+      customerId = matchedCustomer?.id || null
+    }
+
+    setCreatingBooking(true)
+    const { error } = await supabase.from('bookings').insert({
+      host_admin_id: hostAdminId,
+      customer_id: customerId,
+      guest_name: newBookingForm.guestName,
+      guest_contact: newBookingForm.customerEmail || null,
+      service_type: newBookingForm.serviceType,
+      location: newBookingForm.location,
+      description: newBookingForm.description,
+      notes: newBookingForm.notes,
+      scheduled_date: newBookingForm.scheduledDate || null,
+      scheduled_time: newBookingForm.scheduledTime || null,
+      estimated_hours: newBookingForm.estimatedHours || 2,
+      status: 'pending',
+      source: 'manager',
+      created_by: user.id,
+    })
+    setCreatingBooking(false)
+
+    if (error) {
+      showNotification(error.message)
+      return
+    }
+
+    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'manager_create_booking', details: newBookingForm.serviceType })
+    showNotification('Booking created.')
+    setShowNewBooking(false)
+    setNewBookingForm(emptyNewBooking)
+    await loadBookings()
+  }
+
   const statusLabel = (status) => status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())
+
+  const visibleBookings = bookings.filter(booking => {
+    if (sourceFilter !== 'all' && (booking.source || 'customer') !== sourceFilter) return false
+    if (timeFilter === 'all') return true
+    if (timeFilter === 'pending') return booking.status === 'pending'
+    const tone = getScheduleBadge(booking).tone
+    if (timeFilter === 'today') return tone === 'today'
+    if (timeFilter === 'upcoming') return tone === 'upcoming' || tone === 'tomorrow'
+    if (timeFilter === 'overdue') return tone === 'overdue'
+    return true
+  })
 
   return (
     <Layout role="manager">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold">Bookings for Review</h1>
-        <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
-        <div className="mt-3 mb-6 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Bookings for Review</h1>
+            <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowNewBooking(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md"
+          >
+            <Plus className="w-4 h-4" /> New Booking
+          </button>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
             <ListChecks className="w-3.5 h-3.5" /> Select staff from the dropdown
           </span>
@@ -333,11 +443,37 @@ export default function ManagerBookings() {
             <Move className="w-3.5 h-3.5" /> Drag a staff member onto a booking
           </span>
         </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {TIME_FILTERS.map(tab => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setTimeFilter(tab.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${timeFilter === tab.value ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 mb-6 flex flex-wrap items-center gap-2">
+          {SOURCE_FILTERS.map(tab => (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => setSourceFilter(tab.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${sourceFilter === tab.value ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
           <div className="space-y-4">
-            {bookings.map(booking => {
+            {visibleBookings.map(booking => {
               const scheduleBadge = getScheduleBadge(booking)
               return (
               <div
@@ -351,7 +487,11 @@ export default function ManagerBookings() {
                   <div className="min-w-0">
                     <h3 className="font-semibold text-gray-900">{booking.service_type}</h3>
                     <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{booking.location}</p>
-                    <p className="text-xs text-gray-400 mt-2">Requested by {booking.customer?.full_name || booking.customer?.email || 'Customer'} on {new Date(booking.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-400 mt-2">
+                      {booking.source === 'manager'
+                        ? `Added by you${booking.guest_name ? ` for ${booking.guest_name}` : ''}`
+                        : `Requested by ${booking.customer?.full_name || booking.customer?.email || 'Customer'}`} on {new Date(booking.created_at).toLocaleDateString()}
+                    </p>
                     {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
                       <div className="mt-2 flex items-start justify-between gap-2">
                         <p className="text-sm text-indigo-700 flex items-start gap-1">
@@ -382,6 +522,9 @@ export default function ManagerBookings() {
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${booking.source === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-blue-50 text-blue-600'}`}>
+                      {booking.source === 'manager' ? 'Manager Created' : 'Customer Booked'}
+                    </span>
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
                       {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}
                     </span>
@@ -452,7 +595,11 @@ export default function ManagerBookings() {
               </div>
               )
             })}
-            {bookings.length === 0 && <div className="bg-white rounded-xl border p-8 text-center text-gray-400">No bookings found.</div>}
+            {visibleBookings.length === 0 && (
+              <div className="bg-white rounded-xl border p-8 text-center text-gray-400">
+                {bookings.length === 0 ? 'No bookings found.' : 'No bookings match these filters.'}
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border h-fit overflow-hidden">
@@ -494,6 +641,64 @@ export default function ManagerBookings() {
           </div>
         </div>
       </div>
+
+      {showNewBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form onSubmit={handleCreateBooking} className="w-full max-w-lg rounded-xl bg-white p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">New Booking</h3>
+              <button type="button" onClick={() => setShowNewBooking(false)} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <p className="text-sm text-gray-500 mt-1">For walk-in or phone bookings. This still goes through the normal approve &amp; assign flow.</p>
+
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Customer Name</label>
+                <input value={newBookingForm.guestName} onChange={e => setNewBookingForm({ ...newBookingForm, guestName: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Full name" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Customer Email (optional)</label>
+                <input type="email" value={newBookingForm.customerEmail} onChange={e => setNewBookingForm({ ...newBookingForm, customerEmail: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Links to an existing customer account, if any" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Service Type</label>
+                <select value={newBookingForm.serviceType} onChange={e => setNewBookingForm({ ...newBookingForm, serviceType: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
+                  {SERVICE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Location</label>
+                <input value={newBookingForm.location} onChange={e => setNewBookingForm({ ...newBookingForm, location: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Address" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Scheduled Date</label>
+                  <input type="date" value={newBookingForm.scheduledDate} onChange={e => setNewBookingForm({ ...newBookingForm, scheduledDate: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Scheduled Time</label>
+                  <input type="time" value={newBookingForm.scheduledTime} onChange={e => setNewBookingForm({ ...newBookingForm, scheduledTime: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Estimated Hours</label>
+                <input type="number" min="1" step="0.5" value={newBookingForm.estimatedHours} onChange={e => setNewBookingForm({ ...newBookingForm, estimatedHours: Number(e.target.value) })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                <textarea value={newBookingForm.description} onChange={e => setNewBookingForm({ ...newBookingForm, description: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" rows={2} />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Notes</label>
+                <textarea value={newBookingForm.notes} onChange={e => setNewBookingForm({ ...newBookingForm, notes: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" rows={2} />
+              </div>
+              <button type="submit" disabled={creatingBooking} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-60">
+                <Plus className="w-4 h-4" /> {creatingBooking ? 'Creating...' : 'Create Booking'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </Layout>
   )
 }

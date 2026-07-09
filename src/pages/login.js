@@ -83,6 +83,12 @@ export default function LoginPage() {
       return
     }
 
+    const next = typeof router.query.next === 'string' ? router.query.next : ''
+    if (next.startsWith('/attendance-checkin')) {
+      router.push(next)
+      return
+    }
+
     router.push(routeByRole[profile.role] || '/login')
   }
 

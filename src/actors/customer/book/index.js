@@ -6,8 +6,7 @@ import { ClipboardList, MapPin, Calendar, CheckCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { getMinBookableDate } from '../../../../lib/businessWeek'
-
-const SERVICE_TYPES = ['Home Cleaning', 'Office Cleaning', 'Deep Cleaning', 'Move-Out Cleaning', 'Carpet Cleaning']
+import { SERVICE_TYPES } from '../../../../lib/serviceTypes'
 
 export default function CustomerBooking() {
   const router = useRouter()
