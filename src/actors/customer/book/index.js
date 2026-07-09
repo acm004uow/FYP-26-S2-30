@@ -35,6 +35,12 @@ export default function CustomerBooking() {
     loadCompanies()
   }, [])
 
+  useEffect(() => {
+    if (!router.isReady) return
+    const companyId = typeof router.query.companyId === 'string' ? router.query.companyId : ''
+    if (companyId) setForm(prev => ({ ...prev, companyId }))
+  }, [router.isReady, router.query.companyId])
+
   const minDate = getMinBookableDate()
 
   const handleSubmit = async (e) => {

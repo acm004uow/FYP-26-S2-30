@@ -288,13 +288,21 @@ export default function MarketingHome() {
               ))}
             </div>
 
-            <Link
-              href="/login"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
-            >
-              Sign in
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/marketplace"
+                className="hidden sm:inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
+              >
+                Browse companies
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
+              >
+                Sign in
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
           </nav>
         </header>
 

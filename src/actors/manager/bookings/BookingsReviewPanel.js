@@ -486,8 +486,10 @@ export default function BookingsReviewPanel() {
       customerId = matchedCustomer?.id || null
     }
 
+    const assignedStaffId = selectedNewBookingStaffId || null
+
     setCreatingBooking(true)
-    const { error } = await supabase.from('bookings').insert({
+    const { data: createdBooking, error } = await supabase.from('bookings').insert({
       host_admin_id: hostAdminId,
       customer_id: customerId,
       guest_name: newBookingForm.guestName,
@@ -501,12 +503,14 @@ export default function BookingsReviewPanel() {
       scheduled_date: newBookingForm.scheduledDate || null,
       scheduled_time: newBookingForm.scheduledTime || null,
       estimated_hours: newBookingForm.estimatedHours || 2,
-      assigned_staff_id: selectedNewBookingStaffId || null,
-      recommendation_reason: newBookingRecommendations.find(rec => rec.staff_id === selectedNewBookingStaffId)?.reason || null,
-      status: 'pending',
+      assigned_staff_id: assignedStaffId,
+      recommendation_reason: newBookingRecommendations.find(rec => rec.staff_id === assignedStaffId)?.reason || null,
+      // Manager/owner-created tasks are self-authorized — no separate approval step needed.
+      status: 'approved',
+      reviewed_by: user.id,
       source: 'manager',
       created_by: user.id,
-    })
+    }).select('id').single()
     setCreatingBooking(false)
 
     if (error) {
@@ -514,8 +518,26 @@ export default function BookingsReviewPanel() {
       return
     }
 
-    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'manager_create_booking', details: newBookingForm.serviceType })
-    showNotification('Task created.')
+    if (assignedStaffId) {
+      const staff = staffRows.find(item => item.id === assignedStaffId)
+      if (staff) {
+        await supabase
+          .from('staff_profiles')
+          .update({ current_workload: Number(staff.tasks || 0) + 1, updated_at: new Date().toISOString() })
+          .eq('id', staff.id)
+
+        if (staff.userId) {
+          await supabase.from('notifications').insert({
+            user_id: staff.userId,
+            title: 'New task assignment',
+            message: `${newBookingForm.serviceType} has been assigned to you.`,
+          })
+        }
+      }
+    }
+
+    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'manager_create_booking', details: `${newBookingForm.serviceType} (${createdBooking?.id || ''})` })
+    showNotification('Task created and approved.')
     closeNewBookingModal()
     await loadBookings()
   }

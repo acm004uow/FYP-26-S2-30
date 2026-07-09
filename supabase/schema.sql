@@ -32,6 +32,9 @@ create table if not exists profiles (
 alter table profiles add column if not exists host_admin_id uuid references profiles(id) on delete set null;
 alter table profiles add column if not exists attendance_qr_token text;
 alter table profiles add column if not exists attendance_qr_rotated_at timestamptz;
+alter table profiles add column if not exists marketing_description text;
+alter table profiles add column if not exists marketing_published boolean default false;
+alter table profiles add column if not exists service_rates jsonb default '{}'::jsonb;
 
 update profiles
 set host_admin_id = id
@@ -330,6 +333,16 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all attendance" on attendance_records for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
+
+-- Security-definer view: exposes only the public-safe columns of published company
+-- marketing listings to anonymous visitors, without granting anon any broader access
+-- to `profiles` (which also holds emails, QR secrets, host_admin_id, etc).
+create or replace view public_marketing_listings as
+select id, business_name, marketing_description, service_rates
+from profiles
+where role = 'system_admin' and marketing_published = true;
+
+grant select on public_marketing_listings to anon, authenticated;
 
 insert into storage.buckets (id, name, public)
 values ('task-proofs', 'task-proofs', true)

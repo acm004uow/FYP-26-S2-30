@@ -53,7 +53,7 @@ export default function Layout({ children, role = 'manager' }) {
       const { data: { user } } = await supabase.auth.getUser()
       if (cancelled) return
       if (!user) {
-        router.push('/login')
+        router.push(`/login?next=${encodeURIComponent(router.asPath)}`)
         return
       }
 
