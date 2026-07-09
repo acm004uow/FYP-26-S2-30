@@ -4,6 +4,7 @@ import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { SERVICE_TYPES } from '../../../../lib/serviceTypes'
+import AddressFields from '../../../components/AddressFields'
 
 const TIME_FILTERS = [
   { value: 'all', label: 'All' },
@@ -94,6 +95,13 @@ export default function BookingsReviewPanel() {
   const [showNewBooking, setShowNewBooking] = useState(false)
   const [newBookingForm, setNewBookingForm] = useState(emptyNewBooking)
   const [creatingBooking, setCreatingBooking] = useState(false)
+  const [generatingTask, setGeneratingTask] = useState(false)
+  const [generateError, setGenerateError] = useState('')
+  const [newBookingCoordinates, setNewBookingCoordinates] = useState(null)
+  const [recommendationPool, setRecommendationPool] = useState([])
+  const [recommendationParams, setRecommendationParams] = useState({})
+  const [newBookingRecommendations, setNewBookingRecommendations] = useState([])
+  const [selectedNewBookingStaffId, setSelectedNewBookingStaffId] = useState('')
 
   const loadBookings = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -160,6 +168,30 @@ export default function BookingsReviewPanel() {
       if (bookingsChannel) supabase.removeChannel(bookingsChannel)
     }
   }, [])
+
+  useEffect(() => {
+    if (!showNewBooking || !newBookingForm.location) {
+      setNewBookingRecommendations([])
+      return
+    }
+    const recommendations = generateRecommendations(
+      recommendationPool,
+      {
+        required_skill: 'Cleaning',
+        location: newBookingForm.location,
+        estimated_hours: newBookingForm.estimatedHours,
+        requested_text: `${newBookingForm.description || ''} ${newBookingForm.notes || ''}`,
+      },
+      recommendationParams
+    )
+    setNewBookingRecommendations(recommendations)
+  }, [showNewBooking, newBookingForm.location, newBookingForm.estimatedHours, newBookingForm.description, newBookingForm.notes, recommendationPool, recommendationParams])
+
+  useEffect(() => {
+    if (!newBookingRecommendations.length) return
+    setSelectedNewBookingStaffId(prev => (prev && recommendationPool.some(staff => staff.id === prev) ? prev : newBookingRecommendations[0].staff_id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newBookingRecommendations])
 
   const showNotification = (message) => {
     setNotification(message)
@@ -341,6 +373,87 @@ export default function BookingsReviewPanel() {
     await loadBookings()
   }
 
+  const openNewTaskModal = async () => {
+    setShowNewBooking(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: managerProfile } = await supabase
+      .from('profiles')
+      .select('host_admin_id')
+      .eq('id', user?.id)
+      .single()
+    const hostAdminId = managerProfile?.host_admin_id
+    if (!hostAdminId) return
+
+    const [{ data: pool }, { data: params }] = await Promise.all([
+      supabase
+        .from('staff_profiles')
+        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
+        .eq('host_admin_id', hostAdminId)
+        .eq('is_suspended', false)
+        .eq('status', 'active'),
+      supabase.from('system_parameters').select('*').eq('id', 1).single(),
+    ])
+    setRecommendationPool(pool || [])
+    setRecommendationParams(params || {})
+  }
+
+  const closeNewBookingModal = () => {
+    setShowNewBooking(false)
+    setNewBookingForm(emptyNewBooking)
+    setNewBookingCoordinates(null)
+    setGenerateError('')
+    setRecommendationPool([])
+    setRecommendationParams({})
+    setNewBookingRecommendations([])
+    setSelectedNewBookingStaffId('')
+  }
+
+  const handleGenerateDescription = async () => {
+    setGenerateError('')
+    if (!newBookingForm.guestName || !newBookingForm.location) {
+      setGenerateError('Please enter a customer name and location first, so the AI has something to work with.')
+      return
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setGenerateError('Your session has expired. Please log in again.')
+      return
+    }
+
+    setGeneratingTask(true)
+    let response
+    let result
+    try {
+      response = await fetch('/api/agent/generate-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          customerName: newBookingForm.guestName,
+          customerEmail: newBookingForm.customerEmail,
+          serviceType: newBookingForm.serviceType,
+          location: newBookingForm.location,
+          scheduledDate: newBookingForm.scheduledDate,
+          scheduledTime: newBookingForm.scheduledTime,
+          estimatedHours: newBookingForm.estimatedHours,
+        }),
+      })
+      result = await response.json()
+    } catch {
+      setGeneratingTask(false)
+      setGenerateError('Could not reach the server. Check your connection and try again.')
+      return
+    }
+    setGeneratingTask(false)
+
+    if (!response.ok) {
+      setGenerateError(result.error || 'Could not generate a description.')
+      return
+    }
+
+    setNewBookingForm(prev => ({ ...prev, description: result.description, notes: result.notes }))
+  }
+
   const handleCreateBooking = async (event) => {
     event.preventDefault()
     if (!newBookingForm.guestName || !newBookingForm.location) {
@@ -381,11 +494,15 @@ export default function BookingsReviewPanel() {
       guest_contact: newBookingForm.customerEmail || null,
       service_type: newBookingForm.serviceType,
       location: newBookingForm.location,
+      latitude: newBookingCoordinates?.latitude ?? null,
+      longitude: newBookingCoordinates?.longitude ?? null,
       description: newBookingForm.description,
       notes: newBookingForm.notes,
       scheduled_date: newBookingForm.scheduledDate || null,
       scheduled_time: newBookingForm.scheduledTime || null,
       estimated_hours: newBookingForm.estimatedHours || 2,
+      assigned_staff_id: selectedNewBookingStaffId || null,
+      recommendation_reason: newBookingRecommendations.find(rec => rec.staff_id === selectedNewBookingStaffId)?.reason || null,
       status: 'pending',
       source: 'manager',
       created_by: user.id,
@@ -399,8 +516,7 @@ export default function BookingsReviewPanel() {
 
     await supabase.from('audit_logs').insert({ user_id: user.id, action: 'manager_create_booking', details: newBookingForm.serviceType })
     showNotification('Task created.')
-    setShowNewBooking(false)
-    setNewBookingForm(emptyNewBooking)
+    closeNewBookingModal()
     await loadBookings()
   }
 
@@ -426,7 +542,7 @@ export default function BookingsReviewPanel() {
         </div>
         <button
           type="button"
-          onClick={() => setShowNewBooking(true)}
+          onClick={openNewTaskModal}
           className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md"
         >
           <Plus className="w-4 h-4" /> New Task
@@ -644,7 +760,7 @@ export default function BookingsReviewPanel() {
           <form onSubmit={handleCreateBooking} className="w-full max-w-lg rounded-xl bg-white p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">New Task</h3>
-              <button type="button" onClick={() => setShowNewBooking(false)} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>
+              <button type="button" onClick={closeNewBookingModal} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>
             </div>
             <p className="text-sm text-gray-500 mt-1">For walk-in or phone bookings. This still goes through the normal approve &amp; assign flow.</p>
 
@@ -663,10 +779,11 @@ export default function BookingsReviewPanel() {
                   {SERVICE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Location</label>
-                <input value={newBookingForm.location} onChange={e => setNewBookingForm({ ...newBookingForm, location: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Address" />
-              </div>
+              <AddressFields
+                onLocationChange={location => setNewBookingForm(prev => ({ ...prev, location }))}
+                onCoordinatesChange={setNewBookingCoordinates}
+                compact
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Scheduled Date</label>
@@ -681,8 +798,50 @@ export default function BookingsReviewPanel() {
                 <label className="text-sm font-medium text-gray-700">Estimated Hours</label>
                 <input type="number" min="1" step="0.5" value={newBookingForm.estimatedHours} onChange={e => setNewBookingForm({ ...newBookingForm, estimatedHours: Number(e.target.value) })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
               </div>
+
               <div>
-                <label className="text-sm font-medium text-gray-700">Description</label>
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Assign Staff
+                </label>
+                {newBookingForm.location ? (
+                  newBookingRecommendations.length > 0 ? (
+                    <>
+                      <select
+                        value={selectedNewBookingStaffId}
+                        onChange={e => setSelectedNewBookingStaffId(e.target.value)}
+                        className="mt-1 w-full border rounded-lg p-2 text-sm"
+                      >
+                        <option value="">— Unassigned (assign later) —</option>
+                        {newBookingRecommendations.map(rec => (
+                          <option key={rec.staff_id} value={rec.staff_id}>{rec.staff_name} — {rec.reason}</option>
+                        ))}
+                      </select>
+                      {selectedNewBookingStaffId && newBookingRecommendations[0]?.staff_id === selectedNewBookingStaffId && (
+                        <p className="mt-1 text-xs text-indigo-600 flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI-recommended top match</p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-400">No strong staff match found yet — the task will be created unassigned.</p>
+                  )
+                ) : (
+                  <p className="mt-1 text-xs text-gray-400">Enter a location to see AI-recommended staff.</p>
+                )}
+              </div>
+
+              {generateError && <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{generateError}</div>}
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700">Description</label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateDescription}
+                    disabled={generatingTask}
+                    className="flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-600 hover:bg-purple-100 disabled:opacity-60"
+                  >
+                    <Sparkles className="w-3 h-3" /> {generatingTask ? 'Generating...' : 'Generate with AI'}
+                  </button>
+                </div>
                 <textarea value={newBookingForm.description} onChange={e => setNewBookingForm({ ...newBookingForm, description: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" rows={2} />
               </div>
               <div>

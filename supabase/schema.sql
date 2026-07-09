@@ -127,6 +127,8 @@ alter table bookings add column if not exists created_by uuid references profile
 alter table bookings add column if not exists source text not null default 'customer';
 alter table bookings add column if not exists guest_name text;
 alter table bookings add column if not exists guest_contact text;
+-- 'manual' | 'ai' | 'history' for manager-created tasks; null for customer self-service bookings.
+alter table bookings add column if not exists creation_method text;
 
 create table if not exists availability_requests (
   id uuid primary key default gen_random_uuid(),
