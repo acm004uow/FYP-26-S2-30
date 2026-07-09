@@ -22,6 +22,7 @@ export const navMap = {
   ],
   admin: [
     { name: 'User Accounts', path: '/admin', icon: UserCog },
+    { name: 'Tasks', path: '/admin?section=tasks', icon: ClipboardList },
     { name: 'Attendance', path: '/admin?section=attendance', icon: UserCheck },
     { name: 'Security Logs', path: '/admin?section=security', icon: ShieldAlert },
     { name: 'Audit Logs', path: '/admin?section=audit', icon: FileText },

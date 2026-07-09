@@ -1,14 +1,16 @@
 import Layout from '../../../components/Layout'
+import AttendanceScanner from '../../../components/AttendanceScanner'
 import { useRouter } from 'next/router'
 import { useEffect, useState } from 'react'
 import {
-  MapPin, Star, ChevronRight
+  MapPin, Star, ChevronRight, QrCode
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from 'recharts'
 import { supabase } from '../../../../lib/supabaseClient'
+import { formatDuration } from '../../../../lib/attendance'
 
 const fallbackWorkloadData = [
   { name: 'Amir', hours: 18 },
@@ -61,6 +63,30 @@ export default function ManagerDashboard() {
   const [availableStaffCount, setAvailableStaffCount] = useState(0)
   const [statusDonutData, setStatusDonutData] = useState(fallbackStatusData)
   const [workloadBalanceData, setWorkloadBalanceData] = useState(fallbackWorkloadData)
+  const [myAttendance, setMyAttendance] = useState(null)
+  const [showScanner, setShowScanner] = useState(false)
+  const [scannerMessage, setScannerMessage] = useState('')
+
+  const loadMyAttendance = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user?.id) return
+    const { data } = await supabase
+      .from('attendance_records')
+      .select('clocked_in_at,clocked_out_at')
+      .eq('profile_id', user.id)
+      .eq('work_date', new Date().toISOString().slice(0, 10))
+      .maybeSingle()
+    setMyAttendance(data || null)
+  }
+
+  const handleScanResult = ({ status, message }) => {
+    setShowScanner(false)
+    if (status === 'clocked_in') setScannerMessage('Clocked in successfully.')
+    else if (status === 'clocked_out') setScannerMessage('Clocked out successfully.')
+    else if (status === 'already_completed') setScannerMessage("You've already completed attendance for today.")
+    else setScannerMessage(message || 'Check-in failed.')
+    loadMyAttendance()
+  }
 
   const loadDashboard = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -137,6 +163,7 @@ export default function ManagerDashboard() {
 
   useEffect(() => {
     loadDashboard()
+    loadMyAttendance()
   }, [])
 
   return (
@@ -150,6 +177,30 @@ export default function ManagerDashboard() {
             <p className="text-gray-500 text-sm mt-3">Welcome back! Here&apos;s an overview of today&apos;s operations.</p>
           </div>
         </div>
+
+        <div className="bg-white rounded-xl shadow-sm border p-5 mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-gray-900">My Attendance</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {myAttendance?.clocked_in_at && myAttendance?.clocked_out_at
+                ? `Completed — worked ${formatDuration(new Date(myAttendance.clocked_out_at) - new Date(myAttendance.clocked_in_at))} today.`
+                : myAttendance?.clocked_in_at
+                  ? `Checked in since ${new Date(myAttendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
+                  : "You haven't checked in today."}
+            </p>
+            {scannerMessage && <p className="text-xs text-blue-600 mt-1">{scannerMessage}</p>}
+          </div>
+          {!(myAttendance?.clocked_in_at && myAttendance?.clocked_out_at) && (
+            <button
+              onClick={() => { setScannerMessage(''); setShowScanner(true) }}
+              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md"
+            >
+              <QrCode className="w-4 h-4" /> {myAttendance?.clocked_in_at ? 'Clock Out' : 'Clock In'}
+            </button>
+          )}
+        </div>
+
+        {showScanner && <AttendanceScanner onClose={() => setShowScanner(false)} onResult={handleScanResult} />}
 
         <div className="grid grid-cols-1 gap-5 mb-8 sm:grid-cols-2 lg:grid-cols-4">
           {operationStats.map(stat => (

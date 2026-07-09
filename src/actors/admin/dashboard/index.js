@@ -4,6 +4,7 @@ import { UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
 import AttendancePanel from '../attendance/AttendancePanel'
+import BookingsReviewPanel from '../../manager/bookings/BookingsReviewPanel'
 import AuditLogsPanel from '../audit-logs/AuditLogsPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
 import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
@@ -135,7 +136,7 @@ export default function AdminPanel() {
   }, [])
 
   useEffect(() => {
-    const validSections = ['users', 'attendance', 'security', 'audit', 'parameters']
+    const validSections = ['users', 'tasks', 'attendance', 'security', 'audit', 'parameters']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
@@ -264,6 +265,7 @@ export default function AdminPanel() {
               currentUserId={currentUserId}
             />
           )}
+          {activeSection === 'tasks' && <BookingsReviewPanel />}
           {activeSection === 'attendance' && <AttendancePanel />}
           {activeSection === 'security' && <SecurityLogsPanel logs={securityLogs} />}
           {activeSection === 'audit' && <AuditLogsPanel logs={auditLogs} />}

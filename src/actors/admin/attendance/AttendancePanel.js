@@ -188,7 +188,9 @@ export default function AttendancePanel() {
             if (a?.clocked_in_at && a?.clocked_out_at) {
               label = 'Completed'
               color = 'bg-green-100 text-green-700'
-              detail = `Worked ${formatDuration(new Date(a.clocked_out_at) - new Date(a.clocked_in_at))}`
+              const checkIn = new Date(a.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              const checkOut = new Date(a.clocked_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              detail = `${checkIn} – ${checkOut} • Worked ${formatDuration(new Date(a.clocked_out_at) - new Date(a.clocked_in_at))}`
             } else if (a?.clocked_in_at) {
               label = 'Checked in'
               color = 'bg-blue-100 text-blue-700'
