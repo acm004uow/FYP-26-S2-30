@@ -52,7 +52,7 @@ export default function StaffNextWeek() {
   return (
     <Layout role="staffMember">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Calendar className="w-6 h-6 text-indigo-500" /> Next Week's Tasks</h1>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Calendar className="w-6 h-6 text-indigo-500" /> Next Week&apos;s Tasks</h1>
         <p className="text-gray-500 text-sm mt-1 mb-6">
           {nextWeekRange.start.toLocaleDateString()} – {nextWeekRange.end.toLocaleDateString()}
         </p>

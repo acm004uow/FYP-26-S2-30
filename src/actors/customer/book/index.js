@@ -202,7 +202,7 @@ export default function CustomerBooking() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Preferred Date</label>
                   <input type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
-                  <p className="mt-1 text-xs text-gray-400">Bookings open from {minDate} onward — this week's schedule is already finalized.</p>
+                  <p className="mt-1 text-xs text-gray-400">Bookings open from {minDate} onward — this week&apos;s schedule is already finalized.</p>
                 </div>
                 <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><input type="time" value={form.scheduledTime} onChange={e => setForm({ ...form, scheduledTime: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" /></div>
               </div>

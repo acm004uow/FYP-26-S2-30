@@ -147,7 +147,7 @@ export default function ManagerDashboard() {
             <h1 className="font-serif text-3xl font-bold leading-tight text-[#243033] sm:text-4xl">
               Manager dashboard
             </h1>
-            <p className="text-gray-500 text-sm mt-3">Welcome back! Here's an overview of today's operations.</p>
+            <p className="text-gray-500 text-sm mt-3">Welcome back! Here&apos;s an overview of today&apos;s operations.</p>
           </div>
         </div>
 

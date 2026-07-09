@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useMemo, useState } from 'react'
-import { AlertCircle, Edit, Plus, Search, Trash2, X } from 'lucide-react'
+import { AlertCircle, Edit, Plus, Search, Tags, Trash2, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 
 const defaultCategories = ['Maintenance', 'Inspection', 'Cleaning', 'Delivery', 'Administration']
