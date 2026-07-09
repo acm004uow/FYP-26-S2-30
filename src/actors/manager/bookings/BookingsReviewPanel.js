@@ -3,7 +3,7 @@ import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Cale
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
-import { SERVICE_TYPES } from '../../../../lib/serviceTypes'
+import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 import AddressFields from '../../../components/AddressFields'
 
 const TIME_FILTERS = [
@@ -100,6 +100,7 @@ export default function BookingsReviewPanel() {
   const [newBookingCoordinates, setNewBookingCoordinates] = useState(null)
   const [recommendationPool, setRecommendationPool] = useState([])
   const [recommendationParams, setRecommendationParams] = useState({})
+  const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
   const [newBookingRecommendations, setNewBookingRecommendations] = useState([])
   const [selectedNewBookingStaffId, setSelectedNewBookingStaffId] = useState('')
 
@@ -384,7 +385,7 @@ export default function BookingsReviewPanel() {
     const hostAdminId = managerProfile?.host_admin_id
     if (!hostAdminId) return
 
-    const [{ data: pool }, { data: params }] = await Promise.all([
+    const [{ data: pool }, { data: params }, types] = await Promise.all([
       supabase
         .from('staff_profiles')
         .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
@@ -392,9 +393,12 @@ export default function BookingsReviewPanel() {
         .eq('is_suspended', false)
         .eq('status', 'active'),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
+      loadServiceTypes(supabase, hostAdminId),
     ])
     setRecommendationPool(pool || [])
     setRecommendationParams(params || {})
+    setServiceTypes(types)
+    setNewBookingForm(prev => ({ ...prev, serviceType: types.includes(prev.serviceType) ? prev.serviceType : types[0] }))
   }
 
   const closeNewBookingModal = () => {
@@ -798,7 +802,7 @@ export default function BookingsReviewPanel() {
               <div>
                 <label className="text-sm font-medium text-gray-700">Service Type</label>
                 <select value={newBookingForm.serviceType} onChange={e => setNewBookingForm({ ...newBookingForm, serviceType: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
-                  {SERVICE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                  {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
               </div>
               <AddressFields

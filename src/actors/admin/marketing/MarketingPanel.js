@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ExternalLink, Megaphone, Pencil, Sparkles } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
-import { SERVICE_TYPES } from '../../../../lib/serviceTypes'
+import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 
 export default function MarketingPanel() {
   const [businessName, setBusinessName] = useState('')
@@ -16,19 +16,24 @@ export default function MarketingPanel() {
   const [instruction, setInstruction] = useState('')
   const [refining, setRefining] = useState(false)
   const [editMode, setEditMode] = useState(false)
+  const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
 
   const load = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    const { data } = await supabase
-      .from('profiles')
-      .select('business_name,marketing_description,service_rates,marketing_published')
-      .eq('id', user?.id)
-      .single()
+    const [{ data }, types] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('business_name,marketing_description,service_rates,marketing_published')
+        .eq('id', user?.id)
+        .single(),
+      loadServiceTypes(supabase, user?.id),
+    ])
 
     setBusinessName(data?.business_name || '')
     setDescription(data?.marketing_description || '')
     setRates(data?.service_rates || {})
     setPublished(data?.marketing_published || false)
+    setServiceTypes(types)
     // First-time setup (nothing saved yet) starts unlocked; anything already saved starts read-only.
     setEditMode(!data?.marketing_description && !data?.marketing_published)
     setLoading(false)
@@ -212,7 +217,7 @@ export default function MarketingPanel() {
           <label className="text-sm font-medium text-gray-700">Services &amp; Rates</label>
           <p className="text-xs text-gray-400 mb-2">Leave a service blank if you don&apos;t offer it.</p>
           <div className="space-y-2">
-            {SERVICE_TYPES.map(type => (
+            {serviceTypes.map(type => (
               <div key={type} className="flex items-center gap-3">
                 <span className="w-40 shrink-0 text-sm text-gray-700">{type}</span>
                 <div className="flex items-center gap-1">

@@ -1,4 +1,4 @@
-import { Activity, Calendar, CheckCircle2, ClipboardList, FileText, Globe, LayoutDashboard, Megaphone, Settings, ShieldAlert, Sparkles, UserCheck, UserCog, Users } from 'lucide-react'
+import { Activity, Calendar, CheckCircle2, ClipboardList, FileText, Globe, LayoutDashboard, Megaphone, Settings, ShieldAlert, Sparkles, Tags, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
@@ -23,6 +23,7 @@ export const navMap = {
   admin: [
     { name: 'User Accounts', path: '/admin', icon: UserCog },
     { name: 'Tasks', path: '/admin?section=tasks', icon: ClipboardList },
+    { name: 'Categories', path: '/admin?section=categories', icon: Tags },
     { name: 'Attendance', path: '/admin?section=attendance', icon: UserCheck },
     { name: 'Marketing', path: '/admin?section=marketing', icon: Megaphone },
     { name: 'Security Logs', path: '/admin?section=security', icon: ShieldAlert },

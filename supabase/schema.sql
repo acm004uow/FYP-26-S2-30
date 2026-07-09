@@ -221,6 +221,25 @@ create table if not exists audit_logs (
   created_at timestamptz default now()
 );
 
+-- Service categories (e.g. "Home Cleaning", "Deep Cleaning") shown wherever a service type is
+-- picked: customer bookings, manager/owner-created tasks, and the marketplace rate list.
+create table if not exists task_categories (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  status text default 'active',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- Null host_admin_id = shared default category visible to every company; owners can also add
+-- their own categories scoped to just their company.
+alter table task_categories add column if not exists host_admin_id uuid references profiles(id) on delete cascade;
+
+insert into task_categories (name, host_admin_id)
+select name, null from (values ('Home Cleaning'), ('Office Cleaning'), ('Deep Cleaning'), ('Move-Out Cleaning'), ('Carpet Cleaning')) as seed(name)
+where not exists (select 1 from task_categories where host_admin_id is null);
+
 -- Auto-generated weekly schedule proposals (from the Sunday-7pm cron job), pending manager review.
 -- Deliberately has no RLS policy below: only ever read/written server-side with the service-role key.
 create table if not exists schedule_proposals (
@@ -276,6 +295,7 @@ alter table security_logs enable row level security;
 alter table audit_logs enable row level security;
 alter table schedule_proposals enable row level security;
 alter table finalized_schedules enable row level security;
+alter table task_categories enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin
@@ -332,6 +352,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all attendance" on attendance_records for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all task categories" on task_categories for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 -- Security-definer view: exposes only the public-safe columns of published company

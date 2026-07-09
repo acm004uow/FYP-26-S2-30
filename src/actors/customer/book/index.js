@@ -6,7 +6,7 @@ import { ClipboardList, MapPin, Calendar, CheckCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { getMinBookableDate } from '../../../../lib/businessWeek'
-import { SERVICE_TYPES } from '../../../../lib/serviceTypes'
+import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 
 export default function CustomerBooking() {
   const router = useRouter()
@@ -16,6 +16,7 @@ export default function CustomerBooking() {
   const [composedLocation, setComposedLocation] = useState('')
   const [coordinates, setCoordinates] = useState(null)
   const [companies, setCompanies] = useState([])
+  const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
   const [form, setForm] = useState({
     companyId: '', serviceType: SERVICE_TYPES[0], description: '',
     scheduledDate: '', scheduledTime: '', estimatedHours: 2, notes: '',
@@ -40,6 +41,14 @@ export default function CustomerBooking() {
     const companyId = typeof router.query.companyId === 'string' ? router.query.companyId : ''
     if (companyId) setForm(prev => ({ ...prev, companyId }))
   }, [router.isReady, router.query.companyId])
+
+  useEffect(() => {
+    (async () => {
+      const types = await loadServiceTypes(supabase, form.companyId || null)
+      setServiceTypes(types)
+      setForm(prev => (types.includes(prev.serviceType) ? prev : { ...prev, serviceType: types[0] }))
+    })()
+  }, [form.companyId])
 
   const minDate = getMinBookableDate()
 
@@ -186,7 +195,7 @@ export default function CustomerBooking() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Service Type *</label>
                 <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50">
-                  {SERVICE_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+                  {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
               </div>
               <div>
