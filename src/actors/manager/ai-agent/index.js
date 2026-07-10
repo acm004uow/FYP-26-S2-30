@@ -604,7 +604,10 @@ export default function ManagerAiAgent() {
                 <div key={row.booking_id} className="p-5">
                   <div className="flex justify-between items-start gap-4">
                     <div className="min-w-0">
-                      <h3 className="font-semibold text-gray-900">{row.service_type}</h3>
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        {row.service_type}
+                        {row.recurring_booking_id && <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">Recurring</span>}
+                      </h3>
                       <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{row.location}</p>
                       {row.scheduled_date && (
                         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><Calendar className="w-4 h-4" />{row.scheduled_date} {row.scheduled_time}</p>

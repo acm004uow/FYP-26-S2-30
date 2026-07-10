@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X, Repeat } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
@@ -44,6 +44,10 @@ const dateToneColor = {
   upcoming: 'bg-gray-100 text-gray-600',
   none: 'bg-gray-100 text-gray-400',
 }
+
+const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+const formatDaysOfWeek = (days) => (days || []).slice().sort((a, b) => a - b).map(d => DAY_ABBR[d]).join(', ')
 
 const formatTime = (time) => {
   if (!time) return null
@@ -103,6 +107,25 @@ export default function BookingsReviewPanel() {
   const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
   const [newBookingRecommendations, setNewBookingRecommendations] = useState([])
   const [selectedNewBookingStaffId, setSelectedNewBookingStaffId] = useState('')
+  const [hostAdminId, setHostAdminId] = useState(null)
+  const [recurringBookings, setRecurringBookings] = useState([])
+  const [recurringActionId, setRecurringActionId] = useState(null)
+  const [recurringRejecting, setRecurringRejecting] = useState(null)
+  const [recurringRejectReason, setRecurringRejectReason] = useState('')
+
+  const loadRecurringBookings = async (hostAdminIdParam) => {
+    if (!hostAdminIdParam) {
+      setRecurringBookings([])
+      return
+    }
+    const { data } = await supabase
+      .from('recurring_bookings')
+      .select('id,customer_id,service_type,location,description,days_of_week,scheduled_time,estimated_hours,start_date,end_date,status,created_at,customer:profiles!recurring_bookings_customer_id_fkey(full_name,email)')
+      .eq('host_admin_id', hostAdminIdParam)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    setRecurringBookings(data || [])
+  }
 
   const loadBookings = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -112,8 +135,9 @@ export default function BookingsReviewPanel() {
       .eq('id', user?.id)
       .single()
 
-    const hostAdminId = managerProfile?.host_admin_id
-    if (!hostAdminId) {
+    const hostAdminIdResolved = managerProfile?.host_admin_id
+    setHostAdminId(hostAdminIdResolved || null)
+    if (!hostAdminIdResolved) {
       setBookings([])
       setStaffRows([])
       return null
@@ -123,13 +147,13 @@ export default function BookingsReviewPanel() {
       supabase
         .from('bookings')
         .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name)')
-        .eq('host_admin_id', hostAdminId)
+        .eq('host_admin_id', hostAdminIdResolved)
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false }),
       supabase
         .from('staff_profiles')
         .select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended')
-        .eq('host_admin_id', hostAdminId)
+        .eq('host_admin_id', hostAdminIdResolved)
         .eq('status', 'active')
         .order('staff_name'),
     ])
@@ -145,21 +169,31 @@ export default function BookingsReviewPanel() {
       tasks: row.current_workload || 0,
       rating: row.performance_rating || 0,
     })))
-    return hostAdminId
+    return hostAdminIdResolved
   }
 
   useEffect(() => {
     let bookingsChannel = null
+    let recurringChannel = null
     let cancelled = false
 
-    loadBookings().then(hostAdminId => {
-      if (cancelled || !hostAdminId) return
+    loadBookings().then(resolvedHostAdminId => {
+      if (cancelled || !resolvedHostAdminId) return
+      loadRecurringBookings(resolvedHostAdminId)
       bookingsChannel = supabase
-        .channel(`bookings-review-${hostAdminId}-${Date.now()}`)
+        .channel(`bookings-review-${resolvedHostAdminId}-${Date.now()}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'bookings', filter: `host_admin_id=eq.${hostAdminId}` },
+          { event: '*', schema: 'public', table: 'bookings', filter: `host_admin_id=eq.${resolvedHostAdminId}` },
           () => { if (!cancelled) loadBookings() }
+        )
+        .subscribe()
+      recurringChannel = supabase
+        .channel(`recurring-bookings-review-${resolvedHostAdminId}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'recurring_bookings', filter: `host_admin_id=eq.${resolvedHostAdminId}` },
+          () => { if (!cancelled) loadRecurringBookings(resolvedHostAdminId) }
         )
         .subscribe()
     })
@@ -167,6 +201,7 @@ export default function BookingsReviewPanel() {
     return () => {
       cancelled = true
       if (bookingsChannel) supabase.removeChannel(bookingsChannel)
+      if (recurringChannel) supabase.removeChannel(recurringChannel)
     }
   }, [])
 
@@ -262,6 +297,54 @@ export default function BookingsReviewPanel() {
         ? `Booking ${id.slice(0, 8)} ${decision}. Customer notified.`
         : 'This booking is no longer pending.')
     await loadBookings()
+  }
+
+  const handleReviewRecurring = async (id, decision, rejectionReason) => {
+    const status = decision === 'Approved' ? 'active' : 'rejected'
+    const user = await getActiveManager()
+    if (!user) return
+
+    setRecurringActionId(id)
+    const { data: reviewed, error } = await supabase
+      .from('recurring_bookings')
+      .update({
+        status,
+        reviewed_by: user.id,
+        rejection_reason: status === 'rejected' ? (rejectionReason || null) : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .eq('status', 'pending')
+      .select('id,customer_id,service_type')
+      .maybeSingle()
+
+    if (!error && reviewed?.customer_id) {
+      await supabase.from('notifications').insert({
+        user_id: reviewed.customer_id,
+        title: status === 'active' ? 'Recurring booking approved' : 'Recurring booking declined',
+        message: status === 'active'
+          ? `Your recurring ${reviewed.service_type} booking was approved. Visits will appear on the schedule week by week.`
+          : `Your recurring ${reviewed.service_type} booking request was declined.${rejectionReason ? ` Reason: ${rejectionReason}` : ''}`,
+      })
+    }
+
+    if (!error && reviewed) {
+      await supabase.from('audit_logs').insert({
+        user_id: user.id,
+        action: status === 'active' ? 'approve_recurring_booking' : 'reject_recurring_booking',
+        details: `Recurring booking ${id} ${status}`,
+      })
+    }
+
+    setRecurringActionId(null)
+    setRecurringRejecting(null)
+    setRecurringRejectReason('')
+    showNotification(error
+      ? error.message
+      : reviewed
+        ? `Recurring booking ${status === 'active' ? 'approved' : 'rejected'}.`
+        : 'This request is no longer pending.')
+    await loadRecurringBookings(hostAdminId)
   }
 
   const handleStaffDragStart = (event, staff) => {
@@ -610,6 +693,82 @@ export default function BookingsReviewPanel() {
       </div>
 
       {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
+
+      {recurringBookings.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden">
+          <div className="p-4 border-b bg-purple-50 flex items-center gap-2">
+            <Repeat className="w-4 h-4 text-purple-600" />
+            <h2 className="font-semibold text-purple-900">Recurring Booking Requests ({recurringBookings.length})</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {recurringBookings.map(recurring => (
+              <div key={recurring.id} className="p-4">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-900">{recurring.service_type}</h3>
+                  <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{recurring.location}</p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    Requested by {recurring.customer?.full_name || recurring.customer?.email || 'Customer'} on {new Date(recurring.created_at).toLocaleDateString()}
+                  </p>
+                  <p className="text-sm text-gray-600 mt-2 flex items-center gap-1">
+                    <Calendar className="w-4 h-4" />
+                    {recurring.start_date} to {recurring.end_date} · {formatDaysOfWeek(recurring.days_of_week)}{recurring.scheduled_time ? ` · ${formatTime(recurring.scheduled_time)}` : ''}
+                  </p>
+                  {recurring.description && (
+                    <p className="text-sm text-gray-600 mt-2"><span className="font-medium text-gray-700">Description:</span> {recurring.description}</p>
+                  )}
+                </div>
+                {recurringRejecting === recurring.id ? (
+                  <div className="mt-3 space-y-2">
+                    <textarea
+                      value={recurringRejectReason}
+                      onChange={e => setRecurringRejectReason(e.target.value)}
+                      rows={2}
+                      placeholder="Reason for rejecting (optional)..."
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleReviewRecurring(recurring.id, 'Rejected', recurringRejectReason)}
+                        disabled={recurringActionId === recurring.id}
+                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm disabled:opacity-50"
+                      >
+                        Confirm Reject
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setRecurringRejecting(null); setRecurringRejectReason('') }}
+                        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleReviewRecurring(recurring.id, 'Approved')}
+                      disabled={recurringActionId === recurring.id}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-lg text-sm disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecurringRejecting(recurring.id)}
+                      disabled={recurringActionId === recurring.id}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-sm disabled:opacity-50"
+                    >
+                      <XCircle className="w-4 h-4" /> Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
         <div className="space-y-4">

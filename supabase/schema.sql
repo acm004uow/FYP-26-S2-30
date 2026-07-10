@@ -130,8 +130,37 @@ alter table bookings add column if not exists created_by uuid references profile
 alter table bookings add column if not exists source text not null default 'customer';
 alter table bookings add column if not exists guest_name text;
 alter table bookings add column if not exists guest_contact text;
--- 'manual' | 'ai' | 'history' for manager-created tasks; null for customer self-service bookings.
+-- 'manual' | 'ai' | 'history' | 'recurring' for manager-created tasks; null for customer self-service bookings.
 alter table bookings add column if not exists creation_method text;
+
+-- A customer's request to book the service repeatedly over a period (e.g. "cleaning every Monday
+-- and Thursday throughout August"), submitted via the customer booking form. Starts 'pending' for
+-- manager review; once 'active', the weekly schedule cron (and any manual "build schedule" request
+-- covering a week inside start_date/end_date) generates that week's individual `bookings` rows
+-- (tagged with recurring_booking_id below) — see lib/recurringBookings.js#generateWeeklyVisits.
+-- Nothing is pre-generated at approval time; visits appear incrementally, one week at a time.
+create table if not exists recurring_bookings (
+  id uuid primary key default gen_random_uuid(),
+  host_admin_id uuid references profiles(id) on delete cascade,
+  customer_id uuid references profiles(id) on delete cascade,
+  service_type text not null,
+  location text not null,
+  latitude double precision,
+  longitude double precision,
+  description text,
+  days_of_week int[] not null,
+  scheduled_time text,
+  estimated_hours numeric not null default 2,
+  start_date date not null,
+  end_date date not null,
+  status text not null default 'pending', -- pending | active | rejected | cancelled
+  rejection_reason text,
+  reviewed_by uuid references profiles(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table bookings add column if not exists recurring_booking_id uuid references recurring_bookings(id) on delete set null;
 
 create table if not exists availability_requests (
   id uuid primary key default gen_random_uuid(),
@@ -296,6 +325,7 @@ alter table audit_logs enable row level security;
 alter table schedule_proposals enable row level security;
 alter table finalized_schedules enable row level security;
 alter table task_categories enable row level security;
+alter table recurring_bookings enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin
@@ -355,6 +385,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all task categories" on task_categories for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all recurring bookings" on recurring_bookings for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 -- Security-definer view: exposes only the public-safe columns of published company
