@@ -389,7 +389,7 @@ export default function ReportsPanel() {
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
           <FileText className="h-5 w-5 text-blue-500" /> Business Reports
         </h2>
-        <p className="mt-1 mb-5 text-sm text-gray-500">Daily, weekly, or monthly performance reports across your whole business — every manager's staff and bookings, not just one team.</p>
+        <p className="mt-1 mb-5 text-sm text-gray-500">Daily, weekly, or monthly performance reports across your whole business — every manager&apos;s staff and bookings, not just one team.</p>
 
         <div className="inline-flex rounded-xl bg-gray-100 p-1 mb-5">
           {REPORT_TYPES.map(t => (

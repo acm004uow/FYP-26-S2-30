@@ -129,7 +129,7 @@ export default function PayRatesPanel() {
           <DollarSign className="h-5 w-5 text-green-600" /> Pay Rates
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Set an hourly rate per service type. When staff complete a task, they earn an allowance equal to the task's estimated hours multiplied by this rate — shown alongside their basic salary in Business Reports.
+          Set an hourly rate per service type. When staff complete a task, they earn an allowance equal to the task&apos;s estimated hours multiplied by this rate — shown alongside their basic salary in Business Reports.
         </p>
 
         {message && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
@@ -178,7 +178,7 @@ export default function PayRatesPanel() {
           <Wallet className="h-5 w-5 text-blue-500" /> Basic Salary
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Set each staff member's fixed base pay. This is paid regardless of tasks completed, on top of any allowance earned above.
+          Set each staff member&apos;s fixed base pay. This is paid regardless of tasks completed, on top of any allowance earned above.
         </p>
 
         <div className="mt-5 divide-y divide-gray-100 rounded-xl border border-gray-100">

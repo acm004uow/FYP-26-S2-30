@@ -118,7 +118,7 @@ export default function ClosuresPanel() {
             <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
               <CalendarOff className="h-5 w-5 text-red-500" /> Business Closures
             </h2>
-            <p className="mt-1 text-sm text-gray-500">Block dates for public holidays or any one-off situation — customers can't book on these dates, and recurring bookings automatically skip them.</p>
+            <p className="mt-1 text-sm text-gray-500">Block dates for public holidays or any one-off situation — customers can&apos;t book on these dates, and recurring bookings automatically skip them.</p>
           </div>
           <button onClick={() => setModalOpen(true)} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:shadow-lg">
             <Plus className="w-5 h-5" />

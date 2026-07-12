@@ -72,7 +72,7 @@ export default function SchedulingCutoffPanel() {
           <Clock className="h-5 w-5 text-blue-500" /> Weekly Booking Cutoff
         </h2>
         <p className="mt-1 text-sm text-gray-500">
-          Once this day and time passes each week, customers can no longer book into the closing week, and the AI automatically generates next week's schedule for your manager to approve.
+          Once this day and time passes each week, customers can no longer book into the closing week, and the AI automatically generates next week&apos;s schedule for your manager to approve.
         </p>
         {message && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
         <form onSubmit={handleSave} className="mt-4">
