@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Award, CalendarDays, CalendarRange, CheckCircle2, ClipboardList, Clock, DollarSign, Download, FileText, Printer, Star, Sun, TrendingUp, Users } from 'lucide-react'
+import { Award, CalendarDays, CalendarRange, CheckCircle2, ChevronRight, ClipboardList, Clock, DollarSign, Download, FileText, Printer, Star, Sun, TrendingUp, Users, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatDuration } from '../../../../lib/attendance'
 
@@ -35,6 +35,42 @@ function StatCard({ icon: Icon, label, value, caption, theme = 'blue', size = 'l
   )
 }
 
+const AVATAR_PALETTE = [
+  { bg: 'bg-purple-100', text: 'text-purple-600' },
+  { bg: 'bg-teal-100', text: 'text-teal-600' },
+  { bg: 'bg-pink-100', text: 'text-pink-600' },
+  { bg: 'bg-orange-100', text: 'text-orange-600' },
+  { bg: 'bg-blue-100', text: 'text-blue-600' },
+  { bg: 'bg-green-100', text: 'text-green-600' },
+]
+
+const initialsOf = (name) => name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase()
+
+function DetailModal({ title, subtitle, onClose, children }) {
+  useEffect(() => {
+    const onKeyDown = event => { if (event.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={event => event.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-base font-bold text-gray-900">{title}</p>
+            {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+          </div>
+          <button onClick={onClose} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600" aria-label="Close">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </div>
+  )
+}
+
 // Owner-facing counterpart to src/actors/manager/reports/index.js — same report shape (stat
 // cards, category breakdown, CSV/PDF export) but scoped to the whole business rather than one
 // manager's assigned team: every staff member's attendance is included, not just those with
@@ -44,8 +80,14 @@ export default function ReportsPanel() {
   const [data, setData] = useState(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
+  const [viewingAttendanceName, setViewingAttendanceName] = useState(null)
+  const [viewingPayName, setViewingPayName] = useState(null)
+  const [payFilter, setPayFilter] = useState('all')
+  const [attendanceFilter, setAttendanceFilter] = useState('all')
 
   const reportLabel = reportType.charAt(0).toUpperCase() + reportType.slice(1)
+  const payColumnLabel = reportType === 'daily' ? "Today's Pay" : reportType === 'weekly' ? "This Week's Pay" : "This Month's Pay"
+  const hoursColumnLabel = reportType === 'daily' ? "Today's Hours" : reportType === 'weekly' ? "This Week's Hours" : "This Month's Hours"
   const fileStamp = new Date().toISOString().slice(0, 10)
 
   const resolveHostAdminId = async (userId) => {
@@ -401,60 +443,154 @@ export default function ReportsPanel() {
               </div>
             </div>
             <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-gray-500 mb-3">Staff Attendance Summary ({reportLabel})</p>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <Clock className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Staff Attendance Summary ({reportLabel})</p>
+                    <p className="text-xs text-gray-400">{reportLabel} attendance breakdown by staff</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={attendanceFilter}
+                    onChange={event => setAttendanceFilter(event.target.value)}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    aria-label="Filter staff by attendance status"
+                  >
+                    <option value="all">All Staff</option>
+                    <option value="present">Present</option>
+                    <option value="absent">Absent</option>
+                  </select>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600">
+                    <CalendarDays className="h-3.5 w-3.5" /> {reportLabel}
+                  </span>
+                </div>
+              </div>
+
               {data.attendanceSummary.length > 0 ? (
-                <div className="divide-y divide-gray-100">
-                  {data.attendanceSummary.map(row => (
-                    <div key={row.name} className="flex items-center justify-between gap-4 py-2.5 first:pt-0 last:pb-0">
-                      <span className="text-sm font-medium text-gray-900">{row.name}</span>
-                      <div className="flex items-center gap-5 text-right">
-                        <div className="w-16">
-                          <p className={`text-sm font-semibold ${row.daysPresent > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{row.daysPresent}</p>
-                          <p className="text-[11px] text-gray-400">days present</p>
-                        </div>
-                        <div className="w-14">
-                          <p className={`text-sm font-semibold ${row.avgClockIn !== '—' ? 'text-gray-900' : 'text-gray-300'}`}>{row.avgClockIn}</p>
-                          <p className="text-[11px] text-gray-400">avg clock-in</p>
-                        </div>
-                        <div className="w-16">
-                          <p className={`text-sm font-semibold ${row.daysPresent > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{row.totalHours}</p>
-                          <p className="text-[11px] text-gray-400">worked</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                <div className="overflow-x-auto rounded-lg border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-xs font-medium text-gray-400">
+                        <th className="px-4 py-2.5 font-medium">Staff Member</th>
+                        <th className="px-4 py-2.5 font-medium">{hoursColumnLabel}</th>
+                        <th className="px-4 py-2.5 font-medium">Status</th>
+                        <th className="w-8 px-2 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {data.attendanceSummary
+                        .filter(row => attendanceFilter === 'all' ? true : attendanceFilter === 'present' ? row.daysPresent > 0 : row.daysPresent === 0)
+                        .map((row, index) => {
+                          const palette = AVATAR_PALETTE[index % AVATAR_PALETTE.length]
+                          const present = row.daysPresent > 0
+                          return (
+                            <tr
+                              key={row.name}
+                              onClick={() => setViewingAttendanceName(row.name)}
+                              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setViewingAttendanceName(row.name) } }}
+                              role="button"
+                              tabIndex={0}
+                              className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                            >
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2.5">
+                                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${palette.bg} ${palette.text}`}>{initialsOf(row.name)}</span>
+                                  <span className="font-medium text-gray-900">{row.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-gray-700">{row.totalHours}</td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${present ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{present ? 'Present' : 'Absent'}</span>
+                              </td>
+                              <td className="px-2 py-3">
+                                <ChevronRight className="ml-auto h-4 w-4 text-gray-300" />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <p className="text-sm text-gray-400">No staff attendance recorded yet.</p>
               )}
             </div>
             <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-gray-500 mb-3">Staff Pay Summary ({reportLabel})</p>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
+                    <FileText className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">Staff Pay Summary ({reportLabel})</p>
+                    <p className="text-xs text-gray-400">{reportLabel} payroll breakdown by staff</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={payFilter}
+                    onChange={event => setPayFilter(event.target.value)}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    aria-label="Filter staff by pay status"
+                  >
+                    <option value="all">All Staff</option>
+                    <option value="paid">Paid</option>
+                    <option value="nopay">No Pay</option>
+                  </select>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600">
+                    <CalendarDays className="h-3.5 w-3.5" /> {reportLabel}
+                  </span>
+                </div>
+              </div>
+
               {data.paySummary.length > 0 ? (
-                <div className="divide-y divide-gray-100">
-                  {data.paySummary.map(row => (
-                    <div key={row.name} className="py-3 first:pt-0 last:pb-0">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium text-gray-900">{row.name}</span>
-                        <span className="font-semibold text-gray-900">{formatMoney(row.totalPay)} <span className="font-normal text-gray-400">total</span></span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
-                        <span>Basic salary: {formatMoney(row.basicSalary)}</span>
-                        <span>Allowance: {formatMoney(row.totalAllowance)}</span>
-                      </div>
-                      {row.breakdown.length > 0 ? (
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {row.breakdown.map(b => (
-                            <span key={b.service_type} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
-                              {b.service_type}: {b.hours}h ({formatMoney(b.allowance)})
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-1 text-xs text-gray-400">No completed tasks this period.</p>
-                      )}
-                    </div>
-                  ))}
+                <div className="overflow-x-auto rounded-lg border border-gray-100">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-xs font-medium text-gray-400">
+                        <th className="px-4 py-2.5 font-medium">Staff Member</th>
+                        <th className="px-4 py-2.5 font-medium">{payColumnLabel}</th>
+                        <th className="px-4 py-2.5 font-medium">Hours Worked</th>
+                        <th className="px-4 py-2.5 font-medium">Estimated Earnings</th>
+                        <th className="w-8 px-2 py-2.5"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {data.paySummary
+                        .filter(row => payFilter === 'all' ? true : payFilter === 'paid' ? row.totalPay > 0 : row.totalPay === 0)
+                        .map((row, index) => {
+                          const palette = AVATAR_PALETTE[index % AVATAR_PALETTE.length]
+                          const hoursWorked = row.breakdown.reduce((sum, b) => sum + Number(b.hours || 0), 0)
+                          return (
+                            <tr
+                              key={row.name}
+                              onClick={() => setViewingPayName(row.name)}
+                              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setViewingPayName(row.name) } }}
+                              role="button"
+                              tabIndex={0}
+                              className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                            >
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2.5">
+                                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${palette.bg} ${palette.text}`}>{initialsOf(row.name)}</span>
+                                  <span className="font-medium text-gray-900">{row.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-gray-700">{formatMoney(row.totalPay)}</td>
+                              <td className="px-4 py-3 text-gray-700">{hoursWorked.toFixed(1)} hrs</td>
+                              <td className="px-4 py-3 font-medium text-gray-900">{formatMoney(row.totalAllowance)}</td>
+                              <td className="px-2 py-3">
+                                <ChevronRight className="ml-auto h-4 w-4 text-gray-300" />
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <p className="text-sm text-gray-400">No staff found.</p>
@@ -467,6 +603,63 @@ export default function ReportsPanel() {
           </div>
         )}
       </div>
+
+      {viewingAttendanceName && (() => {
+        const row = data?.attendanceSummary.find(r => r.name === viewingAttendanceName)
+        if (!row) return null
+        return (
+          <DetailModal title={row.name} subtitle={`Attendance — ${reportLabel}`} onClose={() => setViewingAttendanceName(null)}>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-lg border border-gray-100 bg-gray-50 py-3">
+                <p className={`text-lg font-bold ${row.daysPresent > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{row.daysPresent}</p>
+                <p className="mt-0.5 text-[11px] text-gray-400">days present</p>
+              </div>
+              <div className="rounded-lg border border-gray-100 bg-gray-50 py-3">
+                <p className={`text-lg font-bold ${row.avgClockIn !== '—' ? 'text-gray-900' : 'text-gray-300'}`}>{row.avgClockIn}</p>
+                <p className="mt-0.5 text-[11px] text-gray-400">avg clock-in</p>
+              </div>
+              <div className="rounded-lg border border-gray-100 bg-gray-50 py-3">
+                <p className={`text-lg font-bold ${row.daysPresent > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{row.totalHours}</p>
+                <p className="mt-0.5 text-[11px] text-gray-400">worked</p>
+              </div>
+            </div>
+          </DetailModal>
+        )
+      })()}
+
+      {viewingPayName && (() => {
+        const row = data?.paySummary.find(r => r.name === viewingPayName)
+        if (!row) return null
+        return (
+          <DetailModal title={row.name} subtitle={`Pay — ${reportLabel}`} onClose={() => setViewingPayName(null)}>
+            <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Total pay</span>
+                <span className="font-bold text-gray-900">{formatMoney(row.totalPay)}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+                <span>Basic salary</span>
+                <span className="font-medium text-gray-700">{formatMoney(row.basicSalary)}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+                <span>Allowance</span>
+                <span className="font-medium text-gray-700">{formatMoney(row.totalAllowance)}</span>
+              </div>
+            </div>
+            {row.breakdown.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {row.breakdown.map(b => (
+                  <span key={b.service_type} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                    {b.service_type}: {b.hours}h ({formatMoney(b.allowance)})
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-gray-400">No completed tasks this period.</p>
+            )}
+          </DetailModal>
+        )
+      })()}
     </div>
   )
 }
