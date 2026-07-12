@@ -71,6 +71,21 @@ create table if not exists staff_profiles (
 
 alter table staff_profiles add column if not exists host_admin_id uuid references profiles(id) on delete set null;
 alter table staff_profiles add column if not exists manager_id uuid references profiles(id) on delete set null;
+-- Fixed base pay, set individually per staff member by the owner. On top of this, staff earn an
+-- allowance for completed tasks (hours x the task's service_type rate — see service_pay_rates
+-- below); both are surfaced together in the owner's Business Reports (Staff Pay Summary).
+alter table staff_profiles add column if not exists basic_salary numeric not null default 0;
+
+-- Owner-configured hourly pay rate per service type, used to compute the allowance staff earn
+-- for completed tasks in that category (lib usage: src/actors/admin/reports/ReportsPanel.js).
+create table if not exists service_pay_rates (
+  id uuid primary key default gen_random_uuid(),
+  host_admin_id uuid references profiles(id) on delete cascade,
+  service_type text not null,
+  hourly_rate numeric not null default 0,
+  updated_at timestamptz default now(),
+  unique (host_admin_id, service_type)
+);
 
 update staff_profiles sp
 set host_admin_id = p.host_admin_id
@@ -161,6 +176,20 @@ create table if not exists recurring_bookings (
 );
 
 alter table bookings add column if not exists recurring_booking_id uuid references recurring_bookings(id) on delete set null;
+
+-- Owner-declared blackout dates (public holiday, renovation, any one-off closure). Only blocks
+-- future scheduling: generateWeeklyVisits (lib/recurringBookings.js) skips these dates when
+-- generating recurring visits, and the customer booking form won't let a new booking be made on
+-- one. Bookings already scheduled before a closure was declared are left untouched.
+create table if not exists business_closures (
+  id uuid primary key default gen_random_uuid(),
+  host_admin_id uuid references profiles(id) on delete cascade,
+  start_date date not null,
+  end_date date not null,
+  reason text,
+  created_by uuid references profiles(id) on delete set null,
+  created_at timestamptz default now()
+);
 
 create table if not exists availability_requests (
   id uuid primary key default gen_random_uuid(),
@@ -269,8 +298,10 @@ insert into task_categories (name, host_admin_id)
 select name, null from (values ('Home Cleaning'), ('Office Cleaning'), ('Deep Cleaning'), ('Move-Out Cleaning'), ('Carpet Cleaning')) as seed(name)
 where not exists (select 1 from task_categories where host_admin_id is null);
 
--- Auto-generated weekly schedule proposals (from the Sunday-7pm cron job), pending manager review.
--- Deliberately has no RLS policy below: only ever read/written server-side with the service-role key.
+-- Auto-generated weekly schedule proposals (from the daily cron job, once each business's
+-- configured cutoff — see scheduling_settings below — has passed for the week), pending manager
+-- review. Deliberately has no RLS policy below: only ever read/written server-side with the
+-- service-role key.
 create table if not exists schedule_proposals (
   id uuid primary key default gen_random_uuid(),
   host_admin_id uuid references profiles(id) on delete cascade,
@@ -279,6 +310,18 @@ create table if not exists schedule_proposals (
   proposal jsonb not null,
   status text not null default 'pending',
   created_at timestamptz default now()
+);
+
+-- Per-business weekly booking cutoff (day of week + time): once it passes, customers can no
+-- longer book into the closing week (lib/businessWeek.js#getMinBookableDate) and the daily cron
+-- auto-generates that week's schedule for manager approval
+-- (lib/businessWeek.js#hasCutoffPassedToday). No row = defaults to Sunday 14:00, matching the
+-- original hardcoded behavior.
+create table if not exists scheduling_settings (
+  host_admin_id uuid primary key references profiles(id) on delete cascade,
+  cutoff_day_of_week int not null default 0,
+  cutoff_time text not null default '14:00',
+  updated_at timestamptz default now()
 );
 
 -- A frozen snapshot of a week's schedule taken when the manager clicks "Finalize Schedule".
@@ -326,6 +369,9 @@ alter table schedule_proposals enable row level security;
 alter table finalized_schedules enable row level security;
 alter table task_categories enable row level security;
 alter table recurring_bookings enable row level security;
+alter table business_closures enable row level security;
+alter table scheduling_settings enable row level security;
+alter table service_pay_rates enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin
@@ -388,6 +434,15 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all recurring bookings" on recurring_bookings for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all business closures" on business_closures for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all scheduling settings" on scheduling_settings for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all service pay rates" on service_pay_rates for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 -- Security-definer view: exposes only the public-safe columns of published company

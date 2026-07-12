@@ -1,4 +1,5 @@
 import Layout from '../../../components/Layout'
+import TimeInput from '../../../components/TimeInput'
 import { useEffect, useState } from 'react'
 import { Search, X, Bell, CheckCircle, MapPin, Calendar, Plus, Edit3 } from 'lucide-react'
 import { useRouter } from 'next/router'
@@ -197,7 +198,7 @@ export default function CustomerDashboard() {
               />
               <div className="grid grid-cols-2 gap-3">
                 <input type="date" value={editBooking.scheduledDate} onChange={e => setEditBooking({...editBooking, scheduledDate: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
-                <input type="time" value={editBooking.scheduledTime} onChange={e => setEditBooking({...editBooking, scheduledTime: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
+                <TimeInput value={editBooking.scheduledTime} onChange={value => setEditBooking({...editBooking, scheduledTime: value})} />
               </div>
               <input type="number" min="1" step="0.5" placeholder="Estimated hours" value={editBooking.estimatedHours} onChange={e => setEditBooking({...editBooking, estimatedHours: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
               <textarea placeholder="Additional notes" value={editBooking.notes} onChange={e => setEditBooking({...editBooking, notes: e.target.value})} className="w-full border rounded-lg p-2 text-sm resize-none" rows={2} />

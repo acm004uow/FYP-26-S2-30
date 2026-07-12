@@ -1,13 +1,16 @@
 import Layout from '../../../components/Layout'
 import AddressFields from '../../../components/AddressFields'
+import TimeInput from '../../../components/TimeInput'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { ClipboardList, MapPin, Calendar, CheckCircle, Repeat } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
-import { getMinBookableDate } from '../../../../lib/businessWeek'
+import { getMinBookableDate, DEFAULT_CUTOFF } from '../../../../lib/businessWeek'
 import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
-import { createRecurringBookingRequest } from '../../../../lib/recurringBookings'
+import { createRecurringBookingRequest, expandRecurrenceDates } from '../../../../lib/recurringBookings'
+import { fetchClosuresClient, isDateClosed } from '../../../../lib/businessClosures'
+import { fetchSchedulingSettingsClient } from '../../../../lib/scheduleSettings'
 
 const DAY_LABELS = [
   { value: 1, label: 'Mon' }, { value: 2, label: 'Tue' }, { value: 3, label: 'Wed' },
@@ -24,6 +27,8 @@ export default function CustomerBooking() {
   const [companies, setCompanies] = useState([])
   const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
   const [bookingMode, setBookingMode] = useState('one-time')
+  const [closures, setClosures] = useState([])
+  const [cutoff, setCutoff] = useState(DEFAULT_CUTOFF)
   const [form, setForm] = useState({
     companyId: '', serviceType: SERVICE_TYPES[0], description: '',
     scheduledDate: '', scheduledTime: '', estimatedHours: 2, notes: '',
@@ -65,7 +70,23 @@ export default function CustomerBooking() {
     })()
   }, [form.companyId])
 
-  const minDate = getMinBookableDate()
+  useEffect(() => {
+    if (!form.companyId) {
+      setClosures([])
+      return
+    }
+    fetchClosuresClient(supabase, form.companyId).then(setClosures).catch(() => setClosures([]))
+  }, [form.companyId])
+
+  useEffect(() => {
+    if (!form.companyId) {
+      setCutoff(DEFAULT_CUTOFF)
+      return
+    }
+    fetchSchedulingSettingsClient(supabase, form.companyId).then(setCutoff).catch(() => setCutoff(DEFAULT_CUTOFF))
+  }, [form.companyId])
+
+  const minDate = getMinBookableDate(new Date(), cutoff)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -94,6 +115,12 @@ export default function CustomerBooking() {
       }
       if (form.daysOfWeek.length === 0) {
         setError('Please select at least one day of the week for the visits.')
+        return
+      }
+      const candidateDates = expandRecurrenceDates({ start_date: form.startDate, end_date: form.endDate, days_of_week: form.daysOfWeek })
+      if (candidateDates.length > 0 && candidateDates.every(date => isDateClosed(date, closures))) {
+        const closure = isDateClosed(candidateDates[0], closures)
+        setError(`This entire period is closed${closure?.reason ? `: ${closure.reason}` : ''}. Please choose a different period.`)
         return
       }
 
@@ -155,6 +182,13 @@ export default function CustomerBooking() {
     if (form.scheduledDate && form.scheduledDate < minDate) {
       setError(`Bookings are only open from ${minDate} onward. This week's schedule has already been finalized.`)
       return
+    }
+    if (form.scheduledDate) {
+      const closure = isDateClosed(form.scheduledDate, closures)
+      if (closure) {
+        setError(`This date is closed${closure.reason ? `: ${closure.reason}` : ''}. Please choose a different date.`)
+        return
+      }
     }
     setSubmitting(true)
     setError('')
@@ -315,7 +349,7 @@ export default function CustomerBooking() {
                     <input type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
                     <p className="mt-1 text-xs text-gray-400">Bookings open from {minDate} onward — this week&apos;s schedule is already finalized.</p>
                   </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><input type="time" value={form.scheduledTime} onChange={e => setForm({ ...form, scheduledTime: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><TimeInput value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} /></div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -345,7 +379,7 @@ export default function CustomerBooking() {
                       ))}
                     </div>
                   </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><input type="time" value={form.scheduledTime} onChange={e => setForm({ ...form, scheduledTime: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" /></div>
+                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><TimeInput value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} /></div>
                 </div>
               )}
 

@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getUpcomingScheduleWeek } from '../../../../lib/businessWeek'
+import { getUpcomingScheduleWeek, hasCutoffPassedToday } from '../../../../lib/businessWeek'
 import { buildScheduleProposal, fetchSupabaseRows, insertSupabaseRow, insertSupabaseRows, summarizeProposal } from '../../../../lib/scheduleProposal'
+import { fetchSchedulingSettingsServer } from '../../../../lib/scheduleSettings'
 
+// Runs daily (see vercel.json) rather than once a week, since each business can configure its own
+// weekly cutoff (day + time) via scheduling_settings — this checks every business's cutoff on
+// every run and only acts on the day it actually falls on. The date range generated for is always
+// "next Monday to Sunday" regardless of which day within the week the cutoff itself lands on.
 export async function GET(request) {
   try {
     const secret = process.env.CRON_SECRET
@@ -10,7 +15,8 @@ export async function GET(request) {
     const authHeader = request.headers.get('authorization')
     if (authHeader !== `Bearer ${secret}`) return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
 
-    const range = getUpcomingScheduleWeek()
+    const now = new Date()
+    const range = getUpcomingScheduleWeek(now)
 
     const businesses = await fetchSupabaseRows('profiles', [
       ['select', 'id'],
@@ -23,6 +29,23 @@ export async function GET(request) {
     const results = []
 
     for (const business of businesses) {
+      const cutoff = await fetchSchedulingSettingsServer(business.id)
+      if (!hasCutoffPassedToday(now, cutoff)) {
+        results.push({ host_admin_id: business.id, skipped: 'cutoff_not_reached' })
+        continue
+      }
+
+      const existingProposal = await fetchSupabaseRows('schedule_proposals', [
+        ['select', 'id'],
+        ['host_admin_id', `eq.${business.id}`],
+        ['week_start', `eq.${range.start_date}`],
+        ['limit', '1'],
+      ])
+      if (existingProposal.length > 0) {
+        results.push({ host_admin_id: business.id, skipped: 'already_generated' })
+        continue
+      }
+
       const proposal = await buildScheduleProposal(business.id, range)
       const needsReview = proposal.some((row) => !row.already_assigned)
       if (!needsReview) {

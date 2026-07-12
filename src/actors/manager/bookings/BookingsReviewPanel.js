@@ -5,6 +5,7 @@ import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 import AddressFields from '../../../components/AddressFields'
+import TimeInput from '../../../components/TimeInput'
 
 const TIME_FILTERS = [
   { value: 'all', label: 'All' },
@@ -976,7 +977,7 @@ export default function BookingsReviewPanel() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700">Scheduled Time</label>
-                  <input type="time" value={newBookingForm.scheduledTime} onChange={e => setNewBookingForm({ ...newBookingForm, scheduledTime: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+                  <TimeInput className="mt-1" value={newBookingForm.scheduledTime} onChange={value => setNewBookingForm({ ...newBookingForm, scheduledTime: value })} />
                 </div>
               </div>
               <div>

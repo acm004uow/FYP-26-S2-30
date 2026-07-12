@@ -4,11 +4,15 @@ import { UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
 import AttendancePanel from '../attendance/AttendancePanel'
+import ClosuresPanel from '../closures/ClosuresPanel'
+import SchedulingCutoffPanel from '../closures/SchedulingCutoffPanel'
 import BookingsReviewPanel from '../../manager/bookings/BookingsReviewPanel'
 import CategoriesPanel from '../../manager/categories/CategoriesPanel'
 import MarketingPanel from '../marketing/MarketingPanel'
 import AuditLogsPanel from '../audit-logs/AuditLogsPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
+import ReportsPanel from '../reports/ReportsPanel'
+import PayRatesPanel from '../pay-rates/PayRatesPanel'
 import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
 import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 
@@ -76,7 +80,7 @@ export default function AdminPanel() {
       supabase.from('security_logs').select('id,email,event_type,details,created_at').order('created_at', { ascending: false }).limit(20),
       supabase.from('audit_logs').select('id,action,details,created_at,profiles(email)').order('created_at', { ascending: false }).limit(20),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
-      hostAdminId ? supabase.from('staff_profiles').select('id,user_id,manager_id').eq('host_admin_id', hostAdminId) : Promise.resolve({ data: [] }),
+      hostAdminId ? supabase.from('staff_profiles').select('id,user_id,manager_id,basic_salary').eq('host_admin_id', hostAdminId) : Promise.resolve({ data: [] }),
     ])
 
     const profilesById = new Map()
@@ -138,7 +142,7 @@ export default function AdminPanel() {
   }, [])
 
   useEffect(() => {
-    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'security', 'audit', 'parameters']
+    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'security', 'audit', 'parameters', 'closures', 'reports', 'payrates']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
@@ -201,6 +205,22 @@ export default function AdminPanel() {
     if (response.ok) await loadAdminData()
   }
 
+  const handleSetBasicSalary = async (staffProfileId, value) => {
+    const basicSalary = Math.max(0, Number(value) || 0)
+    const { error } = await supabase
+      .from('staff_profiles')
+      .update({ basic_salary: basicSalary, updated_at: new Date().toISOString() })
+      .eq('id', staffProfileId)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+    await supabase.from('audit_logs').insert({ user_id: currentUserId, action: 'update_staff_basic_salary', details: `Staff ${staffProfileId} basic salary set to ${basicSalary}` })
+    setMessage('Basic salary updated.')
+    await loadAdminData()
+  }
+
   const handleToggleStatus = (user) => {
     setStatusChangeUser(user)
   }
@@ -249,8 +269,6 @@ export default function AdminPanel() {
   return (
     <Layout role="admin">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold">Owner Dashboard</h1>
-        <p className="text-gray-500 text-sm mb-6">Manage users, monitor security, and configure system settings.</p>
         {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
 
         <div>
@@ -264,6 +282,7 @@ export default function AdminPanel() {
               onChangeRole={handleRoleChange}
               onToggleStatus={handleToggleStatus}
               onSetManager={handleSetManager}
+              onSetBasicSalary={handleSetBasicSalary}
               currentUserId={currentUserId}
             />
           )}
@@ -274,6 +293,14 @@ export default function AdminPanel() {
           {activeSection === 'security' && <SecurityLogsPanel logs={securityLogs} />}
           {activeSection === 'audit' && <AuditLogsPanel logs={auditLogs} />}
           {activeSection === 'parameters' && <ParametersPanel params={params} setParams={setParams} onSave={saveParameters} />}
+          {activeSection === 'reports' && <ReportsPanel />}
+          {activeSection === 'payrates' && <PayRatesPanel />}
+          {activeSection === 'closures' && (
+            <>
+              <SchedulingCutoffPanel />
+              <ClosuresPanel />
+            </>
+          )}
         </div>
       </div>
 

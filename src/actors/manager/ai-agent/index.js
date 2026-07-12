@@ -1,5 +1,6 @@
 import Layout from '../../../components/Layout'
 import AddressFields from '../../../components/AddressFields'
+import TimeInput from '../../../components/TimeInput'
 import { useEffect, useRef, useState } from 'react'
 import { Bot, Calendar, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Plus, Printer, Send, Sparkles, User, X, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
@@ -865,7 +866,7 @@ export default function ManagerAiAgent() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                  <input type="time" value={editTime} onChange={e => setEditTime(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+                  <TimeInput value={editTime} onChange={setEditTime} />
                 </div>
               </div>
               {editError && <p className="text-sm text-red-500">{editError}</p>}
@@ -969,7 +970,7 @@ export default function ManagerAiAgent() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                  <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm" />
+                  <TimeInput value={scheduleTime} onChange={setScheduleTime} />
                 </div>
               </div>
               {scheduleError && <p className="text-sm text-red-500">{scheduleError}</p>}
