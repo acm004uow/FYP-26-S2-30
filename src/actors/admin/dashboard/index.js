@@ -14,6 +14,7 @@ import ParametersPanel from '../parameters/ParametersPanel'
 import ReportsPanel from '../reports/ReportsPanel'
 import PayRatesPanel from '../pay-rates/PayRatesPanel'
 import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
+import TimeOffRequestsPanel from '../timeoff/TimeOffRequestsPanel'
 import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 
 export default function AdminPanel() {
@@ -142,7 +143,7 @@ export default function AdminPanel() {
   }, [])
 
   useEffect(() => {
-    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'security', 'audit', 'parameters', 'closures', 'reports', 'payrates']
+    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'security', 'audit', 'parameters', 'closures', 'reports', 'payrates', 'timeoff']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
@@ -295,6 +296,7 @@ export default function AdminPanel() {
           {activeSection === 'parameters' && <ParametersPanel params={params} setParams={setParams} onSave={saveParameters} />}
           {activeSection === 'reports' && <ReportsPanel />}
           {activeSection === 'payrates' && <PayRatesPanel />}
+          {activeSection === 'timeoff' && <TimeOffRequestsPanel />}
           {activeSection === 'closures' && (
             <>
               <SchedulingCutoffPanel />

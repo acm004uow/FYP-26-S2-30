@@ -1,4 +1,4 @@
-import { Activity, Calendar, CalendarOff, CheckCircle2, ClipboardList, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, ShieldAlert, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
+import { Activity, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, ShieldAlert, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
@@ -6,6 +6,7 @@ export const navMap = {
     { name: 'User Accounts', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'Availability', path: '/manager-availability', icon: Activity },
+    { name: 'Time Off', path: '/manager-time-off', icon: CalendarOff },
     { name: 'Tracking', path: '/manager-tracking', icon: UserCheck },
     { name: 'Reports', path: '/manager-reports', icon: FileText },
     { name: 'Completed Tasks', path: '/manager-completed-tasks', icon: CheckCircle2 },
@@ -14,6 +15,7 @@ export const navMap = {
   staffMember: [
     { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
     { name: 'Next Week', path: '/staff-next-week', icon: Calendar },
+    { name: 'Time Off', path: '/staff-time-off', icon: CalendarOff },
     { name: 'Attendance', path: '/staff-attendance', icon: UserCheck },
   ],
   customer: [
@@ -32,6 +34,7 @@ export const navMap = {
     { name: 'Scheduling', path: '/admin?section=closures', icon: CalendarOff },
     { name: 'Reports', path: '/admin?section=reports', icon: TrendingUp },
     { name: 'Pay Rates', path: '/admin?section=payrates', icon: DollarSign },
+    { name: 'Time Off', path: '/admin?section=timeoff', icon: CalendarClock },
   ],
   userAdmin: [
     { name: 'Overview', path: '/user-admin', icon: Globe },

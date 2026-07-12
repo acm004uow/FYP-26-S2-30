@@ -204,6 +204,46 @@ create table if not exists availability_requests (
   updated_at timestamptz default now()
 );
 
+-- A staff member's or manager's request for either a standing weekly day off ('weekly_day_off',
+-- one weekday per row -- submit two separate requests for two days off) or a one-off leave period
+-- ('leave', start_date..end_date inclusive, reason required). Requires owner (system_admin)
+-- approval -- see src/actors/admin/timeoff/TimeOffRequestsPanel.js. staff_profile_id is set for
+-- staff_member requesters (needed for the scheduling hard-block below) and left null for manager
+-- requesters, who have no staff_profiles row; requested_by (a profiles.id) always identifies the
+-- actual requester regardless of role. Once approved, a staff_member's request hard-blocks them
+-- from being recommended or manually assigned to any booking scheduled on a covered date -- see
+-- lib/staffTimeOff.js, called from lib/recommendationEngine.js / lib/scheduleProposal.js and the
+-- manual-assign flows in src/actors/manager/bookings/BookingsReviewPanel.js and
+-- src/actors/manager/ai-agent/index.js. Separate concern from the existing single-status
+-- availability_requests / staff_profiles.availability toggle -- do not merge them.
+create table if not exists staff_time_off_requests (
+  id uuid primary key default gen_random_uuid(),
+  staff_profile_id uuid references staff_profiles(id) on delete cascade,
+  host_admin_id uuid references profiles(id) on delete cascade,
+  requested_by uuid references profiles(id) on delete set null,
+  request_type text not null check (request_type in ('weekly_day_off', 'leave')),
+  day_of_week int check (day_of_week is null or (day_of_week between 0 and 6)),
+  start_date date not null,
+  end_date date,
+  reason text,
+  status text not null default 'pending', -- pending | approved | rejected
+  rejection_reason text,
+  reviewed_by uuid references profiles(id) on delete set null,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  constraint weekly_day_off_requires_day check (
+    (request_type = 'weekly_day_off' and day_of_week is not null)
+    or (request_type = 'leave' and day_of_week is null)
+  ),
+  constraint leave_requires_end_date check (
+    (request_type = 'leave' and end_date is not null and end_date >= start_date)
+    or (request_type = 'weekly_day_off')
+  )
+);
+
+create index if not exists idx_staff_time_off_requests_staff_status on staff_time_off_requests(staff_profile_id, status);
+create index if not exists idx_staff_time_off_requests_host_status on staff_time_off_requests(host_admin_id, status);
+
 create table if not exists task_recommendations (
   id uuid primary key default gen_random_uuid(),
   task_id uuid references task_requests(id) on delete cascade,
@@ -372,6 +412,7 @@ alter table recurring_bookings enable row level security;
 alter table business_closures enable row level security;
 alter table scheduling_settings enable row level security;
 alter table service_pay_rates enable row level security;
+alter table staff_time_off_requests enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin
@@ -443,6 +484,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all service pay rates" on service_pay_rates for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all staff time off requests" on staff_time_off_requests for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 -- Security-definer view: exposes only the public-safe columns of published company

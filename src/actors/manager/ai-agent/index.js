@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Bot, Calendar, CheckCircle, ChevronLeft, ChevronRight, Loader2, Lock, MapPin, Plus, Printer, Send, Sparkles, User, X, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking, createManualBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
+import { fetchApprovedTimeOffClient, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
 
 const suggestions = ['Create schedule for one week', 'Build a schedule for the next 3 days', 'Schedule bookings for next week']
 
@@ -90,7 +91,17 @@ export default function ManagerAiAgent() {
   const [newTaskHours, setNewTaskHours] = useState(2)
   const [scheduleSaving, setScheduleSaving] = useState(false)
   const [scheduleError, setScheduleError] = useState('')
+  const [approvedTimeOff, setApprovedTimeOff] = useState([])
   const messagesEndRef = useRef(null)
+
+  const loadApprovedTimeOff = async (hostAdminIdParam) => {
+    if (!hostAdminIdParam) {
+      setApprovedTimeOff([])
+      return
+    }
+    const rows = await fetchApprovedTimeOffClient(supabase, hostAdminIdParam)
+    setApprovedTimeOff(rows)
+  }
 
   useEffect(() => {
     (async () => {
@@ -98,6 +109,7 @@ export default function ManagerAiAgent() {
       if (id) {
         await loadWeeklyGrid(id, weekAnchor)
         await loadUnassignedBookings(id)
+        await loadApprovedTimeOff(id)
       }
       await checkPendingAutoProposal(id)
     })()
@@ -226,6 +238,12 @@ export default function ManagerAiAgent() {
 
     const staff = staffRows.find(item => item.id === schedulingSlot.staffId)
 
+    if (staff && isStaffOffOnDate(staff.id, scheduleDate, approvedTimeOff)) {
+      setScheduleError(`${staff.name} has approved time off on ${scheduleDate} and cannot be assigned.`)
+      setScheduleSaving(false)
+      return
+    }
+
     const result = scheduleMode === 'new'
       ? await createManualBooking({
         hostAdminId,
@@ -326,6 +344,12 @@ export default function ManagerAiAgent() {
     const staff = editStaffId ? staffRows.find(item => item.id === editStaffId) : null
     const previousStaff = staffRows.find(item => item.id === editingBooking.assigned_staff_id) || null
 
+    if (staff && isStaffOffOnDate(staff.id, editDate, approvedTimeOff)) {
+      setEditError(`${staff.name} has approved time off on ${editDate} and cannot be assigned.`)
+      setEditSaving(false)
+      return
+    }
+
     const result = await updateBookingAssignment({
       booking: { id: editingBooking.id, status: editingBooking.status },
       staff,
@@ -401,6 +425,10 @@ export default function ManagerAiAgent() {
     const staff = staffRows.find(item => item.id === row.recommended_staff_id)
     if (!staff) {
       updateRow(row.booking_id, { uiStatus: 'error', errorMessage: 'Recommended staff is no longer available.' })
+      return
+    }
+    if (isStaffOffOnDate(staff.id, row.scheduled_date, approvedTimeOff)) {
+      updateRow(row.booking_id, { uiStatus: 'error', errorMessage: `${staff.name} has approved time off on ${row.scheduled_date}.` })
       return
     }
 
@@ -854,9 +882,12 @@ export default function ManagerAiAgent() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Staff</label>
                 <select value={editStaffId} onChange={e => setEditStaffId(e.target.value)} className="w-full px-4 py-2 border rounded-lg text-sm">
                   <option value="">Unassign</option>
-                  {staffRows.map(staff => (
-                    <option key={staff.id} value={staff.id}>{staff.name}{!staff.canAssign ? ' (unavailable)' : ''}</option>
-                  ))}
+                  {staffRows.map(staff => {
+                    const offOnDate = editDate && isStaffOffOnDate(staff.id, editDate, approvedTimeOff)
+                    return (
+                      <option key={staff.id} value={staff.id}>{staff.name}{offOnDate ? ' (Off that day)' : !staff.canAssign ? ' (unavailable)' : ''}</option>
+                    )
+                  })}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">

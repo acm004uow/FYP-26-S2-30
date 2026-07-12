@@ -3,6 +3,7 @@ import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Cale
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
+import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
 import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
@@ -113,6 +114,7 @@ export default function BookingsReviewPanel() {
   const [recurringActionId, setRecurringActionId] = useState(null)
   const [recurringRejecting, setRecurringRejecting] = useState(null)
   const [recurringRejectReason, setRecurringRejectReason] = useState('')
+  const [approvedTimeOff, setApprovedTimeOff] = useState([])
 
   const loadRecurringBookings = async (hostAdminIdParam) => {
     if (!hostAdminIdParam) {
@@ -126,6 +128,15 @@ export default function BookingsReviewPanel() {
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
     setRecurringBookings(data || [])
+  }
+
+  const loadApprovedTimeOff = async (hostAdminIdParam) => {
+    if (!hostAdminIdParam) {
+      setApprovedTimeOff([])
+      return
+    }
+    const rows = await fetchApprovedTimeOffClient(supabase, hostAdminIdParam)
+    setApprovedTimeOff(rows)
   }
 
   const loadBookings = async () => {
@@ -170,12 +181,14 @@ export default function BookingsReviewPanel() {
       tasks: row.current_workload || 0,
       rating: row.performance_rating || 0,
     })))
+    await loadApprovedTimeOff(hostAdminIdResolved)
     return hostAdminIdResolved
   }
 
   useEffect(() => {
     let bookingsChannel = null
     let recurringChannel = null
+    let timeOffChannel = null
     let cancelled = false
 
     loadBookings().then(resolvedHostAdminId => {
@@ -197,12 +210,21 @@ export default function BookingsReviewPanel() {
           () => { if (!cancelled) loadRecurringBookings(resolvedHostAdminId) }
         )
         .subscribe()
+      timeOffChannel = supabase
+        .channel(`bookings-review-time-off-${resolvedHostAdminId}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'staff_time_off_requests', filter: `host_admin_id=eq.${resolvedHostAdminId}` },
+          () => { if (!cancelled) loadApprovedTimeOff(resolvedHostAdminId) }
+        )
+        .subscribe()
     })
 
     return () => {
       cancelled = true
       if (bookingsChannel) supabase.removeChannel(bookingsChannel)
       if (recurringChannel) supabase.removeChannel(recurringChannel)
+      if (timeOffChannel) supabase.removeChannel(timeOffChannel)
     }
   }, [])
 
@@ -211,6 +233,9 @@ export default function BookingsReviewPanel() {
       setNewBookingRecommendations([])
       return
     }
+    const excludedStaffIds = newBookingForm.scheduledDate
+      ? getExcludedStaffIdsForDate(newBookingForm.scheduledDate, approvedTimeOff)
+      : new Set()
     const recommendations = generateRecommendations(
       recommendationPool,
       {
@@ -219,10 +244,11 @@ export default function BookingsReviewPanel() {
         estimated_hours: newBookingForm.estimatedHours,
         requested_text: `${newBookingForm.description || ''} ${newBookingForm.notes || ''}`,
       },
-      recommendationParams
+      recommendationParams,
+      excludedStaffIds
     )
     setNewBookingRecommendations(recommendations)
-  }, [showNewBooking, newBookingForm.location, newBookingForm.estimatedHours, newBookingForm.description, newBookingForm.notes, recommendationPool, recommendationParams])
+  }, [showNewBooking, newBookingForm.location, newBookingForm.estimatedHours, newBookingForm.description, newBookingForm.notes, newBookingForm.scheduledDate, recommendationPool, recommendationParams, approvedTimeOff])
 
   useEffect(() => {
     if (!newBookingRecommendations.length) return
@@ -369,6 +395,10 @@ export default function BookingsReviewPanel() {
       showNotification(`${staff.name} is not available for assignment.`)
       return
     }
+    if (isStaffOffOnDate(staff.id, booking.scheduled_date, approvedTimeOff)) {
+      showNotification(`${staff.name} has approved time off on ${booking.scheduled_date} and cannot be assigned.`)
+      return
+    }
     if (booking.assigned_staff_id === staff.id) {
       showNotification(`${staff.name} is already assigned to ${booking.service_type}.`)
       return
@@ -439,7 +469,8 @@ export default function BookingsReviewPanel() {
         estimated_hours: booking.estimated_hours,
         requested_text: `${booking.description || ''} ${booking.notes || ''}`,
       },
-      systemParams || {}
+      systemParams || {},
+      getExcludedStaffIdsForDate(booking.scheduled_date, approvedTimeOff)
     )
     const topMatch = recommendations[0]
 
@@ -875,11 +906,15 @@ export default function BookingsReviewPanel() {
                       className="min-w-[180px] flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
                     >
                       <option value="">Choose staff...</option>
-                      {staffRows.map(staff => (
-                        <option key={staff.id} value={staff.id} disabled={!staff.canAssign}>
-                          {staff.name}{staff.canAssign ? '' : ` (${staff.status})`}
-                        </option>
-                      ))}
+                      {staffRows.map(staff => {
+                        const offOnDate = isStaffOffOnDate(staff.id, booking.scheduled_date, approvedTimeOff)
+                        const assignable = staff.canAssign && !offOnDate
+                        return (
+                          <option key={staff.id} value={staff.id} disabled={!assignable}>
+                            {staff.name}{assignable ? '' : offOnDate ? ' (Off that day)' : ` (${staff.status})`}
+                          </option>
+                        )
+                      })}
                     </select>
                     <button
                       type="button"
