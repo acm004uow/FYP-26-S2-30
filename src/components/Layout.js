@@ -65,7 +65,7 @@ export default function Layout({ children, role = 'manager' }) {
           .single(),
         supabase
           .from('notifications')
-          .select('id,message,created_at')
+          .select('id,title,message,created_at')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(10),
@@ -116,6 +116,7 @@ export default function Layout({ children, role = 'manager' }) {
       if (resolvedBusinessName) setBusinessName(resolvedBusinessName)
       setNotifications((notificationRows || []).map(item => ({
         id: item.id,
+        title: item.title,
         message: item.message,
         time: new Date(item.created_at).toLocaleString(),
       })))
@@ -129,6 +130,7 @@ export default function Layout({ children, role = 'manager' }) {
             const row = payload.new
             setNotifications(prev => [{
               id: row.id,
+              title: row.title,
               message: row.message,
               time: new Date(row.created_at).toLocaleString(),
             }, ...prev].slice(0, 10))
@@ -249,7 +251,10 @@ export default function Layout({ children, role = 'manager' }) {
                       ) : (
                         notifications.map(notif => (
                           <div key={notif.id} className="p-3 border-b border-gray-50 hover:bg-gray-50">
-                            <p className="text-sm text-gray-800">{notif.message}</p>
+                            {notif.title && (
+                              <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
+                            )}
+                            <p className="text-sm text-gray-600">{notif.message}</p>
                             <p className="text-xs text-gray-400 mt-1">{notif.time}</p>
                           </div>
                         ))

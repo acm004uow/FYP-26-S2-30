@@ -1,18 +1,22 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
-import { Search, Plus, X, AlertCircle, Eye, Edit, User, Mail, Shield, Clock, Key, Users } from 'lucide-react'
+import { UserPlus, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import UserAccountsPanel from '../../admin/users/UserAccountsPanel'
+
+const MANAGER_ROLE_OPTIONS = [
+  { value: 'manager', label: 'Manager', permissions: 'Approve requests, assign tasks, manage staff profiles, and view reports.' },
+  { value: 'staff_member', label: 'Staff Member', permissions: 'View assigned tasks, update availability, and submit task proof.' },
+]
 
 export default function ManagerUserAccounts() {
   const [users, setUsers] = useState([])
-  const [search, setSearch] = useState('')
-  const [modal, setModal] = useState({ open: false, editing: null, viewing: null })
-  const [suspendTarget, setSuspendTarget] = useState(null)
   const [message, setMessage] = useState('')
-
-  const toUiRole = (role) => role === 'staff_member' ? 'staffMember' : role
-  const toDbRole = (role) => role === 'staffMember' ? 'staff_member' : role
-  const permissionsFor = (role) => role === 'manager' ? 'Full Access' : 'View Tasks, Update Availability'
+  const [currentUserId, setCurrentUserId] = useState('')
+  const [currentBusinessName, setCurrentBusinessName] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const [createForm, setCreateForm] = useState({ full_name: '', email: '', role: 'staff_member' })
+  const [statusChangeUser, setStatusChangeUser] = useState(null)
 
   const loadUsers = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -60,248 +64,152 @@ export default function ManagerUserAccounts() {
       .filter(profile => profile.role !== 'system_admin')
       .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''))
 
-    setUsers(profiles.map(profile => ({
-      id: profile.id,
-      username: profile.full_name,
-      email: profile.email,
-      role: toUiRole(profile.role),
-      status: profile.status === 'active' ? 'Active' : 'Suspended',
-      linkedStaff: profile.full_name,
-      lastLogin: profile.updated_at ? new Date(profile.updated_at).toLocaleString() : 'Never',
-      permissions: permissionsFor(toUiRole(profile.role)),
-    })))
+    setCurrentUserId(user?.id || '')
+    setCurrentBusinessName(businessName)
+    setUsers(profiles)
   }
 
   useEffect(() => {
     loadUsers()
   }, [])
 
-  const handleCreate = () => {
-    setModal({ open: true, editing: { id: null, username: '', email: '', role: 'staffMember', status: 'Active' }, viewing: null })
-  }
-
-  const handleEdit = (user) => {
-    setModal({ open: true, editing: { ...user }, viewing: null })
-  }
-
-  const handleView = (user) => {
-    setModal({ open: true, editing: null, viewing: user })
-  }
-
-  const handleSave = async (data) => {
-    if (data.id) {
-      const { error } = await supabase.from('profiles').update({
-        full_name: data.username,
-        email: data.email,
-        role: toDbRole(data.role),
-        status: data.status === 'Active' ? 'active' : 'inactive',
-        updated_at: new Date().toISOString(),
-      }).eq('id', data.id)
-      setMessage(error ? error.message : 'User account updated.')
-    } else {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) {
-        setMessage('Your session has expired. Please log in again.')
-        return
-      }
-      const response = await fetch('/api/admin/create-user', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ full_name: data.username, email: data.email, role: toDbRole(data.role) }),
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        setMessage(result.error || 'Invitation could not be sent.')
-        return
-      }
-      setMessage('Invitation sent. The user can set their own password from the email link.')
+  const handleChangeRole = async (id, role) => {
+    const { error } = await supabase.from('profiles').update({ role, updated_at: new Date().toISOString() }).eq('id', id)
+    setMessage(error ? error.message : 'User role updated.')
+    if (!error) {
+      await supabase.from('audit_logs').insert({ user_id: id, action: 'update_user_role', details: `Role changed to ${role}` })
+      await loadUsers()
     }
-    await supabase.from('audit_logs').insert({ action: data.id ? 'update_user_account' : 'invite_user_account', details: data.email })
-    await loadUsers()
-    setModal({ open: false, editing: null, viewing: null })
   }
 
-  const handleToggleSuspend = async (id) => {
-    const current = users.find(u => u.id === id)
-    const nextStatus = current?.status === 'Active' ? 'inactive' : 'active'
-    await supabase.from('profiles').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', id)
-    await supabase.from('audit_logs').insert({ user_id: id, action: 'update_user_status', details: `Status changed to ${nextStatus}` })
-    await loadUsers()
-    setSuspendTarget(null)
+  const handleToggleStatus = (user) => {
+    setStatusChangeUser(user)
   }
 
-  const filtered = users.filter(u => u.username.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase()) || u.role.toLowerCase().includes(search.toLowerCase()))
+  const confirmStatusChange = async () => {
+    if (!statusChangeUser) return
+    const nextStatus = statusChangeUser.status === 'active' ? 'inactive' : 'active'
+    const { error } = await supabase.from('profiles').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('id', statusChangeUser.id)
+    setMessage(error ? error.message : `User account ${nextStatus === 'active' ? 'reactivated' : 'deactivated'}.`)
+    if (!error) {
+      await supabase.from('audit_logs').insert({ user_id: statusChangeUser.id, action: 'update_user_status', details: `Status changed to ${nextStatus}` })
+      await loadUsers()
+    }
+    setStatusChangeUser(null)
+  }
 
-  const roleIcon = { manager: <Shield className="w-4 h-4" />, staffMember: <User className="w-4 h-4" /> }
+  const handleCreate = async (event) => {
+    event.preventDefault()
+    const { full_name, email, role } = createForm
+    if (!full_name || !email || !role) {
+      setMessage('Please fill in name, email, and role.')
+      return
+    }
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      setMessage('Your session has expired. Please log in again.')
+      return
+    }
+
+    const response = await fetch('/api/admin/create-user', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ full_name, email, role, business_name: currentBusinessName || undefined }),
+    })
+    const result = await response.json()
+    if (!response.ok) {
+      setMessage(result.error || 'Invitation could not be sent.')
+      return
+    }
+
+    setMessage('Invitation sent. The user can set their own password from the email link.')
+    await loadUsers()
+    setCreateForm({ full_name: '', email: '', role: 'staff_member' })
+    setShowCreate(false)
+  }
 
   return (
     <Layout role="manager">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">User Accounts</h1>
-            <p className="text-gray-500 text-sm mt-1">Manage system access and permissions</p>
-          </div>
-          <button onClick={handleCreate} className="bg-gradient-to-r from-blue-500 to-green-500 text-white px-5 py-2.5 rounded-lg flex items-center gap-2 text-sm font-medium shadow-md hover:shadow-lg transition">
-            <Plus className="w-5 h-5" /> Invite User
-          </button>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">User Accounts</h1>
+          <p className="text-gray-500 text-sm mt-1">Manage system access and permissions</p>
         </div>
         {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
 
-        {/* Search Bar */}
-        <div className="relative mb-8">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            placeholder="Search by username, email, or role..." 
-            className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" 
-          />
-        </div>
-
-        {/* User Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map(u => (
-            <div 
-              key={u.id} 
-              className="bg-white rounded-xl shadow-md border border-gray-100 overflow-hidden hover:shadow-lg transition cursor-pointer"
-              onClick={() => handleView(u)}
-            >
-              {/* Card Header */}
-              <div className="p-5 pb-3 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-gradient-to-br from-blue-400 to-green-400 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm">
-                      {u.username.slice(0,2).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800 text-lg">{u.username}</h3>
-                      <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
-                        {roleIcon[u.role]} {u.role === 'staffMember' ? 'Staff Member' : 'Manager'}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`text-sm px-3 py-1 rounded-full font-medium ${u.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {u.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Card Body */}
-              <div className="p-5 space-y-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Mail className="w-4 h-4" /> {u.email}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <User className="w-4 h-4" /> Linked: {u.linkedStaff}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock className="w-4 h-4" /> Last login: {u.lastLogin}
-                </div>
-                <div className="mt-2 pt-2 border-t border-gray-100">
-                  <p className="text-xs text-gray-400 flex items-center gap-1"><Key className="w-3 h-3" /> Permissions</p>
-                  <p className="text-sm text-gray-700 mt-1">{u.permissions}</p>
-                </div>
-              </div>
-
-              {/* Card Footer - Action Buttons */}
-              <div className="p-4 pt-3 border-t border-gray-100 flex gap-3">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleView(u) }} 
-                  className="flex-1 bg-blue-50 text-blue-600 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-blue-100 transition"
-                >
-                  <Eye className="w-4 h-4" /> View
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleEdit(u) }} 
-                  className="flex-1 bg-green-50 text-green-600 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-green-100 transition"
-                >
-                  <Edit className="w-4 h-4" /> Edit
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); setSuspendTarget(u) }} 
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition ${u.status === 'Active' ? 'bg-orange-50 text-orange-600 hover:bg-orange-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
-                >
-                  {u.status === 'Active' ? 'Suspend' : 'Activate'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
-          <div className="text-center py-16 text-gray-400">
-            <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>No user accounts found matching your search.</p>
-          </div>
-        )}
+        <UserAccountsPanel
+          users={users}
+          onAddUser={() => setShowCreate(true)}
+          onResetUser={() => {}}
+          onChangeRole={handleChangeRole}
+          onToggleStatus={handleToggleStatus}
+          onSetManager={() => {}}
+          onSetBasicSalary={() => {}}
+          currentUserId={currentUserId}
+          roleOptions={MANAGER_ROLE_OPTIONS}
+          canResetPassword={false}
+        />
       </div>
 
-      {/* Modal for Create/Edit/View */}
-      {modal.open && (
+      {statusChangeUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-semibold">
-                {modal.viewing ? 'User Account Details' : (modal.editing?.id ? 'Edit User' : 'Invite User Account')}
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex justify-between gap-4">
+              <h3 className="text-lg font-semibold">
+                {statusChangeUser.status === 'active' ? 'Deactivate User Account' : 'Reactivate User Account'}
               </h3>
-              <button onClick={() => setModal({ open: false, editing: null, viewing: null })} className="p-1 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
+              <button type="button" onClick={() => setStatusChangeUser(null)} aria-label="Close"><X /></button>
             </div>
-            {message && !modal.viewing && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
-
-            {modal.viewing ? (
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-3">
-                  <p><strong>Username:</strong> {modal.viewing.username}</p>
-                  <p><strong>Email:</strong> {modal.viewing.email}</p>
-                  <p><strong>Role:</strong> {modal.viewing.role}</p>
-                  <p><strong>Status:</strong> <span className={`px-2 py-0.5 rounded-full text-xs ${modal.viewing.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{modal.viewing.status}</span></p>
-                  <p><strong>Linked Staff:</strong> {modal.viewing.linkedStaff}</p>
-                  <p><strong>Last Login:</strong> {modal.viewing.lastLogin}</p>
-                  <p className="col-span-2"><strong>Permissions:</strong><br />{modal.viewing.permissions}</p>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.target); handleSave({ id: modal.editing?.id, username: fd.get('username'), email: fd.get('email'), role: fd.get('role'), status: modal.editing?.status || 'Active' }); }}>
-                <input name="username" defaultValue={modal.editing?.username} placeholder="Full Name" className="w-full border rounded-lg p-3 my-2 text-sm" required />
-                <input name="email" defaultValue={modal.editing?.email} placeholder="Email" className="w-full border rounded-lg p-3 my-2 text-sm" required />
-                <select name="role" defaultValue={modal.editing?.role || 'staffMember'} className="w-full border rounded-lg p-3 my-2 text-sm">
-                  <option value="staffMember">Staff Member</option>
-                  <option value="manager">Manager</option>
-                </select>
-                <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-3 rounded-lg font-medium mt-2">{modal.editing?.id ? 'Update Account' : 'Send Invite'}</button>
-              </form>
-            )}
+            <p className="mt-4 text-sm text-gray-600">
+              {statusChangeUser.status === 'active'
+                ? `${statusChangeUser.full_name} will be signed out on their next protected page load and blocked from future logins.`
+                : `${statusChangeUser.full_name} will be allowed to access the system again with their existing role.`}
+            </p>
+            <div className="mt-4 rounded-lg bg-gray-50 p-3 text-sm">
+              <p className="font-medium text-gray-800">{statusChangeUser.email}</p>
+              <p className="text-xs text-gray-500">Current status: {statusChangeUser.status}</p>
+            </div>
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                onClick={confirmStatusChange}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium text-white ${statusChangeUser.status === 'active' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'}`}
+              >
+                {statusChangeUser.status === 'active' ? 'Deactivate Account' : 'Reactivate Account'}
+              </button>
+              <button type="button" onClick={() => setStatusChangeUser(null)} className="flex-1 rounded-lg bg-gray-200 py-2 text-sm font-medium text-gray-700">Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Suspend/Activate confirmation modal */}
-      {suspendTarget && (
+      {showCreate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-sm w-full p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <AlertCircle className="w-6 h-6 text-orange-500" />
-              <h3 className="text-lg font-semibold">Confirm {suspendTarget.status === 'Active' ? 'Suspend' : 'Activate'}</h3>
+          <form onSubmit={handleCreate} className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex justify-between"><h3 className="text-lg font-semibold">Invite User Account</h3><button type="button" onClick={() => setShowCreate(false)}><X /></button></div>
+            {message && <div className="mt-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+            <div className="space-y-3 mt-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Role</label>
+                <select value={createForm.role} onChange={e => setCreateForm({ ...createForm, role: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
+                  {MANAGER_ROLE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Full Name</label>
+                <input value={createForm.full_name} onChange={e => setCreateForm({ ...createForm, full_name: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Enter full name" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Email</label>
+                <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="name@example.com" />
+              </div>
+              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Send Invite</button>
             </div>
-            <p className="text-gray-600 mb-6">
-              {suspendTarget.status === 'Active' 
-                ? `Are you sure you want to suspend ${suspendTarget.username}? They will not be able to log in.` 
-                : `Are you sure you want to activate ${suspendTarget.username}? They will regain access.`}
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => handleToggleSuspend(suspendTarget.id)} className={`flex-1 py-2.5 rounded-lg font-medium text-white ${suspendTarget.status === 'Active' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-500 hover:bg-green-600'}`}>
-                {suspendTarget.status === 'Active' ? 'Suspend' : 'Activate'}
-              </button>
-              <button onClick={() => setSuspendTarget(null)} className="flex-1 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
-                Cancel
-              </button>
-            </div>
-          </div>
+          </form>
         </div>
       )}
     </Layout>

@@ -26,7 +26,7 @@ const roleLabel = (role) => ({
   system_admin: 'Owner',
 }[role] || role)
 
-const permissionsFor = (role) => roleOptions.find(option => option.value === role)?.permissions || 'Custom access level.'
+const permissionsFor = (role, options = roleOptions) => options.find(option => option.value === role)?.permissions || 'Custom access level.'
 
 const ROLE_ORDER = ['system_admin', 'manager', 'staff_member']
 
@@ -46,7 +46,7 @@ const groupUsersByRole = (users) => {
   return groups
 }
 
-function UserManageModal({ user, staffProfile, managers, currentUserId, onClose, onChangeRole, onToggleStatus, onResetUser, onSetManager, isEditingSalary, onEnableSalaryEdit, onSalaryBlur, onSalaryKeyDown }) {
+function UserManageModal({ user, staffProfile, managers, currentUserId, onClose, onChangeRole, onToggleStatus, onResetUser, onSetManager, isEditingSalary, onEnableSalaryEdit, onSalaryBlur, onSalaryKeyDown, roleOptions: availableRoleOptions, canResetPassword }) {
   const meta = ROLE_META[ROLE_ORDER.includes(user.role) ? user.role : 'other']
 
   useEffect(() => {
@@ -90,9 +90,9 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
             className={`w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 ${meta.select}`}
             aria-label={`Change role for ${user.full_name}`}
           >
-            {roleOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+            {availableRoleOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
-          <p className="mt-2 text-xs leading-relaxed text-gray-500">{user.status === 'active' ? permissionsFor(user.role) : 'Access disabled. This user cannot sign in to the system.'}</p>
+          <p className="mt-2 text-xs leading-relaxed text-gray-500">{user.status === 'active' ? permissionsFor(user.role, availableRoleOptions) : 'Access disabled. This user cannot sign in to the system.'}</p>
         </div>
 
         {user.role === 'staff_member' && staffProfile && (
@@ -143,9 +143,11 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
         )}
 
         <div className="mt-6 flex items-center gap-3">
-          <button onClick={() => onResetUser(user)} className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-green-200 bg-white px-4 py-2 text-xs font-medium text-green-700 hover:bg-green-50">
-            <KeyRound className="h-3.5 w-3.5" /> Reset
-          </button>
+          {canResetPassword && (
+            <button onClick={() => onResetUser(user)} className="inline-flex flex-1 items-center justify-center gap-1 rounded-full border border-green-200 bg-white px-4 py-2 text-xs font-medium text-green-700 hover:bg-green-50">
+              <KeyRound className="h-3.5 w-3.5" /> Reset
+            </button>
+          )}
           <button
             onClick={() => onToggleStatus(user)}
             disabled={user.id === currentUserId}
@@ -160,7 +162,7 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
   )
 }
 
-export default function UserAccountsPanel({ users, staffProfiles = [], managers = [], onAddUser, onResetUser, onChangeRole, onToggleStatus, onSetManager, onSetBasicSalary, currentUserId }) {
+export default function UserAccountsPanel({ users, staffProfiles = [], managers = [], onAddUser, onResetUser, onChangeRole, onToggleStatus, onSetManager, onSetBasicSalary, currentUserId, roleOptions: availableRoleOptions = roleOptions, canResetPassword = true }) {
   const [editingSalary, setEditingSalary] = useState({})
   const [managingUserId, setManagingUserId] = useState(null)
   const salaryRefs = useRef({})
@@ -254,6 +256,8 @@ export default function UserAccountsPanel({ users, staffProfiles = [], managers 
           onEnableSalaryEdit={() => enableSalaryEdit(managingUser.id)}
           onSalaryBlur={handleSalaryBlur}
           onSalaryKeyDown={event => handleSalaryKeyDown(event, managingUser.id)}
+          roleOptions={availableRoleOptions}
+          canResetPassword={canResetPassword}
         />
       )}
     </div>

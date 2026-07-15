@@ -48,8 +48,6 @@ export default function StaffMemberDashboard() {
   const [proofError, setProofError] = useState('')
   const [notification, setNotification] = useState(null)
   const [uploadingProof, setUploadingProof] = useState(false)
-  const [pendingAvailability, setPendingAvailability] = useState(null)
-  const [pendingAvailabilityReason, setPendingAvailabilityReason] = useState('')
   const [dismissedOverdueAlert, setDismissedOverdueAlert] = useState(false)
   const [checkingInTaskId, setCheckingInTaskId] = useState(null)
 
@@ -327,74 +325,6 @@ export default function StaffMemberDashboard() {
     setTimeout(() => setNotification(null), 2000)
   }
 
-  const requestAvailabilityChange = (next) => {
-    if (next === availability) return
-    setPendingAvailability(next)
-    setPendingAvailabilityReason('')
-  }
-
-  const sendAvailabilityUpdateRequest = async (next, reason) => {
-    if (!profile) return
-
-    const { data: { user } } = await supabase.auth.getUser()
-
-    const { data: managers } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('role', 'manager')
-      .eq('status', 'active')
-
-    const nextLabel = availabilityLabels[next]?.toLowerCase() || next
-    const currentLabel = availabilityLabels[availability]?.toLowerCase() || availability
-
-    const requestData = {
-      staff_profile_id: profile.id,
-      requested_by: user?.id,
-      current_availability: availability,
-      requested_availability: next,
-      comment: reason || null,
-      status: 'pending',
-    }
-
-    const { error: requestError } = await supabase.from('availability_requests').insert(requestData)
-
-    if (requestError) {
-      console.error('Availability request failed:', requestError)
-      setNotification('Could not submit availability request. Please try again or contact your manager.')
-      setTimeout(() => setNotification(null), 4000)
-      return
-    }
-
-    const notifications = (managers || []).map((manager) => ({
-      user_id: manager.id,
-      title: 'Availability update request',
-      message: `${profile.staff_name || 'A staff member'} requested to change availability from ${currentLabel} to ${nextLabel}.`,
-    }))
-
-    if (notifications.length) {
-      await supabase.from('notifications').insert(notifications)
-    }
-
-    await supabase.from('audit_logs').insert({
-      action: 'request_update_availability',
-      details: `${profile.staff_name || profile.id} requested ${currentLabel} -> ${nextLabel}`,
-    })
-
-    setNotification(`Request sent to manager to change availability to ${availabilityLabels[next] || next}.`)
-    setTimeout(() => setNotification(null), 2000)
-  }
-
-  const confirmAvailabilityChange = async () => {
-    if (!pendingAvailability || !pendingAvailabilityReason.trim()) return
-
-    const next = pendingAvailability
-    const reason = pendingAvailabilityReason.trim()
-    setPendingAvailability(null)
-    setPendingAvailabilityReason('')
-
-    await sendAvailabilityUpdateRequest(next, reason)
-  }
-
   const avgRating = completedTasks.length
     ? (completedTasks.reduce((sum, task) => sum + Number(task.rating || 0), 0) / completedTasks.length).toFixed(1)
     : Number(profile?.performance_rating || 0).toFixed(1)
@@ -613,7 +543,7 @@ export default function StaffMemberDashboard() {
 
               <select
                 value={availability}
-                onChange={event => requestAvailabilityChange(event.target.value)}
+                onChange={event => updateAvailability(event.target.value)}
                 className="rounded-full border border-white/20 bg-white/20 px-3 py-1.5 text-xs text-white outline-none transition hover:bg-white/30"
               >
                 {availabilityOptions.map(option => (
@@ -1047,63 +977,6 @@ export default function StaffMemberDashboard() {
         </div>
       )}
 
-      {pendingAvailability && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  Change Availability?
-                </h3>
-                <p className="mt-2 text-sm text-gray-600">
-                  Change your status from {availabilityLabels[availability]} to {availabilityLabels[pendingAvailability]}?
-                </p>
-              </div>
-
-              <button
-                onClick={() => setPendingAvailability(null)}
-                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                aria-label="Close confirmation"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-gray-700">Reason for request</label>
-                <textarea
-                  value={pendingAvailabilityReason}
-                  onChange={(event) => setPendingAvailabilityReason(event.target.value)}
-                  rows={4}
-                  placeholder="Explain why you need this availability change."
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={confirmAvailabilityChange}
-                disabled={!pendingAvailabilityReason.trim()}
-                className="flex-1 rounded-lg bg-blue-500 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-blue-300"
-              >
-                Submit Request
-              </button>
-
-              <button
-                onClick={() => {
-                  setPendingAvailability(null)
-                  setPendingAvailabilityReason('')
-                }}
-                className="flex-1 rounded-lg bg-gray-100 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </Layout>
   )
 }
