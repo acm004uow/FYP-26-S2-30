@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X, Repeat } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, ChevronRight } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
@@ -20,7 +21,35 @@ const SOURCE_FILTERS = [
   { value: 'all', label: 'All Sources' },
   { value: 'manager', label: 'Manager Created' },
   { value: 'customer', label: 'Customer Booked' },
+  { value: 'ai', label: 'AI Recommended' },
 ]
+
+const SERVICE_ICONS = {
+  'Home Cleaning': Home,
+  'Office Cleaning': Building2,
+  'Deep Cleaning': Droplets,
+  'Move-Out Cleaning': Truck,
+  'Carpet Cleaning': Layers,
+}
+
+const serviceIcon = (type) => SERVICE_ICONS[type] || Home
+
+// Deterministic per-name color so the same staff member always gets the same avatar color.
+const AVATAR_PALETTE = [
+  'bg-purple-500 text-white',
+  'bg-green-500 text-white',
+  'bg-teal-500 text-white',
+  'bg-orange-500 text-white',
+  'bg-indigo-500 text-white',
+  'bg-pink-500 text-white',
+  'bg-blue-500 text-white',
+]
+
+function avatarColor(name) {
+  let hash = 0
+  for (let i = 0; i < (name || '').length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length]
+}
 
 const emptyNewBooking = {
   customerEmail: '', guestName: '', serviceType: SERVICE_TYPES[0], location: '',
@@ -36,8 +65,18 @@ const statusColor = {
 const staffStatusColor = {
   Available: 'bg-green-100 text-green-700',
   Busy: 'bg-blue-100 text-blue-700',
+  'Time Off': 'bg-amber-100 text-amber-700',
   'On Leave': 'bg-gray-100 text-gray-600',
 }
+
+const STAFF_STATUS_FILTERS = ['All', 'Available', 'Busy', 'Time Off', 'On Leave']
+
+const BOOKING_STATUS_FILTERS = [
+  { value: 'all', label: 'Any status' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'rejected', label: 'Rejected' },
+]
 
 const dateToneColor = {
   overdue: 'bg-red-50 text-red-700',
@@ -115,6 +154,13 @@ export default function BookingsReviewPanel() {
   const [recurringRejecting, setRecurringRejecting] = useState(null)
   const [recurringRejectReason, setRecurringRejectReason] = useState('')
   const [approvedTimeOff, setApprovedTimeOff] = useState([])
+  const [staffSearch, setStaffSearch] = useState('')
+  const [staffStatusFilter, setStaffStatusFilter] = useState('All')
+  const [staffFiltersOpen, setStaffFiltersOpen] = useState(false)
+  const [bookingSearch, setBookingSearch] = useState('')
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('all')
+  const [bookingServiceTypeFilter, setBookingServiceTypeFilter] = useState('all')
+  const [bookingFiltersOpen, setBookingFiltersOpen] = useState(false)
 
   const loadRecurringBookings = async (hostAdminIdParam) => {
     if (!hostAdminIdParam) {
@@ -176,7 +222,9 @@ export default function BookingsReviewPanel() {
       userId: row.user_id,
       name: row.staff_name,
       role: row.skills?.[0] || 'Staff Member',
-      status: row.is_suspended ? 'On Leave' : row.availability === 'available' ? 'Available' : 'Busy',
+      status: row.is_suspended
+        ? 'On Leave'
+        : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
       canAssign: !row.is_suspended && row.status === 'active' && row.availability === 'available',
       tasks: row.current_workload || 0,
       rating: row.performance_rating || 0,
@@ -663,23 +711,67 @@ export default function BookingsReviewPanel() {
 
   const statusLabel = (status) => status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())
 
-  const visibleBookings = bookings.filter(booking => {
-    if (sourceFilter !== 'all' && (booking.source || 'customer') !== sourceFilter) return false
-    if (timeFilter === 'all') return true
-    if (timeFilter === 'pending') return booking.status === 'pending'
+  const isAiRecommended = (booking) => booking.status === 'pending' && !!booking.assigned_staff_id
+
+  const matchesSourceFilter = (booking, filter) => {
+    if (filter === 'all') return true
+    if (filter === 'ai') return isAiRecommended(booking)
+    return (booking.source || 'customer') === filter
+  }
+
+  const matchesTimeFilter = (booking, filter) => {
+    if (filter === 'all') return true
+    if (filter === 'pending') return booking.status === 'pending'
     const tone = getScheduleBadge(booking).tone
-    if (timeFilter === 'today') return tone === 'today'
-    if (timeFilter === 'upcoming') return tone === 'upcoming' || tone === 'tomorrow'
-    if (timeFilter === 'overdue') return tone === 'overdue'
+    if (filter === 'today') return tone === 'today'
+    if (filter === 'upcoming') return tone === 'upcoming' || tone === 'tomorrow'
+    if (filter === 'overdue') return tone === 'overdue'
+    return true
+  }
+
+  const matchesBookingSearch = (booking, term) => {
+    if (!term.trim()) return true
+    const haystack = [
+      booking.service_type,
+      booking.location,
+      booking.description,
+      booking.guest_name,
+      booking.customer?.full_name,
+      booking.customer?.email,
+      booking.staff_profiles?.staff_name,
+    ].filter(Boolean).join(' ').toLowerCase()
+    return haystack.includes(term.trim().toLowerCase())
+  }
+
+  const visibleBookings = bookings.filter(booking =>
+    matchesSourceFilter(booking, sourceFilter)
+    && matchesTimeFilter(booking, timeFilter)
+    && (bookingStatusFilter === 'all' || booking.status === bookingStatusFilter)
+    && (bookingServiceTypeFilter === 'all' || booking.service_type === bookingServiceTypeFilter)
+    && matchesBookingSearch(booking, bookingSearch)
+  )
+  const bookingServiceTypes = Array.from(new Set(bookings.map(b => b.service_type).filter(Boolean))).sort()
+  const timeFilterCounts = Object.fromEntries(TIME_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesTimeFilter(b, tab.value)).length]))
+  const sourceFilterCounts = Object.fromEntries(SOURCE_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesSourceFilter(b, tab.value)).length]))
+
+  const visibleStaffRows = staffRows.filter(staff => {
+    if (staffSearch.trim() && !staff.name.toLowerCase().includes(staffSearch.trim().toLowerCase())) return false
+    if (staffStatusFilter !== 'All' && staff.status !== staffStatusFilter) return false
     return true
   })
+  const availableStaffCount = staffRows.filter(staff => staff.status === 'Available').length
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Bookings for Review</h1>
-          <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Bookings for Review</h1>
+            <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
+          </div>
         </div>
         <button
           type="button"
@@ -700,14 +792,71 @@ export default function BookingsReviewPanel() {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={bookingSearch}
+            onChange={e => setBookingSearch(e.target.value)}
+            placeholder="Search bookings by service, location, or customer..."
+            className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+        </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setBookingFiltersOpen(open => !open)}
+            className="flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <Filter className="w-4 h-4" /> Filter <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          </button>
+          {bookingFiltersOpen && (
+            <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
+              <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
+              {BOOKING_STATUS_FILTERS.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => { setBookingStatusFilter(option.value); setBookingFiltersOpen(false) }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingStatusFilter === option.value ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+              <p className="border-t px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Service Type</p>
+              <button
+                type="button"
+                onClick={() => { setBookingServiceTypeFilter('all'); setBookingFiltersOpen(false) }}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingServiceTypeFilter === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+              >
+                Any service type
+              </button>
+              {bookingServiceTypes.map(type => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => { setBookingServiceTypeFilter(type); setBookingFiltersOpen(false) }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingServiceTypeFilter === type ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         {TIME_FILTERS.map(tab => (
           <button
             key={tab.value}
             type="button"
             onClick={() => setTimeFilter(tab.value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${timeFilter === tab.value ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${timeFilter === tab.value ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {tab.label}
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${timeFilter === tab.value ? 'bg-white/20' : 'bg-white text-gray-500'}`}>
+              {timeFilterCounts[tab.value]}
+            </span>
           </button>
         ))}
       </div>
@@ -717,9 +866,12 @@ export default function BookingsReviewPanel() {
             key={tab.value}
             type="button"
             onClick={() => setSourceFilter(tab.value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${sourceFilter === tab.value ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${sourceFilter === tab.value ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           >
             {tab.label}
+            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${sourceFilter === tab.value ? 'bg-white/20' : 'bg-white text-gray-500'}`}>
+              {sourceFilterCounts[tab.value]}
+            </span>
           </button>
         ))}
       </div>
@@ -806,6 +958,7 @@ export default function BookingsReviewPanel() {
         <div className="space-y-4">
           {visibleBookings.map(booking => {
             const scheduleBadge = getScheduleBadge(booking)
+            const ServiceIcon = serviceIcon(booking.service_type)
             return (
             <div
               key={booking.id}
@@ -815,7 +968,11 @@ export default function BookingsReviewPanel() {
               className={`bg-white rounded-xl shadow-sm border p-5 transition ${booking.status !== 'rejected' ? 'hover:bg-blue-50' : ''} ${dropTargetId === booking.id ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''}`}
             >
               <div className="flex justify-between items-start gap-4">
-                <div className="min-w-0">
+                <div className="flex min-w-0 gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-500">
+                    <ServiceIcon className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
                   <h3 className="font-semibold text-gray-900">{booking.service_type}</h3>
                   <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{booking.location}</p>
                   <p className="text-xs text-gray-400 mt-2">
@@ -824,7 +981,7 @@ export default function BookingsReviewPanel() {
                       : `Requested by ${booking.customer?.full_name || booking.customer?.email || 'Customer'}`} on {new Date(booking.created_at).toLocaleDateString()}
                   </p>
                   {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
-                    <div className="mt-2 flex items-start justify-between gap-2">
+                    <div className="mt-2 flex items-start justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2">
                       <p className="text-sm text-indigo-700 flex items-start gap-1">
                         <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
                         <span>
@@ -837,7 +994,7 @@ export default function BookingsReviewPanel() {
                         onClick={() => handleRerunMatch(booking)}
                         disabled={rerunningId === booking.id}
                         title="Re-run AI match using the latest notes and staff availability"
-                        className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+                        className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-indigo-400 hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-50"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${rerunningId === booking.id ? 'animate-spin' : ''}`} /> Re-run match
                       </button>
@@ -851,6 +1008,7 @@ export default function BookingsReviewPanel() {
                   {booking.notes && (
                     <p className="text-sm text-gray-600 mt-1"><span className="font-medium text-gray-700">Notes:</span> {booking.notes}</p>
                   )}
+                  </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${booking.source === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-blue-50 text-blue-600'}`}>
@@ -939,11 +1097,48 @@ export default function BookingsReviewPanel() {
 
         <div className="bg-white rounded-xl shadow-sm border h-fit overflow-hidden">
           <div className="p-5 border-b">
-            <h2 className="font-semibold text-gray-900">Available Staff</h2>
+            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+              Available Staff
+              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">{availableStaffCount}</span>
+            </h2>
             <p className="text-sm text-gray-500 mt-1">Drag a staff member onto a booking.</p>
+            <div className="mt-3 flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  value={staffSearch}
+                  onChange={e => setStaffSearch(e.target.value)}
+                  placeholder="Search staff..."
+                  className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setStaffFiltersOpen(open => !open)}
+                  className="flex items-center gap-1 px-3 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Filter className="w-4 h-4" /> <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+                {staffFiltersOpen && (
+                  <div className="absolute right-0 mt-1 w-36 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
+                    {STAFF_STATUS_FILTERS.map(option => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => { setStaffStatusFilter(option); setStaffFiltersOpen(false) }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${staffStatusFilter === option ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
           <div className="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
-            {staffRows.map(staff => (
+            {visibleStaffRows.map(staff => (
               <div
                 key={staff.id}
                 draggable={staff.canAssign}
@@ -956,7 +1151,7 @@ export default function BookingsReviewPanel() {
                 title={staff.canAssign ? 'Drag this staff member onto a booking' : 'Only available active staff can be assigned'}
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-green-400 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 ${avatarColor(staff.name)}`}>
                     {staff.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -971,8 +1166,15 @@ export default function BookingsReviewPanel() {
                 </div>
               </div>
             ))}
-            {staffRows.length === 0 && <div className="p-8 text-center text-gray-400">No active staff found.</div>}
+            {visibleStaffRows.length === 0 && (
+              <div className="p-8 text-center text-gray-400">
+                {staffRows.length === 0 ? 'No active staff found.' : 'No staff match this search or filter.'}
+              </div>
+            )}
           </div>
+          <Link href="/manager-user-accounts" className="flex items-center justify-center gap-1 border-t p-3 text-sm font-medium text-blue-600 hover:bg-gray-50">
+            View all staff <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
 
