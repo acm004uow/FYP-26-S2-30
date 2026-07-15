@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, Calendar, FileUp } from 'lucide-react'
+import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, Calendar, FileUp, AlertCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
 import { getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
@@ -50,6 +50,8 @@ export default function StaffMemberDashboard() {
   const [uploadingProof, setUploadingProof] = useState(false)
   const [dismissedOverdueAlert, setDismissedOverdueAlert] = useState(false)
   const [checkingInTaskId, setCheckingInTaskId] = useState(null)
+  const [checkInErrorTaskId, setCheckInErrorTaskId] = useState(null)
+  const [checkInError, setCheckInError] = useState('')
 
   const loadDashboard = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -125,10 +127,12 @@ export default function StaffMemberDashboard() {
 
   const handleStartTask = async (taskId) => {
     const task = myTasks.find(item => item.id === taskId)
+    setCheckInError('')
+    setCheckInErrorTaskId(null)
 
     if (!task || !isTaskAssignedToday(task)) {
-      setNotification('You can only start this task on its assigned day.')
-      setTimeout(() => setNotification(null), 3000)
+      setCheckInError('You can only start this task on its assigned day.')
+      setCheckInErrorTaskId(taskId)
       return
     }
 
@@ -142,16 +146,16 @@ export default function StaffMemberDashboard() {
         position = await getCurrentPosition()
       } catch (error) {
         setCheckingInTaskId(null)
-        setNotification(error.message)
-        setTimeout(() => setNotification(null), 4000)
+        setCheckInError(error.message)
+        setCheckInErrorTaskId(taskId)
         return
       }
 
       const distance = getDistanceMeters(position.latitude, position.longitude, task.latitude, task.longitude)
       setCheckingInTaskId(null)
       if (distance > CHECK_IN_RADIUS_METERS) {
-        setNotification(`You're ${Math.round(distance)}m from the job site — get within ${CHECK_IN_RADIUS_METERS}m to check in.`)
-        setTimeout(() => setNotification(null), 4000)
+        setCheckInError(`You're ${Math.round(distance)}m from the job site — get within ${CHECK_IN_RADIUS_METERS}m to check in.`)
+        setCheckInErrorTaskId(taskId)
         return
       }
     }
@@ -159,10 +163,16 @@ export default function StaffMemberDashboard() {
     const checkInAt = new Date()
     const attendanceStatus = getAttendanceStatusFromDateTime(task.scheduledStartRaw, checkInAt)
 
-    await supabase
+    const { error: checkInUpdateError } = await supabase
       .from('bookings')
       .update({ status: 'in_progress', checked_in_at: checkInAt.toISOString(), attendance_status: attendanceStatus, updated_at: checkInAt.toISOString() })
       .eq('id', taskId)
+
+    if (checkInUpdateError) {
+      setCheckInError(checkInUpdateError.message || 'Could not check in. Please try again.')
+      setCheckInErrorTaskId(taskId)
+      return
+    }
 
     await supabase.from('audit_logs').insert({
       action: 'start_booking',
@@ -475,6 +485,13 @@ export default function StaffMemberDashboard() {
             <p className="text-xs text-gray-500 mb-4">
               Assigned by: {task.supervisor}
             </p>
+
+            {checkInErrorTaskId === task.id && checkInError && (
+              <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{checkInError}</span>
+              </div>
+            )}
 
             <div className="flex gap-3">
               {['Pending', 'Approved'].includes(task.status) && (
