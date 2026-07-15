@@ -5,6 +5,7 @@ export const navMap = {
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
     { name: 'User Accounts', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
+    { name: 'Schedule', path: '/manager-schedule', icon: Calendar },
     { name: 'Availability', path: '/manager-availability', icon: Activity },
     { name: 'Time Off', path: '/manager-time-off', icon: CalendarOff },
     { name: 'Tracking', path: '/manager-tracking', icon: UserCheck },
