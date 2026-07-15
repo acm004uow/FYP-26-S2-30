@@ -21,6 +21,7 @@ const SOURCE_FILTERS = [
   { value: 'all', label: 'All Sources' },
   { value: 'manager', label: 'Manager Created' },
   { value: 'customer', label: 'Customer Booked' },
+  { value: 'department', label: 'Department Requests' },
   { value: 'ai', label: 'AI Recommended' },
 ]
 
@@ -33,6 +34,14 @@ const SERVICE_ICONS = {
 }
 
 const serviceIcon = (type) => SERVICE_ICONS[type] || Home
+
+const sourceMeta = {
+  manager: { label: 'Manager Created', badge: 'bg-purple-100 text-purple-700' },
+  department: { label: 'Department Request', badge: 'bg-orange-100 text-orange-700' },
+  customer: { label: 'Customer Booked', badge: 'bg-blue-50 text-blue-600' },
+}
+
+const getSourceMeta = (source) => sourceMeta[source || 'customer'] || sourceMeta.customer
 
 // Deterministic per-name color so the same staff member always gets the same avatar color.
 const AVATAR_PALETTE = [
@@ -204,7 +213,7 @@ export default function BookingsReviewPanel() {
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
       supabase
         .from('bookings')
-        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name)')
+        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name),departments(name)')
         .eq('host_admin_id', hostAdminIdResolved)
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false }),
@@ -978,7 +987,9 @@ export default function BookingsReviewPanel() {
                   <p className="text-xs text-gray-400 mt-2">
                     {booking.source === 'manager'
                       ? `Added by you${booking.guest_name ? ` for ${booking.guest_name}` : ''}`
-                      : `Requested by ${booking.customer?.full_name || booking.customer?.email || 'Customer'}`} on {new Date(booking.created_at).toLocaleDateString()}
+                      : booking.source === 'department'
+                        ? `Requested by ${booking.departments?.name ? `the ${booking.departments.name} department` : 'a department'}`
+                        : `Requested by ${booking.customer?.full_name || booking.customer?.email || 'Customer'}`} on {new Date(booking.created_at).toLocaleDateString()}
                   </p>
                   {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
                     <div className="mt-2 flex items-start justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2">
@@ -1011,8 +1022,8 @@ export default function BookingsReviewPanel() {
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${booking.source === 'manager' ? 'bg-purple-100 text-purple-700' : 'bg-blue-50 text-blue-600'}`}>
-                    {booking.source === 'manager' ? 'Manager Created' : 'Customer Booked'}
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${getSourceMeta(booking.source).badge}`}>
+                    {getSourceMeta(booking.source).label}
                   </span>
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
                     {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}

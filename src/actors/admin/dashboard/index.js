@@ -16,6 +16,7 @@ import PayRatesPanel from '../pay-rates/PayRatesPanel'
 import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
 import TimeOffRequestsPanel from '../timeoff/TimeOffRequestsPanel'
 import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
+import DepartmentsPanel from '../departments/DepartmentsPanel'
 
 export default function AdminPanel() {
   const router = useRouter()
@@ -27,7 +28,8 @@ export default function AdminPanel() {
   const [showReset, setShowReset] = useState(null)
   const [showCreate, setShowCreate] = useState(null)
   const [statusChangeUser, setStatusChangeUser] = useState(null)
-  const [createForm, setCreateForm] = useState({ full_name: '', email: '', role: 'manager' })
+  const [createForm, setCreateForm] = useState({ full_name: '', email: '', role: 'manager', department_id: '' })
+  const [departments, setDepartments] = useState([])
   const [resetPassword, setResetPassword] = useState('')
   const [params, setParams] = useState({
     workloadThreshold: 3,
@@ -76,12 +78,13 @@ export default function AdminPanel() {
       profileRequests.push(supabase.from('profiles').select(baseProfileSelect).eq('business_name', businessName))
     }
 
-    const [profileResults, { data: security }, { data: audit }, { data: systemParams }, { data: staff }] = await Promise.all([
+    const [profileResults, { data: security }, { data: audit }, { data: systemParams }, { data: staff }, { data: departmentRows }] = await Promise.all([
       Promise.all(profileRequests),
       supabase.from('security_logs').select('id,email,event_type,details,created_at').order('created_at', { ascending: false }).limit(20),
       supabase.from('audit_logs').select('id,action,details,created_at,profiles(email)').order('created_at', { ascending: false }).limit(20),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
       hostAdminId ? supabase.from('staff_profiles').select('id,user_id,manager_id,basic_salary').eq('host_admin_id', hostAdminId) : Promise.resolve({ data: [] }),
+      hostAdminId ? supabase.from('departments').select('id,name').eq('host_admin_id', hostAdminId).order('name') : Promise.resolve({ data: [] }),
     ])
 
     const profilesById = new Map()
@@ -96,6 +99,7 @@ export default function AdminPanel() {
     setCurrentBusinessName(businessName)
     setUsers(profiles || [])
     setStaffProfiles(staff || [])
+    setDepartments(departmentRows || [])
     setSecurityLogs(security || [])
     setAuditLogs(audit || [])
     if (systemParams) {
@@ -143,16 +147,20 @@ export default function AdminPanel() {
   }, [])
 
   useEffect(() => {
-    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'security', 'audit', 'parameters', 'closures', 'reports', 'payrates', 'timeoff']
+    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'security', 'audit', 'parameters', 'closures', 'reports', 'payrates', 'timeoff', 'departments']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
 
   const handleCreate = async (event) => {
     event.preventDefault()
-    const { full_name, email, role } = createForm
+    const { full_name, email, role, department_id } = createForm
     if (!full_name || !email || !role) {
       setMessage('Please fill in name, email, and role.')
+      return
+    }
+    if (role === 'department_staff' && !department_id) {
+      setMessage('Please choose a department for this staff member.')
       return
     }
 
@@ -168,7 +176,7 @@ export default function AdminPanel() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ full_name, email, role, business_name: currentBusinessName || undefined }),
+      body: JSON.stringify({ full_name, email, role, business_name: currentBusinessName || undefined, department_id: role === 'department_staff' ? department_id : undefined }),
     })
     const result = await response.json()
     if (!response.ok) {
@@ -178,7 +186,7 @@ export default function AdminPanel() {
 
     setMessage('Invitation sent. The user can set their own password from the email link.')
     await loadAdminData()
-    setCreateForm({ full_name: '', email: '', role: 'manager' })
+    setCreateForm({ full_name: '', email: '', role: 'manager', department_id: '' })
     setShowCreate(null)
   }
 
@@ -297,6 +305,7 @@ export default function AdminPanel() {
           {activeSection === 'reports' && <ReportsPanel />}
           {activeSection === 'payrates' && <PayRatesPanel />}
           {activeSection === 'timeoff' && <TimeOffRequestsPanel />}
+          {activeSection === 'departments' && <DepartmentsPanel />}
           {activeSection === 'closures' && (
             <>
               <SchedulingCutoffPanel />
@@ -367,6 +376,18 @@ export default function AdminPanel() {
                   {roleOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
+              {createForm.role === 'department_staff' && (
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Department</label>
+                  <select value={createForm.department_id} onChange={e => setCreateForm({ ...createForm, department_id: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
+                    <option value="">Select a department...</option>
+                    {departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  </select>
+                  {departments.length === 0 && (
+                    <p className="mt-1 text-xs text-gray-400">No departments yet — add one under Departments first.</p>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium text-gray-700">Full Name</label>
                 <input value={createForm.full_name} onChange={e => setCreateForm({ ...createForm, full_name: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Enter full name" />

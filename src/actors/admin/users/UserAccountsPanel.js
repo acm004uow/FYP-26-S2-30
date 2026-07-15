@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { KeyRound, Pencil, Plus, Shield, ShieldCheck, UserCheck, UserMinus, UserRound, Users, X } from 'lucide-react'
+import { Briefcase, KeyRound, Pencil, Plus, Shield, ShieldCheck, UserCheck, UserMinus, UserRound, Users, X } from 'lucide-react'
 
 export const roleOptions = [
   {
     value: 'manager',
     label: 'Manager',
     permissions: 'Approve requests, assign tasks, manage staff profiles, and view reports.',
+  },
+  {
+    value: 'department_staff',
+    label: 'Department Staff',
+    permissions: 'Create tasks for their department, view available staff, and assign staff manually or via AI recommendation.',
   },
   {
     value: 'staff_member',
@@ -28,11 +33,12 @@ const roleLabel = (role) => ({
 
 const permissionsFor = (role, options = roleOptions) => options.find(option => option.value === role)?.permissions || 'Custom access level.'
 
-const ROLE_ORDER = ['system_admin', 'manager', 'staff_member']
+const ROLE_ORDER = ['system_admin', 'manager', 'department_staff', 'staff_member']
 
 const ROLE_META = {
   system_admin: { label: 'Owner', icon: ShieldCheck, ring: 'border-purple-200', avatarBg: 'bg-purple-50', avatarText: 'text-purple-600', select: 'border-purple-200 focus:border-purple-400 focus:ring-purple-100' },
   manager: { label: 'Manager', icon: Users, ring: 'border-blue-200', avatarBg: 'bg-blue-50', avatarText: 'text-blue-600', select: 'border-blue-200 focus:border-blue-400 focus:ring-blue-100' },
+  department_staff: { label: 'Department Staff', icon: Briefcase, ring: 'border-orange-200', avatarBg: 'bg-orange-50', avatarText: 'text-orange-600', select: 'border-orange-200 focus:border-orange-400 focus:ring-orange-100' },
   staff_member: { label: 'Staff Member', icon: UserRound, ring: 'border-green-200', avatarBg: 'bg-green-50', avatarText: 'text-green-600', select: 'border-green-200 focus:border-green-400 focus:ring-green-100' },
   other: { label: 'Other', icon: UserRound, ring: 'border-gray-200', avatarBg: 'bg-gray-50', avatarText: 'text-gray-600', select: 'border-gray-200 focus:border-gray-400 focus:ring-gray-100' },
 }

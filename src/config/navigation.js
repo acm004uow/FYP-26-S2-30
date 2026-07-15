@@ -1,4 +1,4 @@
-import { Activity, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, ShieldAlert, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
+import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, ShieldAlert, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
@@ -19,6 +19,9 @@ export const navMap = {
     { name: 'Time Off', path: '/staff-time-off', icon: CalendarOff },
     { name: 'Attendance', path: '/staff-attendance', icon: UserCheck },
   ],
+  departmentStaff: [
+    { name: 'Dashboard', path: '/department', icon: Briefcase },
+  ],
   customer: [
     { name: 'My Bookings', path: '/customer', icon: ClipboardList },
     { name: 'New Booking', path: '/customer-book', icon: ClipboardList },
@@ -36,6 +39,7 @@ export const navMap = {
     { name: 'Reports', path: '/admin?section=reports', icon: TrendingUp },
     { name: 'Pay Rates', path: '/admin?section=payrates', icon: DollarSign },
     { name: 'Time Off', path: '/admin?section=timeoff', icon: CalendarClock },
+    { name: 'Departments', path: '/admin?section=departments', icon: Briefcase },
   ],
   userAdmin: [
     { name: 'Overview', path: '/user-admin', icon: Globe },

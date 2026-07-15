@@ -3,7 +3,7 @@ import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
   try {
-    const { email, full_name, business_name, role } = await request.json();
+    const { email, full_name, business_name, role, department_id } = await request.json();
     if (!email || !full_name || !role) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     const supabase = createSupabaseAdmin();
     const token = request.headers.get("authorization")?.replace("Bearer ", "");
@@ -81,10 +81,11 @@ export async function POST(request) {
       host_admin_id: resolvedHostAdminId,
       role,
       status: "active",
+      department_id: role === "department_staff" ? (department_id || null) : null,
     };
     const { error: profileError } = await supabase.from("profiles").upsert(profile);
     if (profileError) {
-      const { host_admin_id, ...profileWithoutHostAdmin } = profile;
+      const { host_admin_id, department_id: _departmentId, ...profileWithoutHostAdmin } = profile;
       const { error: fallbackProfileError } = await supabase.from("profiles").upsert(profileWithoutHostAdmin);
       if (fallbackProfileError) return NextResponse.json({ error: fallbackProfileError.message }, { status: 400 });
     }

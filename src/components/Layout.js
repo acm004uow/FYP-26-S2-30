@@ -105,6 +105,7 @@ export default function Layout({ children, role = 'manager' }) {
         admin: 'system_admin',
         customer: 'customer',
         userAdmin: 'user_admin',
+        departmentStaff: 'department_staff',
       }
       const expectedRole = expectedRoleMap[role] || role
       if (resolvedProfile.role && resolvedProfile.role !== expectedRole) {

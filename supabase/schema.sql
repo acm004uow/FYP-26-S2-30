@@ -36,6 +36,18 @@ alter table profiles add column if not exists marketing_description text;
 alter table profiles add column if not exists marketing_published boolean default false;
 alter table profiles add column if not exists service_rates jsonb default '{}'::jsonb;
 
+-- A department (e.g. "Sales", "Facilities") within a business (host_admin_id), owned/managed by
+-- the business's owner. A department_staff profile belongs to one department and requests casual
+-- staff from the business's shared staff_profiles pool for their own department's tasks.
+create table if not exists departments (
+  id uuid primary key default gen_random_uuid(),
+  host_admin_id uuid references profiles(id) on delete cascade,
+  name text not null,
+  created_at timestamptz default now()
+);
+
+alter table profiles add column if not exists department_id uuid references departments(id) on delete set null;
+
 update profiles
 set host_admin_id = id
 where role = 'system_admin'
@@ -147,6 +159,8 @@ alter table bookings add column if not exists guest_name text;
 alter table bookings add column if not exists guest_contact text;
 -- 'manual' | 'ai' | 'history' | 'recurring' for manager-created tasks; null for customer self-service bookings.
 alter table bookings add column if not exists creation_method text;
+-- Set when source = 'department': which department requested this task, for the manager's visibility.
+alter table bookings add column if not exists department_id uuid references departments(id) on delete set null;
 
 -- A customer's request to book the service repeatedly over a period (e.g. "cleaning every Monday
 -- and Thursday throughout August"), submitted via the customer booking form. Starts 'pending' for
@@ -413,6 +427,7 @@ alter table business_closures enable row level security;
 alter table scheduling_settings enable row level security;
 alter table service_pay_rates enable row level security;
 alter table staff_time_off_requests enable row level security;
+alter table departments enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin
@@ -433,6 +448,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all bookings" on bookings for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all departments" on departments for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all recommendations" on task_recommendations for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');

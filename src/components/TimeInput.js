@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+
 // Replaces the native <input type="time"> everywhere in the app — its picker is a
 // browser/OS-native overlay with zero CSS styling hooks and no control over where it renders
 // (it can render off-card, as in the cramped screenshot that prompted this). Three plain <select>
@@ -27,19 +29,42 @@ const selectClass = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py
 // the scheduling cutoff time). Leave it false for "preferred time" style fields where no
 // selection means "no time preference," matching what an empty native time input used to mean.
 export default function TimeInput({ value, onChange, required = false, className = '' }) {
-  const { hour12, minute, period } = parseTime(value)
+  // Picking hour/minute/period one at a time is necessarily incomplete until all three are set,
+  // so `onChange` gets called with '' after the first pick or two (see toValue above). If the
+  // displayed selection were derived straight from `value`, that '' would round-trip back through
+  // parseTime('') and reset every select to "--", making it look like nothing could be chosen.
+  // Local `parts` state remembers what's been picked so far regardless of what the composed
+  // value is; a ref tracks the last value *we* emitted so an externally-set value (e.g. picking
+  // a different existing booking, which fills in its saved time while this stays mounted) is
+  // still detected and synced in, without fighting the incomplete-selection case above.
+  const [parts, setParts] = useState(() => parseTime(value))
+  const lastEmitted = useRef(value)
+
+  useEffect(() => {
+    if (value === lastEmitted.current) return
+    lastEmitted.current = value
+    setParts(parseTime(value))
+  }, [value])
+
+  const updatePart = (patch) => {
+    const next = { ...parts, ...patch }
+    setParts(next)
+    const composed = toValue(next.hour12, next.minute, next.period)
+    lastEmitted.current = composed
+    onChange(composed)
+  }
 
   return (
     <div className={`grid grid-cols-3 gap-2 ${className}`}>
-      <select value={hour12} onChange={e => onChange(toValue(e.target.value, minute, period))} className={selectClass}>
+      <select value={parts.hour12} onChange={e => updatePart({ hour12: e.target.value })} className={selectClass}>
         {!required && <option value="">--</option>}
         {HOURS.map(h => <option key={h} value={h}>{String(h).padStart(2, '0')}</option>)}
       </select>
-      <select value={minute} onChange={e => onChange(toValue(hour12, e.target.value, period))} className={selectClass}>
+      <select value={parts.minute} onChange={e => updatePart({ minute: e.target.value })} className={selectClass}>
         {!required && <option value="">--</option>}
         {MINUTES.map(m => <option key={m} value={String(m).padStart(2, '0')}>{String(m).padStart(2, '0')}</option>)}
       </select>
-      <select value={period} onChange={e => onChange(toValue(hour12, minute, e.target.value))} className={selectClass}>
+      <select value={parts.period} onChange={e => updatePart({ period: e.target.value })} className={selectClass}>
         {!required && <option value="">--</option>}
         {PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
       </select>

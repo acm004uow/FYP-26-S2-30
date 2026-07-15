@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const VALID_ROLES = new Set(["manager", "staff_member", "system_admin"]);
+const VALID_ROLES = new Set(["manager", "staff_member", "system_admin", "department_staff"]);
 const VALID_STATUSES = new Set(["active", "inactive"]);
 
 export async function POST(request) {

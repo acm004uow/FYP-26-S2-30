@@ -9,6 +9,7 @@ const routeByRole = {
   system_admin: '/admin',
   customer: '/customer',
   user_admin: '/user-admin',
+  department_staff: '/department',
 }
 
 export default function AuthCallback() {

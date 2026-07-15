@@ -25,6 +25,7 @@ export default function LoginPage() {
     system_admin: '/admin',
     customer: '/customer',
     user_admin: '/user-admin',
+    department_staff: '/department',
   }
 
   const ensureProfile = async (accessToken, fallbackRole) => {

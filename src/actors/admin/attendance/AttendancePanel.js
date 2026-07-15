@@ -90,7 +90,7 @@ export default function AttendancePanel() {
     if (!resolvedHostAdminId) return
 
     const [{ data: profileRows }, { data: attendance }] = await Promise.all([
-      supabase.from('profiles').select('id,full_name,role,status').eq('host_admin_id', resolvedHostAdminId).in('role', ['manager', 'staff_member']),
+      supabase.from('profiles').select('id,full_name,role,status').eq('host_admin_id', resolvedHostAdminId).in('role', ['manager', 'staff_member', 'department_staff']),
       supabase.from('attendance_records').select('profile_id,clocked_in_at,clocked_out_at').eq('host_admin_id', resolvedHostAdminId).eq('work_date', dateIso),
     ])
 
@@ -219,7 +219,8 @@ export default function AttendancePanel() {
               dot = 'bg-blue-500'
               detail = `Since ${new Date(a.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
             }
-            const roleTint = person.role === 'manager' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
+            const roleTint = person.role === 'manager' ? 'bg-blue-50 text-blue-600' : person.role === 'department_staff' ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'
+            const roleLabel = person.role === 'manager' ? 'Manager' : person.role === 'department_staff' ? 'Department Staff' : 'Staff Member'
             return (
               <div key={person.id} className="flex items-center justify-between gap-4 px-5 py-4">
                 <div className="flex items-center gap-3">
@@ -231,7 +232,7 @@ export default function AttendancePanel() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-800">{person.full_name}</p>
-                    <p className="text-xs text-gray-400">{person.role === 'manager' ? 'Manager' : 'Staff Member'}</p>
+                    <p className="text-xs text-gray-400">{roleLabel}</p>
                   </div>
                 </div>
                 <div className="text-right">
