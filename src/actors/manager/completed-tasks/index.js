@@ -139,7 +139,7 @@ export default function ManagerCompletedTasks() {
                         <div className="mt-1">
                           <p className="text-sm text-gray-600">
                             Customer feedback: <span className="text-yellow-500">{'★'.repeat(customerFeedback.rating)}{'☆'.repeat(5 - customerFeedback.rating)}</span>
-                            {customerFeedback.comment && <span className="italic text-gray-500"> "{customerFeedback.comment}"</span>}
+                            {customerFeedback.comment && <span className="italic text-gray-500"> &ldquo;{customerFeedback.comment}&rdquo;</span>}
                           </p>
                           {customerFeedback.image_url && (
                             <a href={customerFeedback.image_url} target="_blank" rel="noreferrer">

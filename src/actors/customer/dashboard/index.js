@@ -458,7 +458,7 @@ export default function CustomerDashboard() {
                       <div className="mt-2 space-y-2">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
                           <span className="text-yellow-500 tracking-tight">{'★'.repeat(booking.feedback.rating)}{'☆'.repeat(5 - booking.feedback.rating)}</span>
-                          {booking.feedback.comment && <span className="italic text-gray-500">"{booking.feedback.comment}"</span>}
+                          {booking.feedback.comment && <span className="italic text-gray-500">&ldquo;{booking.feedback.comment}&rdquo;</span>}
                         </div>
                         {booking.feedback.image_url && (
                           <a href={booking.feedback.image_url} target="_blank" rel="noreferrer">
