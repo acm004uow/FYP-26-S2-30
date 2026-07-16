@@ -18,12 +18,18 @@ export default function LoginPage() {
   const [signupRole, setSignupRole] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [isCustomerBookingFlow, setIsCustomerBookingFlow] = useState(false)
 
   useEffect(() => {
     if (router.query.locked === '1') {
       setError('Your account has been locked after repeated last-minute booking cancellations. Contact your service provider to reactivate it.')
     }
   }, [router.query.locked])
+
+  useEffect(() => {
+    const next = new URLSearchParams(window.location.search).get('next') || ''
+    setIsCustomerBookingFlow(next.startsWith('/customer-book'))
+  }, [])
 
   const routeByRole = {
     manager: '/manager',
@@ -308,14 +314,16 @@ export default function LoginPage() {
               Sign in with Google
             </button>
 
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => openSignup('system_admin')}
-                className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
-              >
-                Sign Up as Owner
-              </button>
+            <div className={isCustomerBookingFlow ? '' : 'grid grid-cols-2 gap-3'}>
+              {!isCustomerBookingFlow && (
+                <button
+                  type="button"
+                  onClick={() => openSignup('system_admin')}
+                  className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
+                >
+                  Sign Up as Owner
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => openSignup('customer')}
