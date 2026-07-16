@@ -24,7 +24,7 @@ export default function StaffNextWeek() {
 
       const { data: bookings } = await supabase
         .from('bookings')
-        .select('id,created_at,service_type,location,scheduled_date,scheduled_time,status,description,notes,customer_id,checked_in_at,checked_out_at,customer:profiles!bookings_customer_id_fkey(full_name,email)')
+        .select('id,created_at,service_type,location,scheduled_date,scheduled_time,status,description,notes,customer_id,checked_in_at,checked_out_at,customer:profiles!bookings_customer_id_fkey(full_name,email,phone)')
         .eq('assigned_staff_id', staffProfile.id)
         .neq('status', 'pending')
         .order('scheduled_date', { ascending: true })
@@ -94,7 +94,7 @@ export default function StaffNextWeek() {
                   {task.description && <p>{task.description}</p>}
                   <p><span className="font-medium text-gray-800">Assigned day:</span> {task.assignedDate}</p>
                   <p><span className="font-medium text-gray-800">Instructions:</span> {task.instructions}</p>
-                  <p><span className="font-medium text-gray-800">Assigned by:</span> {task.supervisor}</p>
+                  <p><span className="font-medium text-gray-800">Assigned by:</span> {task.supervisor}{task.customerPhone ? ` · ${task.customerPhone}` : ''}</p>
                 </div>
               )}
             </div>

@@ -3,7 +3,7 @@ import TimeInput from '../../../components/TimeInput'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, ArrowUpDown, Bell, Building, Building2, Calendar, CheckCircle2, ChevronDown, ChevronLeft,
-  ChevronRight, ClipboardList, Edit3, Filter, Home, Lightbulb, Layers, MapPin, Plus, Search,
+  ChevronRight, ClipboardList, Edit3, Filter, Home, HelpCircle, ImagePlus, Lightbulb, Layers, MapPin, Plus, Search,
   Sparkles, Trash2, X,
 } from 'lucide-react'
 import { useRouter } from 'next/router'
@@ -48,6 +48,8 @@ export default function CustomerDashboard() {
   const [activeTab, setActiveTab] = useState('all')
   const [sortOrder, setSortOrder] = useState('newest')
   const [filterServices, setFilterServices] = useState([])
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
   const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -84,7 +86,7 @@ export default function CustomerDashboard() {
     if (!user) return
     const { data } = await supabase
       .from('bookings')
-      .select('id,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,host_admin_id,assigned_staff_id,staff_profiles(staff_name),company:profiles!bookings_host_admin_id_fkey(business_name),booking_feedback(id,rating,comment)')
+      .select('id,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,host_admin_id,assigned_staff_id,staff_profiles(staff_name),company:profiles!bookings_host_admin_id_fkey(business_name),booking_feedback(id,rating,comment,image_url)')
       .eq('customer_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -136,7 +138,7 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [activeTab, search, filterServices, sortOrder])
+  }, [activeTab, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
 
   const LATE_CANCEL_WINDOW_HOURS = 24
   const LATE_CANCEL_LOCK_THRESHOLD = 2
@@ -150,12 +152,7 @@ export default function CustomerDashboard() {
   }
 
   const handleCancelClick = (booking) => {
-    const isLate = isLastMinuteCancellation(booking)
-    if (isLate && booking.rawStatus === 'approved') {
-      setCancelConfirmBooking(booking)
-      return
-    }
-    performCancel(booking)
+    setCancelConfirmBooking(booking)
   }
 
   const performCancel = async (booking) => {
@@ -171,7 +168,7 @@ export default function CustomerDashboard() {
       .in('status', ['pending', 'approved'])
     await supabase.from('audit_logs').insert({
       action: 'cancel_booking',
-      details: `Booking ${id}${isLate && rawStatus === 'approved' ? ' (late cancellation of an approved booking)' : ''}`,
+      details: `Booking ${id}${isLate && rawStatus === 'approved' ? ' (last-minute cancellation of an approved booking)' : ''}`,
     })
 
     let locked = false
@@ -188,7 +185,7 @@ export default function CustomerDashboard() {
         }).eq('id', user.id)
         await supabase.from('audit_logs').insert({
           user_id: user.id,
-          action: locked ? 'account_locked' : 'late_cancellation_strike',
+          action: locked ? 'account_locked' : 'last_minute_cancellation_strike',
           details: `Booking ${id} cancelled within 24h of the scheduled visit (strike ${nextCount}/${LATE_CANCEL_LOCK_THRESHOLD})`,
         })
       }
@@ -234,6 +231,25 @@ export default function CustomerDashboard() {
     }
     setSavingFeedbackId(booking.id)
     const { data: { user } } = await supabase.auth.getUser()
+
+    let imageUrl = null
+    const imageFile = feedbackDrafts[booking.id]?.imageFile
+    if (imageFile) {
+      const safeName = imageFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const path = `${user?.id}/feedback-${booking.id}-${Date.now()}-${safeName}`
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('task-proofs')
+        .upload(path, imageFile, { upsert: false })
+      if (uploadError) {
+        setSavingFeedbackId(null)
+        setNotification(uploadError.message)
+        setTimeout(() => setNotification(null), 3000)
+        return
+      }
+      const { data: publicUrlData } = supabase.storage.from('task-proofs').getPublicUrl(uploadData.path)
+      imageUrl = publicUrlData?.publicUrl || null
+    }
+
     const { error } = await supabase.from('booking_feedback').insert({
       booking_id: booking.id,
       customer_id: user?.id,
@@ -241,6 +257,7 @@ export default function CustomerDashboard() {
       staff_id: booking.assignedStaffId,
       rating,
       comment: feedbackDrafts[booking.id]?.comment?.trim() || null,
+      image_url: imageUrl,
     })
     setSavingFeedbackId(null)
     setNotification(error ? error.message : 'Thanks for your feedback!')
@@ -283,13 +300,22 @@ export default function CustomerDashboard() {
       list = list.filter(b => filterServices.includes(b.serviceType))
     }
 
+    if (filterDateFrom) {
+      list = list.filter(b => b.scheduledDate && b.scheduledDate >= filterDateFrom)
+    }
+    if (filterDateTo) {
+      list = list.filter(b => b.scheduledDate && b.scheduledDate <= filterDateTo)
+    }
+
     return [...list].sort((a, b) => sortOrder === 'newest' ? b.createdAtMs - a.createdAtMs : a.createdAtMs - b.createdAtMs)
-  }, [bookings, activeTab, search, filterServices, sortOrder])
+  }, [bookings, activeTab, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
 
   const totalPages = Math.max(1, Math.ceil(visibleBookings.length / PAGE_SIZE))
   const pageBookings = visibleBookings.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const sectionLabel = TABS.find(t => t.key === activeTab)?.label || 'All Bookings'
+
+  const activeFilterCount = filterServices.length + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0)
 
   const toggleServiceFilter = (serviceType) => {
     setFilterServices(prev => prev.includes(serviceType) ? prev.filter(s => s !== serviceType) : [...prev, serviceType])
@@ -320,10 +346,10 @@ export default function CustomerDashboard() {
               onClick={() => { setShowFilterMenu(v => !v); setShowSortMenu(false) }}
               className="h-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 bg-white hover:bg-gray-50"
             >
-              <Filter className="w-4 h-4" /> Filter{filterServices.length > 0 ? ` (${filterServices.length})` : ''}
+              <Filter className="w-4 h-4" /> Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
             </button>
             {showFilterMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 z-20 p-3">
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 z-20 p-3">
                 <p className="text-xs font-semibold text-gray-500 mb-2">Service type</p>
                 {serviceOptions.length === 0 && <p className="text-xs text-gray-400">No bookings yet.</p>}
                 {serviceOptions.map(option => (
@@ -332,8 +358,19 @@ export default function CustomerDashboard() {
                     {option}
                   </label>
                 ))}
-                {filterServices.length > 0 && (
-                  <button onClick={() => setFilterServices([])} className="mt-2 text-xs text-blue-600 hover:underline">Clear filters</button>
+                <p className="text-xs font-semibold text-gray-500 mb-2 mt-3">Scheduled date</p>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">From</label>
+                    <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">To</label>
+                    <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
+                  </div>
+                </div>
+                {activeFilterCount > 0 && (
+                  <button onClick={() => { setFilterServices([]); setFilterDateFrom(''); setFilterDateTo('') }} className="mt-3 text-xs text-blue-600 hover:underline">Clear filters</button>
                 )}
               </div>
             )}
@@ -418,37 +455,69 @@ export default function CustomerDashboard() {
 
                   {booking.status === 'Completed' && (
                     booking.feedback ? (
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                        <span className="text-yellow-500 tracking-tight">{'★'.repeat(booking.feedback.rating)}{'☆'.repeat(5 - booking.feedback.rating)}</span>
-                        {booking.feedback.comment && <span className="italic text-gray-500">"{booking.feedback.comment}"</span>}
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                          <span className="text-yellow-500 tracking-tight">{'★'.repeat(booking.feedback.rating)}{'☆'.repeat(5 - booking.feedback.rating)}</span>
+                          {booking.feedback.comment && <span className="italic text-gray-500">"{booking.feedback.comment}"</span>}
+                        </div>
+                        {booking.feedback.image_url && (
+                          <a href={booking.feedback.image_url} target="_blank" rel="noreferrer">
+                            <img src={booking.feedback.image_url} alt="Feedback attachment" className="h-16 w-16 rounded-lg object-cover border" />
+                          </a>
+                        )}
                       </div>
                     ) : (
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <div className="flex items-center gap-0.5">
-                          {[1, 2, 3, 4, 5].map(value => (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], rating: value } }))}
-                              className={`text-lg leading-none ${Number(feedbackDrafts[booking.id]?.rating || 0) >= value ? 'text-yellow-500' : 'text-gray-300'}`}
-                              aria-label={`Rate ${value} star${value > 1 ? 's' : ''}`}
-                            >★</button>
-                          ))}
+                      <div className="mt-2 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex items-center gap-0.5">
+                            {[1, 2, 3, 4, 5].map(value => (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], rating: value } }))}
+                                className={`text-lg leading-none ${Number(feedbackDrafts[booking.id]?.rating || 0) >= value ? 'text-yellow-500' : 'text-gray-300'}`}
+                                aria-label={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                              >★</button>
+                            ))}
+                          </div>
+                          <input
+                            value={feedbackDrafts[booking.id]?.comment || ''}
+                            onChange={e => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], comment: e.target.value } }))}
+                            placeholder="Leave a comment (optional)"
+                            className="flex-1 min-w-[140px] border rounded-lg px-2 py-1 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleSubmitFeedback(booking)}
+                            disabled={savingFeedbackId === booking.id}
+                            className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                          >
+                            {savingFeedbackId === booking.id ? 'Saving...' : 'Submit feedback'}
+                          </button>
                         </div>
-                        <input
-                          value={feedbackDrafts[booking.id]?.comment || ''}
-                          onChange={e => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], comment: e.target.value } }))}
-                          placeholder="Leave a comment (optional)"
-                          className="flex-1 min-w-[140px] border rounded-lg px-2 py-1 text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSubmitFeedback(booking)}
-                          disabled={savingFeedbackId === booking.id}
-                          className="text-xs text-blue-600 hover:underline disabled:opacity-50"
-                        >
-                          {savingFeedbackId === booking.id ? 'Saving...' : 'Submit feedback'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <label className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 cursor-pointer">
+                            <ImagePlus className="h-3.5 w-3.5" /> {feedbackDrafts[booking.id]?.imageFile ? 'Change photo' : 'Add photo'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], imageFile: e.target.files?.[0] || null } }))}
+                            />
+                          </label>
+                          {feedbackDrafts[booking.id]?.imageFile && (
+                            <>
+                              <span className="text-xs text-gray-400 truncate max-w-[140px]">{feedbackDrafts[booking.id].imageFile.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], imageFile: null } }))}
+                                className="text-xs text-red-500 hover:underline"
+                              >
+                                Remove
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )
                   )}
@@ -547,29 +616,39 @@ export default function CustomerDashboard() {
         </div>
       )}
 
-      {cancelConfirmBooking && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex justify-between gap-4">
-              <h3 className="flex items-center gap-2 text-lg font-semibold"><AlertTriangle className="h-5 w-5 text-amber-500" /> Cancel This Booking?</h3>
-              <button type="button" onClick={() => setCancelConfirmBooking(null)} aria-label="Close"><X /></button>
-            </div>
-            <p className="mt-4 text-sm text-gray-600">
-              This booking is scheduled within 24 hours. Cancelling now counts as a late cancellation, and repeated late cancellations can lock your account.
-            </p>
-            <div className="mt-6 flex gap-2">
-              <button
-                type="button"
-                onClick={() => { performCancel(cancelConfirmBooking); setCancelConfirmBooking(null) }}
-                className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-700"
-              >
-                Yes, Cancel Booking
-              </button>
-              <button type="button" onClick={() => setCancelConfirmBooking(null)} className="flex-1 rounded-lg bg-gray-200 py-2 text-sm font-medium text-gray-700">Keep Booking</button>
+      {cancelConfirmBooking && (() => {
+        const isLateApproved = isLastMinuteCancellation(cancelConfirmBooking) && cancelConfirmBooking.rawStatus === 'approved'
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-md w-full p-6">
+              <div className="flex justify-between gap-4">
+                <h3 className="flex items-center gap-2 text-lg font-semibold">
+                  {isLateApproved
+                    ? <AlertTriangle className="h-5 w-5 text-amber-500" />
+                    : <HelpCircle className="h-5 w-5 text-blue-500" />}
+                  Cancel This Booking?
+                </h3>
+                <button type="button" onClick={() => setCancelConfirmBooking(null)} aria-label="Close"><X /></button>
+              </div>
+              <p className="mt-4 text-sm text-gray-600">
+                {isLateApproved
+                  ? 'This booking is scheduled within 24 hours. Cancelling now counts as a last-minute cancellation, and repeated last-minute cancellations can lock your account.'
+                  : 'Are you sure you want to cancel this booking? This cannot be undone.'}
+              </p>
+              <div className="mt-6 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { performCancel(cancelConfirmBooking); setCancelConfirmBooking(null) }}
+                  className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-700"
+                >
+                  Yes, Cancel Booking
+                </button>
+                <button type="button" onClick={() => setCancelConfirmBooking(null)} className="flex-1 rounded-lg bg-gray-200 py-2 text-sm font-medium text-gray-700">Keep Booking</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
     </Layout>
   )
 }

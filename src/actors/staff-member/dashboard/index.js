@@ -69,7 +69,7 @@ export default function StaffMemberDashboard() {
 
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,estimated_hours,status,description,notes,customer_id,checked_in_at,checked_out_at,latitude,longitude,customer:profiles!bookings_customer_id_fkey(full_name,email),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
+      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,estimated_hours,status,description,notes,customer_id,checked_in_at,checked_out_at,latitude,longitude,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
       .eq('assigned_staff_id', staffProfile.id)
       .neq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -483,7 +483,7 @@ export default function StaffMemberDashboard() {
             )}
 
             <p className="text-xs text-gray-500 mb-4">
-              Assigned by: {task.supervisor}
+              Assigned by: {task.supervisor}{task.customerPhone ? ` · ${task.customerPhone}` : ''}
             </p>
 
             {checkInErrorTaskId === task.id && checkInError && (
@@ -741,7 +741,7 @@ export default function StaffMemberDashboard() {
 
                           <p>
                             <span className="font-medium text-gray-800">Assigned by:</span>{' '}
-                            {selectedCalendarTask.supervisor}
+                            {selectedCalendarTask.supervisor}{selectedCalendarTask.customerPhone ? ` · ${selectedCalendarTask.customerPhone}` : ''}
                           </p>
                         </div>
                       </div>

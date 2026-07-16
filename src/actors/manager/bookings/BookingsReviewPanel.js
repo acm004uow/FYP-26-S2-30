@@ -178,7 +178,7 @@ export default function BookingsReviewPanel() {
     }
     const { data } = await supabase
       .from('recurring_bookings')
-      .select('id,customer_id,service_type,location,description,days_of_week,scheduled_time,estimated_hours,start_date,end_date,status,created_at,customer:profiles!recurring_bookings_customer_id_fkey(full_name,email)')
+      .select('id,customer_id,service_type,location,description,days_of_week,scheduled_time,estimated_hours,start_date,end_date,status,created_at,customer:profiles!recurring_bookings_customer_id_fkey(full_name,email,phone)')
       .eq('host_admin_id', hostAdminIdParam)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -213,7 +213,7 @@ export default function BookingsReviewPanel() {
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
       supabase
         .from('bookings')
-        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email),staff_profiles(staff_name),departments(name)')
+        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
         .eq('host_admin_id', hostAdminIdResolved)
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false }),
@@ -900,7 +900,7 @@ export default function BookingsReviewPanel() {
                   <h3 className="font-semibold text-gray-900">{recurring.service_type}</h3>
                   <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{recurring.location}</p>
                   <p className="text-xs text-gray-400 mt-2">
-                    Requested by {recurring.customer?.full_name || recurring.customer?.email || 'Customer'} on {new Date(recurring.created_at).toLocaleDateString()}
+                    Requested by {recurring.customer?.full_name || recurring.customer?.email || 'Customer'}{recurring.customer?.phone ? ` · ${recurring.customer.phone}` : ''} on {new Date(recurring.created_at).toLocaleDateString()}
                   </p>
                   <p className="text-sm text-gray-600 mt-2 flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
@@ -989,7 +989,7 @@ export default function BookingsReviewPanel() {
                       ? `Added by you${booking.guest_name ? ` for ${booking.guest_name}` : ''}`
                       : booking.source === 'department'
                         ? `Requested by ${booking.departments?.name ? `the ${booking.departments.name} department` : 'a department'}`
-                        : `Requested by ${booking.customer?.full_name || booking.customer?.email || 'Customer'}`} on {new Date(booking.created_at).toLocaleDateString()}
+                        : `Requested by ${booking.customer?.full_name || booking.customer?.email || 'Customer'}${booking.customer?.phone ? ` · ${booking.customer.phone}` : ''}`} on {new Date(booking.created_at).toLocaleDateString()}
                   </p>
                   {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
                     <div className="mt-2 flex items-start justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2">

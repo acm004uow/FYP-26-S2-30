@@ -4,12 +4,14 @@ const roleNames = {
   manager: 'Manager',
   staffMember: 'Staff Member',
   admin: 'Owner',
+  customer: 'Customer',
 }
 
 const roleContext = {
   manager: 'Managers review customer bookings, assign staff, view staff profiles, manage user accounts, monitor availability, and generate operational reports.',
   staffMember: 'Staff members view assigned tasks, update availability, start work, complete tasks, upload proof, and check feedback.',
   admin: 'Owners manage accounts, reset passwords, monitor security logs, review audit logs, and tune global allocation parameters.',
+  customer: 'Customers book cleaning services, track the status of their own bookings, edit or cancel a booking while it is Pending or Approved, and leave a rating and comment after a booking is completed.',
 }
 
 const normalizeRole = (role) => ({
@@ -82,7 +84,31 @@ async function getUserIdFromToken(token) {
   return response.ok ? data?.id || null : null
 }
 
+const compactBooking = (booking) => ({
+  service_type: booking.service_type,
+  status: booking.status,
+  location: booking.location,
+  scheduled_date: booking.scheduled_date,
+  scheduled_time: booking.scheduled_time,
+  assigned_staff: booking.staff_profiles?.staff_name || 'Unassigned',
+  created_at: booking.created_at,
+})
+
 async function buildLiveContext(role, userId) {
+  if (role === 'customer' && userId) {
+    const bookings = await fetchSupabaseRows('bookings', {
+      select: 'service_type,status,location,scheduled_date,scheduled_time,created_at,staff_profiles(staff_name)',
+      customer_id: `eq.${userId}`,
+      order: 'created_at.desc',
+      limit: '20',
+    })
+    return JSON.stringify({
+      scope: 'customer_bookings_live_context',
+      generated_at: new Date().toISOString(),
+      recent_bookings: (bookings || []).map(compactBooking),
+    })
+  }
+
   if (role !== 'manager') {
     return JSON.stringify({
       scope: 'general_app_context',
@@ -162,14 +188,18 @@ export async function POST(request) {
     const systemPrompt = [
       'You are the Smart Task Allocation assistant.',
       `Current user role: ${roleNames[normalizedRole] || normalizedRole}.`,
-      roleContext[normalizedRole] || roleContext.manager,
-      'Answer using the live application context below when the question asks about tasks, assignments, staff, availability, or reports.',
+      roleContext[normalizedRole] || '',
+      'Answer using the live application context below when the question asks about tasks, assignments, staff, availability, reports, or the user\'s own bookings.',
       'The chat is read-only, but you can still guide users step by step on how to use pages, buttons, filters, and forms in the application.',
       'For report questions, explain how to use the Reports section. Tell the user to choose the report type, select filters such as date range or department if available, click Generate Report, then review or export the result if the page provides those options.',
       'Do not refuse to give navigation guidance. Only refuse when the user asks chat to directly perform the action for them.',
       normalizedRole === 'manager' ? 'For managers who ask about allocation status, tell them to open the Bookings page and review each booking status, AI-recommended staff, and recent updates.' : '',
       normalizedRole === 'manager' ? 'For managers who ask about staff availability, tell them to open the Staff Availability page to see available, busy, or on leave staff and current workload.' : '',
       normalizedRole === 'manager' ? 'For managers who ask for a quick report, tell them to open the Reports section, choose the report type and filters, then generate the report.' : '',
+      normalizedRole === 'customer' ? 'For customers who ask about the status of their booking(s), answer directly using the recent_bookings live context above (service type, status, scheduled date/time, assigned staff) instead of telling them to check the page themselves.' : '',
+      normalizedRole === 'customer' ? 'For customers who ask how to book a new cleaning service, tell them to open New Booking, pick a company and service type, fill in the address and preferred date/time, then submit.' : '',
+      normalizedRole === 'customer' ? 'For customers who ask how to edit or cancel a booking, tell them to go to My Bookings and use the Edit or Cancel action next to it: Edit only works while the booking is Pending; Cancel works while it is Pending or Approved. Cancelling an Approved booking within 24 hours of its scheduled time counts as a late cancellation, and 2 late cancellations locks the account.' : '',
+      normalizedRole === 'customer' ? 'For customers who ask how to leave feedback, tell them that once a booking is marked Completed, a star rating and comment box appears on that booking in My Bookings.' : '',
       'For normal greetings or general app questions, answer naturally.',
       'If the user says hello, hi, thanks, or asks a general question, do not search records. Reply naturally.',
       'Only say a record cannot be found when the user clearly asks for a specific task, staff member, report, or assignment that is not in the live context.',

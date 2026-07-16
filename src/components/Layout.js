@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { Bell, Headphones, LayoutDashboard, LogOut, Menu, X } from 'lucide-react'
+import { Bell, Headphones, LayoutDashboard, LogOut, Menu, Pencil, X } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import Chatbot from './Chatbot'
 import { navMap } from '../config/navigation'
@@ -35,6 +35,10 @@ export default function Layout({ children, role = 'manager' }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [businessName, setBusinessName] = useState('Smart Task Allocation')
   const [profileInfo, setProfileInfo] = useState(null)
+  const [userId, setUserId] = useState(null)
+  const [editingProfile, setEditingProfile] = useState(false)
+  const [profileEditForm, setProfileEditForm] = useState({ full_name: '', phone: '' })
+  const [savingProfile, setSavingProfile] = useState(false)
   const notificationRef = useRef(null)
   const profileRef = useRef(null)
   const nav = navMap[role] || navMap.manager
@@ -60,7 +64,7 @@ export default function Layout({ children, role = 'manager' }) {
       const [{ data: profile }, { data: notificationRows }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('full_name,email,role,business_name,status,host_admin_id')
+          .select('full_name,email,role,business_name,status,host_admin_id,phone')
           .eq('id', user.id)
           .single(),
         supabase
@@ -78,6 +82,7 @@ export default function Layout({ children, role = 'manager' }) {
         role,
         business_name: user.user_metadata?.business_name || '',
         status: 'active',
+        phone: '',
       }
 
       let resolvedBusinessName = resolvedProfile.business_name
@@ -114,6 +119,8 @@ export default function Layout({ children, role = 'manager' }) {
       }
 
       setProfileInfo({ ...resolvedProfile, business_name: resolvedBusinessName })
+      setUserId(user.id)
+      setProfileEditForm({ full_name: resolvedProfile.full_name || '', phone: resolvedProfile.phone || '' })
       if (resolvedBusinessName) setBusinessName(resolvedBusinessName)
       setNotifications((notificationRows || []).map(item => ({
         id: item.id,
@@ -350,14 +357,31 @@ export default function Layout({ children, role = 'manager' }) {
                       </div>
                     </div>
                     <div className="space-y-2 p-4 text-sm">
-                      <div>
-                        <p className="text-xs text-gray-400">Business</p>
-                        <p className="font-medium text-gray-800">{profileInfo?.business_name || businessName}</p>
-                      </div>
+                      {role !== 'customer' && (
+                        <div>
+                          <p className="text-xs text-gray-400">Business</p>
+                          <p className="font-medium text-gray-800">{profileInfo?.business_name || businessName}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-xs text-gray-400">Role</p>
                         <p className="font-medium text-gray-800">{profileRoleDisplay}</p>
                       </div>
+                      {role === 'customer' && (
+                        <div className="pt-2 border-t border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-gray-400">Personal info</p>
+                            <button
+                              type="button"
+                              onClick={() => { setEditingProfile(true); setShowProfileMenu(false) }}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                            >
+                              <Pencil className="h-3 w-3" /> Edit
+                            </button>
+                          </div>
+                          <p className="mt-1 font-medium text-gray-800">{profileInfo?.phone || 'No phone number added'}</p>
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={async () => {
@@ -420,6 +444,56 @@ export default function Layout({ children, role = 'manager' }) {
 
       <main className="lg:pl-64">{children}</main>
       <Chatbot role={role} addNotification={addNotification} />
+
+      {editingProfile && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault()
+              if (!userId) return
+              setSavingProfile(true)
+              const { error } = await supabase
+                .from('profiles')
+                .update({ full_name: profileEditForm.full_name, phone: profileEditForm.phone, updated_at: new Date().toISOString() })
+                .eq('id', userId)
+              setSavingProfile(false)
+              if (!error) {
+                setProfileInfo(prev => prev ? { ...prev, full_name: profileEditForm.full_name, phone: profileEditForm.phone } : prev)
+                setEditingProfile(false)
+              }
+            }}
+            className="bg-white rounded-xl max-w-sm w-full p-6"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Edit Personal Info</h3>
+              <button type="button" onClick={() => setEditingProfile(false)} aria-label="Close"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Full name</label>
+                <input
+                  required
+                  value={profileEditForm.full_name}
+                  onChange={e => setProfileEditForm(prev => ({ ...prev, full_name: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Phone number</label>
+                <input
+                  value={profileEditForm.phone}
+                  onChange={e => setProfileEditForm(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="e.g. 9123 4567"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </div>
+              <button type="submit" disabled={savingProfile} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
+                {savingProfile ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

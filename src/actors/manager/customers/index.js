@@ -21,7 +21,7 @@ export default function ManagerCustomers() {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id,full_name,email,status,late_cancellation_count,created_at')
+      .select('id,full_name,email,phone,status,late_cancellation_count,created_at')
       .eq('host_admin_id', hostAdminId)
       .eq('role', 'customer')
       .order('full_name', { ascending: true })
@@ -56,7 +56,7 @@ export default function ManagerCustomers() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-          <p className="text-gray-500 text-sm mt-1">Accounts auto-lock after 2 late (within 24h) cancellations of an approved booking.</p>
+          <p className="text-gray-500 text-sm mt-1">Accounts auto-lock after 2 last-minute (within 24h) cancellations of an approved booking.</p>
         </div>
         {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
 
@@ -79,8 +79,9 @@ export default function ManagerCustomers() {
                       </span>
                     </div>
                     <p className="truncate text-xs text-gray-500">{customer.email}</p>
+                    <p className="truncate text-xs text-gray-500">{customer.phone || 'No phone number on file'}</p>
                     <p className={`mt-1 text-xs ${strikes > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-                      Late cancellation strikes: {strikes}/2
+                      Last-minute cancellation strikes: {strikes}/2
                     </p>
                   </div>
                   {isLocked && (
@@ -106,7 +107,7 @@ export default function ManagerCustomers() {
               <button type="button" onClick={() => setUnlockTarget(null)} aria-label="Close"><X /></button>
             </div>
             <p className="mt-4 text-sm text-gray-600">
-              {unlockTarget.full_name} will be able to sign in and book again. Their late cancellation count will be reset to 0.
+              {unlockTarget.full_name} will be able to sign in and book again. Their last-minute cancellation count will be reset to 0.
             </p>
             <div className="mt-6 flex gap-2">
               <button type="button" onClick={confirmUnlock} className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-medium text-white hover:bg-green-700">Unlock Account</button>

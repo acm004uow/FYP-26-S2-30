@@ -40,6 +40,9 @@ alter table profiles add column if not exists service_rates jsonb default '{}'::
 -- existing status !== 'active' gate in login.js / Layout.js already blocks sign-in for. A manager
 -- can reset this and reactivate from the Customers panel (src/actors/manager/customers).
 alter table profiles add column if not exists late_cancellation_count integer not null default 0;
+-- Contact number, editable by the user from the profile menu (Layout.js). Customer-facing today;
+-- surfaced read-only to managers/staff wherever a customer's name is shown on a booking.
+alter table profiles add column if not exists phone text;
 
 -- A department (e.g. "Sales", "Facilities") within a business (host_admin_id), owned/managed by
 -- the business's owner. A department_staff profile belongs to one department and requests casual
@@ -324,8 +327,11 @@ create table if not exists booking_feedback (
   staff_id uuid references staff_profiles(id) on delete set null,
   rating integer not null check (rating between 1 and 5),
   comment text,
+  image_url text,
   created_at timestamptz default now()
 );
+
+alter table booking_feedback add column if not exists image_url text;
 
 create table if not exists system_parameters (
   id integer primary key default 1,

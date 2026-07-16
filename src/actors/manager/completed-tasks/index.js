@@ -20,7 +20,7 @@ export default function ManagerCompletedTasks() {
 
     const { data: tasks, error } = await supabase
       .from('bookings')
-      .select('id,service_type,location,updated_at,assigned_staff_id,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id),booking_feedback(rating,comment)')
+      .select('id,service_type,location,updated_at,assigned_staff_id,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id),booking_feedback(rating,comment,image_url)')
       .eq('host_admin_id', managerProfile?.host_admin_id)
       .eq('status', 'completed')
       .order('updated_at', { ascending: false })
@@ -136,10 +136,17 @@ export default function ManagerCompletedTasks() {
                       <p className="text-sm text-gray-500">{task.location} - Completed {task.updated_at ? new Date(task.updated_at).toLocaleString() : 'recently'}</p>
                       <p className="text-sm text-gray-500">Assigned staff: {task.staff_profiles?.staff_name || 'Unassigned'}</p>
                       {customerFeedback && (
-                        <p className="mt-1 text-sm text-gray-600">
-                          Customer feedback: <span className="text-yellow-500">{'★'.repeat(customerFeedback.rating)}{'☆'.repeat(5 - customerFeedback.rating)}</span>
-                          {customerFeedback.comment && <span className="italic text-gray-500"> "{customerFeedback.comment}"</span>}
-                        </p>
+                        <div className="mt-1">
+                          <p className="text-sm text-gray-600">
+                            Customer feedback: <span className="text-yellow-500">{'★'.repeat(customerFeedback.rating)}{'☆'.repeat(5 - customerFeedback.rating)}</span>
+                            {customerFeedback.comment && <span className="italic text-gray-500"> "{customerFeedback.comment}"</span>}
+                          </p>
+                          {customerFeedback.image_url && (
+                            <a href={customerFeedback.image_url} target="_blank" rel="noreferrer">
+                              <img src={customerFeedback.image_url} alt="Customer feedback attachment" className="mt-1 h-16 w-16 rounded-lg object-cover border" />
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
                     {proof?.file_url ? (

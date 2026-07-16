@@ -21,7 +21,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (router.query.locked === '1') {
-      setError('Your account has been locked after repeated late-minute booking cancellations. Contact your service provider to reactivate it.')
+      setError('Your account has been locked after repeated last-minute booking cancellations. Contact your service provider to reactivate it.')
     }
   }, [router.query.locked])
 
@@ -88,7 +88,7 @@ export default function LoginPage() {
       await supabase.auth.signOut()
       setError(
         profile.status === 'locked'
-          ? 'This account has been locked after repeated late-minute booking cancellations. Contact your service provider to reactivate it.'
+          ? 'This account has been locked after repeated last-minute booking cancellations. Contact your service provider to reactivate it.'
           : 'This account is inactive. Contact the account owner.'
       )
       return

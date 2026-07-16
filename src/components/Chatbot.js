@@ -5,12 +5,14 @@ const roleNames = {
   manager: 'Manager',
   staffMember: 'Staff Member',
   admin: 'Owner',
+  customer: 'Customer',
 }
 
 const assistantSuggestions = {
   manager: ['Generate quick report', 'Check allocation status', 'Show availability'],
   staffMember: ['Update availability', 'Start a task', 'Upload proof'],
   admin: ['Reset a password', 'Review security logs', 'Explain audit logs'],
+  customer: ['Check my booking status', 'How do I book a cleaning?', 'How do I cancel a booking?'],
 }
 
 const normalizeRole = (role) => ({
