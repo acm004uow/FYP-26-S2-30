@@ -3,7 +3,7 @@ import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { ClipboardList, MapPin, Calendar, CheckCircle, Repeat } from 'lucide-react'
+import { ArrowLeft, Calendar, CheckCircle, ClipboardList, Clock, Info, MapPin, Repeat } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { getMinBookableDate, DEFAULT_CUTOFF } from '../../../../lib/businessWeek'
@@ -297,15 +297,42 @@ export default function CustomerBooking() {
   return (
     <Layout role="customer">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Book a Cleaning Service</h1>
-          <p className="text-gray-500 text-sm mt-1">Tell us what you need and a manager will review and assign staff.</p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <button type="button" onClick={() => router.push('/customer')} className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+              <ArrowLeft className="w-4 h-4" /> Back
+            </button>
+            <h1 className="text-2xl font-bold text-gray-900">Book a Cleaning Service</h1>
+    
+          </div>
+          <div className="hidden sm:flex shrink-0 h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100">
+            <svg viewBox="0 0 64 64" className="h-11 w-11" xmlns="http://www.w3.org/2000/svg">
+              <rect x="34" y="16" width="17" height="36" rx="2" fill="#93C5FD" />
+              <rect x="38" y="22" width="3" height="3" rx="0.5" fill="#EFF6FF" />
+              <rect x="44.5" y="22" width="3" height="3" rx="0.5" fill="#EFF6FF" />
+              <rect x="38" y="29" width="3" height="3" rx="0.5" fill="#EFF6FF" />
+              <rect x="44.5" y="29" width="3" height="3" rx="0.5" fill="#EFF6FF" />
+              <rect x="38" y="36" width="3" height="3" rx="0.5" fill="#EFF6FF" />
+              <rect x="44.5" y="36" width="3" height="3" rx="0.5" fill="#EFF6FF" />
+              <rect x="13" y="30" width="21" height="22" rx="1.5" fill="#3B82F6" />
+              <path d="M11 31 L23.5 19 L36 31" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <rect x="20" y="40" width="6.5" height="12" rx="1" fill="#1E3A8A" />
+              <rect x="28.5" y="35" width="4" height="4" rx="0.5" fill="#DBEAFE" />
+              <path d="M51 8 L52.6 12.4 L57 14 L52.6 15.6 L51 20 L49.4 15.6 L45 14 L49.4 12.4 Z" fill="#A5B4FC" />
+              <circle cx="15" cy="13" r="1.8" fill="#BFDBFE" />
+              <circle cx="55" cy="34" r="1.4" fill="#BFDBFE" />
+            </svg>
+          </div>
         </div>
         {error && <div className="mb-4 rounded-lg border bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2"><ClipboardList className="w-5 h-5 text-blue-500" /> Service Details</h3>
+            <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50"><ClipboardList className="w-4 h-4 text-blue-500" /></span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-semibold text-white">1</span>
+              Service Details
+            </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
@@ -323,17 +350,28 @@ export default function CustomerBooking() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Describe what needs to be cleaned..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" />
+                <div className="relative">
+                  <textarea maxLength={500} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Describe what needs to be cleaned..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" />
+                  <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.description.length} / 500</span>
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Estimated Hours</label>
-                <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">Estimated Hours <Info className="w-3.5 h-3.5 text-gray-400" /></label>
+                <div className="flex items-center gap-2 w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500">
+                  <Clock className="w-4 h-4 text-gray-400 shrink-0" />
+                  <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: e.target.value })} className="flex-1 bg-transparent text-sm focus:outline-none" />
+                  <span className="text-xs text-gray-400 shrink-0">hours</span>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2"><MapPin className="w-5 h-5 text-green-500" /> Location & Schedule</h3>
+            <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-green-50"><MapPin className="w-4 h-4 text-green-500" /></span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-xs font-semibold text-white">2</span>
+              Location & Schedule
+            </h3>
             <div className="space-y-4">
               <AddressFields onLocationChange={setComposedLocation} onCoordinatesChange={setCoordinates} />
 
@@ -345,9 +383,12 @@ export default function CustomerBooking() {
               {bookingMode === 'one-time' ? (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Preferred Date</label>
-                    <input type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
-                    <p className="mt-1 text-xs text-gray-400">Bookings open from {minDate} onward — this week&apos;s schedule is already finalized.</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Date *</label>
+                    <div className="relative">
+                      <input required type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
+                      <Calendar className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    </div>
+                    <p className="mt-1 flex items-start gap-1 text-xs text-gray-400"><Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Bookings open from {minDate} onward — this week&apos;s schedule is already finalized.</p>
                   </div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><TimeInput value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} /></div>
                 </div>
@@ -383,12 +424,20 @@ export default function CustomerBooking() {
                 </div>
               )}
 
-              <div><label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Any special instructions..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" /></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
+                <div className="relative">
+                  <textarea maxLength={300} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Any special instructions..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" />
+                  <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.notes.length} / 300</span>
+                </div>
+              </div>
             </div>
           </div>
 
           <div className="space-y-3">
-            <button type="submit" disabled={submitting} className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed">{submitting ? 'Submitting...' : bookingMode === 'recurring' ? 'Submit Recurring Booking Request' : 'Submit Booking'}</button>
+            <button type="submit" disabled={submitting} className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+              <Calendar className="w-4 h-4" /> {submitting ? 'Submitting...' : bookingMode === 'recurring' ? 'Submit Recurring Booking Request' : 'Submit Booking'}
+            </button>
             <button type="button" onClick={() => router.push('/customer')} className="w-full py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>
           </div>
         </form>

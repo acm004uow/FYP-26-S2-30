@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { Eye, EyeOff, LayoutDashboard } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
@@ -18,6 +18,12 @@ export default function LoginPage() {
   const [signupRole, setSignupRole] = useState(null)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (router.query.locked === '1') {
+      setError('Your account has been locked after repeated late-minute booking cancellations. Contact your service provider to reactivate it.')
+    }
+  }, [router.query.locked])
 
   const routeByRole = {
     manager: '/manager',
@@ -80,7 +86,11 @@ export default function LoginPage() {
 
     if (profile.status !== 'active') {
       await supabase.auth.signOut()
-      setError('This account is inactive. Contact the account owner.')
+      setError(
+        profile.status === 'locked'
+          ? 'This account has been locked after repeated late-minute booking cancellations. Contact your service provider to reactivate it.'
+          : 'This account is inactive. Contact the account owner.'
+      )
       return
     }
 

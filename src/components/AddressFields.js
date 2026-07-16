@@ -123,11 +123,11 @@ export default function AddressFields({ onLocationChange, onCoordinatesChange, c
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Building Name</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Building Name (optional)</label>
         <input
           value={address.building}
           onChange={e => setAddress({ ...address, building: e.target.value })}
-          placeholder="e.g. Hougang Spring (optional)"
+          placeholder="e.g. Hougang Spring"
           className={inputClass}
         />
       </div>

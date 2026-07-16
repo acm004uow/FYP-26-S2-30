@@ -20,7 +20,7 @@ export default function ManagerCompletedTasks() {
 
     const { data: tasks, error } = await supabase
       .from('bookings')
-      .select('id,service_type,location,updated_at,assigned_staff_id,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id)')
+      .select('id,service_type,location,updated_at,assigned_staff_id,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id),booking_feedback(rating,comment)')
       .eq('host_admin_id', managerProfile?.host_admin_id)
       .eq('status', 'completed')
       .order('updated_at', { ascending: false })
@@ -126,6 +126,7 @@ export default function ManagerCompletedTasks() {
             {completedTasks.length === 0 && <div className="rounded-lg border p-8 text-center text-gray-400">No completed tasks yet.</div>}
             {visibleCompletedTasks.map(task => {
               const proof = task.task_proofs?.[0]
+              const customerFeedback = task.booking_feedback?.[0]
               const draft = reviewDrafts[task.id] || { rating: '', feedback: '' }
               return (
                 <div key={task.id} className="rounded-xl border border-gray-100 p-4">
@@ -134,6 +135,12 @@ export default function ManagerCompletedTasks() {
                       <h3 className="font-semibold text-gray-900">{task.service_type}</h3>
                       <p className="text-sm text-gray-500">{task.location} - Completed {task.updated_at ? new Date(task.updated_at).toLocaleString() : 'recently'}</p>
                       <p className="text-sm text-gray-500">Assigned staff: {task.staff_profiles?.staff_name || 'Unassigned'}</p>
+                      {customerFeedback && (
+                        <p className="mt-1 text-sm text-gray-600">
+                          Customer feedback: <span className="text-yellow-500">{'★'.repeat(customerFeedback.rating)}{'☆'.repeat(5 - customerFeedback.rating)}</span>
+                          {customerFeedback.comment && <span className="italic text-gray-500"> "{customerFeedback.comment}"</span>}
+                        </p>
+                      )}
                     </div>
                     {proof?.file_url ? (
                       <a href={proof.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50">

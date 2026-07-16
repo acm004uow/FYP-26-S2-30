@@ -112,6 +112,7 @@ export default function Chatbot({ role, addNotification }) {
     <>
       {!isOpen && (
         <button onClick={() => setIsOpen(true)}
+          id="chatbot-toggle-button"
           aria-label="Open AI assistant"
           className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-br from-blue-500 to-green-500 text-white rounded-full shadow-lg hover:shadow-xl transition flex items-center justify-center z-50">
           <MessageCircle className="w-6 h-6" />

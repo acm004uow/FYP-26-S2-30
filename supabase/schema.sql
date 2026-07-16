@@ -35,6 +35,11 @@ alter table profiles add column if not exists attendance_qr_rotated_at timestamp
 alter table profiles add column if not exists marketing_description text;
 alter table profiles add column if not exists marketing_published boolean default false;
 alter table profiles add column if not exists service_rates jsonb default '{}'::jsonb;
+-- Counts a customer's late (within 24h of the scheduled visit) cancellations of an
+-- already-approved booking. Reaching 2 auto-locks the account (status -> 'locked'), which the
+-- existing status !== 'active' gate in login.js / Layout.js already blocks sign-in for. A manager
+-- can reset this and reactivate from the Customers panel (src/actors/manager/customers).
+alter table profiles add column if not exists late_cancellation_count integer not null default 0;
 
 -- A department (e.g. "Sales", "Facilities") within a business (host_admin_id), owned/managed by
 -- the business's owner. A department_staff profile belongs to one department and requests casual
@@ -190,6 +195,12 @@ create table if not exists recurring_bookings (
 );
 
 alter table bookings add column if not exists recurring_booking_id uuid references recurring_bookings(id) on delete set null;
+-- Set when a customer cancels (see src/actors/customer/dashboard/index.js#handleCancel).
+-- cancelled_late is true when the cancellation happened within 24h of scheduled_date/scheduled_time
+-- (computed client-side at cancel time, since scheduled_time is a free-form "HH:MM" text field) --
+-- used to count strikes toward the auto-lock in profiles.late_cancellation_count.
+alter table bookings add column if not exists cancelled_at timestamptz;
+alter table bookings add column if not exists cancelled_late boolean default false;
 
 -- Owner-declared blackout dates (public holiday, renovation, any one-off closure). Only blocks
 -- future scheduling: generateWeeklyVisits (lib/recurringBookings.js) skips these dates when
@@ -300,6 +311,21 @@ create table if not exists performance_reviews (
 );
 
 alter table performance_reviews add column if not exists booking_id uuid references bookings(id) on delete cascade;
+
+-- A customer's rating + comment on their own completed booking (distinct from
+-- performance_reviews, which is the manager rating staff). One row per booking -- the customer
+-- dashboard (src/actors/customer/dashboard/index.js) shows the submission form until this exists,
+-- then shows it read-only. Also surfaced read-only in the manager's Completed Tasks panel.
+create table if not exists booking_feedback (
+  id uuid primary key default gen_random_uuid(),
+  booking_id uuid references bookings(id) on delete cascade unique,
+  customer_id uuid references profiles(id) on delete cascade,
+  host_admin_id uuid references profiles(id) on delete set null,
+  staff_id uuid references staff_profiles(id) on delete set null,
+  rating integer not null check (rating between 1 and 5),
+  comment text,
+  created_at timestamptz default now()
+);
 
 create table if not exists system_parameters (
   id integer primary key default 1,
@@ -428,6 +454,7 @@ alter table scheduling_settings enable row level security;
 alter table service_pay_rates enable row level security;
 alter table staff_time_off_requests enable row level security;
 alter table departments enable row level security;
+alter table booking_feedback enable row level security;
 
 -- Prototype policies. Tighten these before production.
 do $$ begin
@@ -505,6 +532,9 @@ do $$ begin
 exception when duplicate_object then null; end $$;
 do $$ begin
   create policy "authenticated all staff time off requests" on staff_time_off_requests for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated all booking feedback" on booking_feedback for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 -- Security-definer view: exposes only the public-safe columns of published company
