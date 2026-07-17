@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import { Eye, EyeOff, LayoutDashboard } from 'lucide-react'
+import { Eye, EyeOff, LayoutDashboard, MailCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 
 const signupRoleLabels = {
@@ -13,7 +13,9 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({ email: '', password: '' })
   const [signupForm, setSignupForm] = useState({ fullName: '', businessName: '', email: '', password: '' })
-  const [verificationCode, setVerificationCode] = useState('')
+  const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', ''])
+  const codeInputRefs = useRef([])
+  const verificationCode = codeDigits.join('')
   const [signupStep, setSignupStep] = useState('details')
   const [signupRole, setSignupRole] = useState(null)
   const [error, setError] = useState('')
@@ -128,9 +130,35 @@ export default function LoginPage() {
   const openSignup = (nextRole) => {
     setSignupRole(nextRole)
     setSignupStep('details')
-    setVerificationCode('')
+    setCodeDigits(['', '', '', '', '', ''])
     setError('')
     setMessage('')
+  }
+
+  const handleCodeDigitChange = (index, rawValue) => {
+    const digit = rawValue.replace(/\D/g, '').slice(-1)
+    setCodeDigits(prev => {
+      const next = [...prev]
+      next[index] = digit
+      return next
+    })
+    if (digit && codeInputRefs.current[index + 1]) {
+      codeInputRefs.current[index + 1].focus()
+    }
+  }
+
+  const handleCodeDigitKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !codeDigits[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleCodePaste = (e) => {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6)
+    if (!pasted) return
+    setCodeDigits(Array.from({ length: 6 }, (_, i) => pasted[i] || ''))
+    codeInputRefs.current[Math.min(pasted.length, 5)]?.focus()
   }
 
   const handleSignup = async (e) => {
@@ -210,7 +238,7 @@ export default function LoginPage() {
 
     setForm({ email: signupForm.email, password: signupForm.password })
     setSignupForm({ fullName: '', businessName: '', email: '', password: '' })
-    setVerificationCode('')
+    setCodeDigits(['', '', '', '', '', ''])
     setSignupStep('details')
     setMessage(`Email verified. You can sign in as ${signupRoleLabel} now.`)
     setSignupRole(null)
@@ -421,18 +449,32 @@ export default function LoginPage() {
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleVerifySignup} className="space-y-4">
-                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-700">
-                  A verification code was sent to {signupForm.email}.
+              <form onSubmit={handleVerifySignup} className="space-y-5">
+                <div className="flex flex-col items-center gap-3 pt-1">
+                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                    <MailCheck className="h-7 w-7" />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-800">Verification Code</p>
+                    <p className="mt-1 text-xs text-gray-500">A code was sent to {signupForm.email}</p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Verification Code</label>
-                  <input
-                    value={verificationCode}
-                    onChange={e => setVerificationCode(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 tracking-widest"
-                    placeholder="Enter email code"
-                  />
+                <div className="flex items-center justify-center gap-2">
+                  {codeDigits.map((digit, index) => (
+                    <input
+                      key={index}
+                      ref={el => (codeInputRefs.current[index] = el)}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={1}
+                      value={digit}
+                      onChange={e => handleCodeDigitChange(index, e.target.value)}
+                      onKeyDown={e => handleCodeDigitKeyDown(index, e)}
+                      onPaste={handleCodePaste}
+                      className="h-14 w-11 rounded-xl border border-gray-200 bg-gray-50 text-center text-lg font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  ))}
                 </div>
                 <button
                   type="submit"
