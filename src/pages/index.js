@@ -296,7 +296,7 @@ export default function MarketingHome() {
                 Browse companies
               </Link>
               <Link
-                href="/login"
+                href="/login?mode=signin"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
               >
                 Sign in
@@ -581,7 +581,7 @@ export default function MarketingHome() {
               <p className="mt-2 text-slate-600">Sign in with your role or create the first owner account.</p>
             </div>
             <Link
-              href="/login"
+              href="/login?mode=owner"
               className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-black text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
             >
               Launch Smart Task Allocation

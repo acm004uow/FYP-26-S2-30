@@ -19,6 +19,8 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [isCustomerBookingFlow, setIsCustomerBookingFlow] = useState(false)
+  const [isSignInOnly, setIsSignInOnly] = useState(false)
+  const [isOwnerFlow, setIsOwnerFlow] = useState(false)
 
   useEffect(() => {
     if (router.query.locked === '1') {
@@ -27,8 +29,12 @@ export default function LoginPage() {
   }, [router.query.locked])
 
   useEffect(() => {
-    const next = new URLSearchParams(window.location.search).get('next') || ''
+    const params = new URLSearchParams(window.location.search)
+    const next = params.get('next') || ''
+    const mode = params.get('mode')
     setIsCustomerBookingFlow(next.startsWith('/customer-book'))
+    setIsSignInOnly(mode === 'signin')
+    setIsOwnerFlow(mode === 'owner')
   }, [])
 
   const routeByRole = {
@@ -314,24 +320,28 @@ export default function LoginPage() {
               Sign in with Google
             </button>
 
-            <div className={isCustomerBookingFlow ? '' : 'grid grid-cols-2 gap-3'}>
-              {!isCustomerBookingFlow && (
-                <button
-                  type="button"
-                  onClick={() => openSignup('system_admin')}
-                  className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
-                >
-                  Sign Up as Owner
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => openSignup('customer')}
-                className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
-              >
-                Sign Up as Customer
-              </button>
-            </div>
+            {!isSignInOnly && (
+              <div className={isCustomerBookingFlow || isOwnerFlow ? '' : 'grid grid-cols-2 gap-3'}>
+                {!isCustomerBookingFlow && (
+                  <button
+                    type="button"
+                    onClick={() => openSignup('system_admin')}
+                    className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
+                  >
+                    Sign Up as Owner
+                  </button>
+                )}
+                {!isOwnerFlow && (
+                  <button
+                    type="button"
+                    onClick={() => openSignup('customer')}
+                    className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
+                  >
+                    Sign Up as Customer
+                  </button>
+                )}
+              </div>
+            )}
           </form>
 
           <p className="text-center text-xs text-gray-400 mt-6">
