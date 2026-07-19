@@ -197,6 +197,17 @@ create table if not exists recurring_bookings (
   updated_at timestamptz default now()
 );
 
+-- Manager-initiated contracts (e.g. via the AI Scheduling Agent chat) for a customer without a
+-- portal account — mirrors bookings.guest_name/guest_contact. Also how many staff each visit
+-- needs, and who created the recurring booking / where it came from. Manager-created recurring
+-- bookings are self-authorized (status: 'active' immediately, reviewed_by: the creating manager),
+-- same as manager-created one-off bookings — see lib/recurringBookings.js#createManagerRecurringBooking.
+alter table recurring_bookings add column if not exists guest_name text;
+alter table recurring_bookings add column if not exists guest_contact text;
+alter table recurring_bookings add column if not exists staff_count integer not null default 1;
+alter table recurring_bookings add column if not exists source text not null default 'customer'; -- customer | manager
+alter table recurring_bookings add column if not exists created_by uuid references profiles(id) on delete set null;
+
 alter table bookings add column if not exists recurring_booking_id uuid references recurring_bookings(id) on delete set null;
 -- Set when a customer cancels (see src/actors/customer/dashboard/index.js#handleCancel).
 -- cancelled_late is true when the cancellation happened within 24h of scheduled_date/scheduled_time

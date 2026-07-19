@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { buildScheduleProposal, fetchSupabaseRows, getSupabaseConfig, patchSupabaseRow, summarizeProposal } from '../../../lib/scheduleProposal'
+import { createManagerRecurringBooking } from '../../../lib/recurringBookings'
 
 async function getManagerProfile(token) {
   if (!token) return null
@@ -36,7 +37,7 @@ const scheduleTool = {
   type: 'function',
   function: {
     name: 'propose_weekly_schedule',
-    description: 'Generate a proposed staff schedule for unassigned bookings within a date range. Call this whenever the manager asks to create, build, or generate a schedule, roster, or allocation for a week or date range.',
+    description: 'Generate a proposed staff schedule for unassigned bookings within a date range. Call this whenever the manager asks to create, build, or generate a schedule, roster, or allocation for a week or date range using EXISTING bookings/contracts already in the system.',
     parameters: {
       type: 'object',
       properties: {
@@ -44,6 +45,42 @@ const scheduleTool = {
         end_date: { type: 'string', description: 'ISO date (YYYY-MM-DD) for the end of the scheduling window, inclusive.' },
       },
       required: ['start_date', 'end_date'],
+    },
+  },
+}
+
+const contractSchema = {
+  type: 'object',
+  properties: {
+    customer_name: { type: 'string', description: 'The customer or company name.' },
+    customer_email: { type: 'string', description: "The customer's email, if the manager mentioned one, to link an existing customer account. Omit if unknown — a new contract customer does not need a portal login." },
+    service_type: { type: 'string', description: 'The type of service, e.g. "Office Cleaning".' },
+    location: { type: 'string', description: 'The service address. If the manager did not give one, use the customer name.' },
+    days_of_week: {
+      type: 'array',
+      items: { type: 'string', enum: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] },
+      description: 'Which named weekdays the service repeats on — list every day mentioned by NAME, do not compute or number them. "Every day" means all seven names. "Monday to Friday" means ["monday","tuesday","wednesday","thursday","friday"].',
+    },
+    start_time: { type: 'string', description: 'Visit start time converted to 24-hour HH:MM, e.g. "7 PM" -> "19:00", "8am" -> "08:00". Just reformat the stated time — do not do any duration math here.' },
+    end_time: { type: 'string', description: 'Visit end time converted to 24-hour HH:MM, e.g. "9 PM" -> "21:00". If the visit crosses midnight (e.g. "10 PM - 1 AM"), this will be numerically earlier than start_time (e.g. "01:00") — that is expected, just reformat the stated end time, do not adjust it.' },
+    staff_count: { type: 'integer', description: 'Number of staff/cleaners required per visit, if stated. Defaults to 1.' },
+    start_date: { type: 'string', description: 'ISO date (YYYY-MM-DD) the contract begins. If the manager only gave one overall scheduling window covering every contract in this request (e.g. "next week"), use that window here.' },
+    end_date: { type: 'string', description: 'ISO date (YYYY-MM-DD) the contract ends, inclusive. Same fallback as start_date.' },
+  },
+  required: ['customer_name', 'service_type', 'days_of_week', 'start_time', 'end_time', 'start_date', 'end_date'],
+}
+
+const createContractTool = {
+  type: 'function',
+  function: {
+    name: 'create_recurring_contract',
+    description: 'Create one or more brand-new recurring service contracts/booking plans, each for a customer who needs the service on a repeating weekly pattern over a date range — e.g. "ABC Office Tower signed a contract for daily cleaning from 1 to 31 August, 3 staff, 8-10pm", or a message listing several customers at once, each with their own days/time/staff count. Call this whenever the manager describes a customer/location together with a recurring schedule (days of week + a time + how many staff) that is not already set up in the system — this counts even if the manager does not use the words "new" or "contract", e.g. a message that just lists "Business A: Mon-Fri 7-9pm 3 cleaners, Business B: daily 10pm-1am 5 cleaners" is a request to set both of those up. One entry in the contracts array per customer described. After creating them, the schedule for the covered range is built automatically in the same reply, so do not also call propose_weekly_schedule afterward.',
+    parameters: {
+      type: 'object',
+      properties: {
+        contracts: { type: 'array', items: contractSchema, description: 'One entry per new customer/contract described in the manager\'s message.' },
+      },
+      required: ['contracts'],
     },
   },
 }
@@ -79,9 +116,10 @@ export async function POST(request) {
     const systemPrompt = [
       'You are the Manager Scheduling Agent for the Smart Task Allocation app.',
       `Today's date is ${today}.`,
-      'When the manager asks to create, build, or generate a schedule, roster, or allocation for a week or a date range, call the propose_weekly_schedule function with start_date and end_date in YYYY-MM-DD format.',
-      'If the manager does not specify a date range, default to today through 7 days from today.',
-      'For anything else, reply briefly and naturally without calling the function. Keep replies concise, plain text only, no Markdown.',
+      'Call create_recurring_contract whenever the manager pairs a named customer/location with a recurring schedule (days of week, a time, and usually a staff count) that is not already set up — this applies even if they never say "new" or "contract". A message can describe several customers at once (e.g. "ABC Office Mon-Fri 7-9pm 3 cleaners, Green Mall daily 10pm-1am 5 cleaners"); put one entry per customer in the contracts array, all in a single call. For days_of_week, list the weekday NAMES mentioned — do not number or count them yourself. For start_time/end_time, only reformat the stated clock time into 24-hour HH:MM — do not calculate a duration or day count; that math is done in code afterward, not by you. If the manager gives one overall window for the whole message (e.g. "next week", "from 1 to 31 August") rather than a separate duration per customer, use that same window as every contract\'s start_date/end_date.',
+      'Only call propose_weekly_schedule (start_date/end_date, no contract details) when the manager is asking to build/refresh a schedule from bookings/contracts that are already set up, without giving new schedule specifics (days/time/staff) for a customer that is not yet in the system.',
+      'If the manager does not specify a date range for propose_weekly_schedule, default to today through 7 days from today.',
+      'For anything else, reply briefly and naturally without calling a function. Keep replies concise, plain text only, no Markdown.',
     ].join(' ')
 
     const messages = [{ role: 'system', content: systemPrompt }, ...cleanHistory(history), { role: 'user', content: userMessage }]
@@ -98,7 +136,7 @@ export async function POST(request) {
       body: JSON.stringify({
         model,
         messages,
-        tools: [scheduleTool],
+        tools: [scheduleTool, createContractTool],
         tool_choice: 'auto',
         temperature: 0.2,
         max_tokens: 300,
@@ -112,10 +150,50 @@ export async function POST(request) {
       return NextResponse.json({ error: data.error?.message || 'OpenAI request failed.' }, { status: response.status })
     }
 
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.find((call) => call.function?.name === 'propose_weekly_schedule')
+    const toolCalls = data.choices?.[0]?.message?.tool_calls || []
+    // If the model returns calls to both tools in the same turn, prefer create_recurring_contract
+    // — it already builds and returns the schedule for the covered range afterward, so a separate
+    // propose_weekly_schedule call would just be redundant.
+    const contractCall = toolCalls.find((call) => call.function?.name === 'create_recurring_contract')
+    const scheduleCall = toolCalls.find((call) => call.function?.name === 'propose_weekly_schedule')
 
-    if (toolCall) {
-      const args = JSON.parse(toolCall.function.arguments || '{}')
+    if (contractCall) {
+      const args = JSON.parse(contractCall.function.arguments || '{}')
+      const contracts = Array.isArray(args.contracts) ? args.contracts : [args]
+      if (contracts.length === 0) return NextResponse.json({ error: 'No contract details were provided.' }, { status: 400 })
+
+      const created = []
+      const failed = []
+      for (const contract of contracts) {
+        try {
+          await createManagerRecurringBooking(managerProfile.host_admin_id, managerProfile.id, contract)
+          created.push(contract.customer_name || 'Unnamed customer')
+        } catch (error) {
+          failed.push(`${contract.customer_name || 'Unnamed customer'}: ${error.message}`)
+        }
+      }
+
+      if (created.length === 0) {
+        return NextResponse.json({ error: failed.join(' ') || 'Could not create any contracts.' }, { status: 400 })
+      }
+
+      const validRanges = contracts.filter((c) => isValidIsoDate(c.start_date) && isValidIsoDate(c.end_date))
+      const range = validRanges.length
+        ? {
+          start_date: validRanges.map((c) => c.start_date).sort()[0],
+          end_date: validRanges.map((c) => c.end_date).sort().slice(-1)[0],
+        }
+        : defaultDateRange()
+
+      const proposal = await buildScheduleProposal(managerProfile.host_admin_id, range)
+      const createdSummary = `Created ${created.length} recurring contract${created.length === 1 ? '' : 's'}: ${created.join(', ')}.`
+      const failedSummary = failed.length ? ` Could not create: ${failed.join('; ')}.` : ''
+      const reply = `${createdSummary}${failedSummary} ${summarizeProposal(proposal, range)}`
+      return NextResponse.json({ reply, proposal, range })
+    }
+
+    if (scheduleCall) {
+      const args = JSON.parse(scheduleCall.function.arguments || '{}')
       const range = isValidIsoDate(args.start_date) && isValidIsoDate(args.end_date)
         ? { start_date: args.start_date, end_date: args.end_date }
         : defaultDateRange()
