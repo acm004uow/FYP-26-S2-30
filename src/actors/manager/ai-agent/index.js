@@ -529,7 +529,7 @@ export default function ManagerAiAgent() {
                     </div>
                   </div>
                   <h3 className="font-semibold text-gray-900">No proposed schedule yet</h3>
-                  <p className="text-sm text-gray-400 mt-1">Ask the agent to create a schedule to see this week's bookings here.</p>
+                  <p className="text-sm text-gray-400 mt-1">Ask the agent to create a schedule to see this week&apos;s bookings here.</p>
 
                   <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
                     <div className="rounded-lg border border-gray-100 p-3">
