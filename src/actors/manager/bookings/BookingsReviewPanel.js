@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, ChevronRight } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
@@ -143,6 +143,9 @@ export default function BookingsReviewPanel() {
   const [assigningBookingId, setAssigningBookingId] = useState(null)
   const [selectedStaffId, setSelectedStaffId] = useState({})
   const [reassigningId, setReassigningId] = useState(null)
+  // Two-step confirm before a real, permanent delete — id of the rejected booking currently
+  // showing its "Confirm Delete / Cancel" prompt.
+  const [deletingId, setDeletingId] = useState(null)
   const [rerunningId, setRerunningId] = useState(null)
   const [timeFilter, setTimeFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -380,6 +383,27 @@ export default function BookingsReviewPanel() {
       : reviewedBooking
         ? `Booking ${id.slice(0, 8)} ${decision}. Customer notified.`
         : 'This booking is no longer pending.')
+    await loadBookings()
+  }
+
+  // Permanent delete, only ever for rejected bookings (also enforced server-side via the
+  // .eq('status','rejected') guard below) — pending/approved/scheduled bookings have no delete
+  // path, since Reject already covers stepping those down safely.
+  const handleDeleteBooking = async (id) => {
+    const user = await getActiveManager()
+    if (!user) return
+
+    const { error } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', id)
+      .eq('status', 'rejected')
+
+    if (!error) {
+      await supabase.from('audit_logs').insert({ user_id: user.id, action: 'delete_booking', details: `Booking ${id} deleted` })
+    }
+    setDeletingId(null)
+    showNotification(error ? error.message : `Booking ${id.slice(0, 8)} deleted.`)
     await loadBookings()
   }
 
@@ -1033,6 +1057,38 @@ export default function BookingsReviewPanel() {
                   </span>
                 </div>
               </div>
+              {booking.status === 'rejected' && (
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  {deletingId === booking.id ? (
+                    <>
+                      <span className="text-sm text-gray-500">Delete this booking permanently?</span>
+                      <button
+                        onClick={() => handleDeleteBooking(booking.id)}
+                        className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" /> Confirm Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingId(null)}
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setDeletingId(booking.id)}
+                      title="Delete"
+                      aria-label="Delete booking"
+                      className="flex items-center justify-center rounded-lg border border-red-200 p-2 text-red-600 transition hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
               {booking.status !== 'rejected' && (
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex gap-2">
