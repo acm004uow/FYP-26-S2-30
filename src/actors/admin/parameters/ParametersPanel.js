@@ -82,7 +82,7 @@ function HowItWorksModal({ onClose }) {
           <button type="button" onClick={onClose} aria-label="Close"><X className="w-5 h-5" /></button>
         </div>
         <p className="mt-3 text-sm text-gray-600">
-          When a booking needs a staff member, the system scores every eligible staff member and recommends the highest-scoring match. Each factor below adds its weight to a candidate's score only if that factor is true for them — the numbers are points, not percentages, and don't need to add up to any fixed total.
+          When a booking needs a staff member, the system scores every eligible staff member and recommends the highest-scoring match. Each factor below adds its weight to a candidate&apos;s score only if that factor is true for them — the numbers are points, not percentages, and don&apos;t need to add up to any fixed total.
         </p>
 
         <div className="mt-4 space-y-3">
