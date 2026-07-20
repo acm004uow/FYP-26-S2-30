@@ -1,9 +1,10 @@
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { Bell, Headphones, LayoutDashboard, LogOut, Menu, Pencil, X } from 'lucide-react'
+import { Bell, Headphones, LayoutDashboard, LogOut, MapPin, Menu, Pencil, X } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import Chatbot from './Chatbot'
+import AddressFields from './AddressFields'
 import { navMap } from '../config/navigation'
 
 const roleDisplayMap = {
@@ -39,6 +40,11 @@ export default function Layout({ children, role = 'manager' }) {
   const [editingProfile, setEditingProfile] = useState(false)
   const [profileEditForm, setProfileEditForm] = useState({ full_name: '', phone: '' })
   const [savingProfile, setSavingProfile] = useState(false)
+  const [staffAddress, setStaffAddress] = useState({ assigned_region: '', latitude: null, longitude: null })
+  const [editingAddress, setEditingAddress] = useState(false)
+  const [addressDraft, setAddressDraft] = useState({ location: '', coordinates: null })
+  const [savingAddress, setSavingAddress] = useState(false)
+  const [addressError, setAddressError] = useState('')
   const notificationRef = useRef(null)
   const profileRef = useRef(null)
   const nav = navMap[role] || navMap.manager
@@ -122,6 +128,17 @@ export default function Layout({ children, role = 'manager' }) {
       setUserId(user.id)
       setProfileEditForm({ full_name: resolvedProfile.full_name || '', phone: resolvedProfile.phone || '' })
       if (resolvedBusinessName) setBusinessName(resolvedBusinessName)
+
+      if (role === 'staffMember') {
+        const { data: staffProfile } = await supabase
+          .from('staff_profiles')
+          .select('assigned_region,latitude,longitude')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (!cancelled && staffProfile) {
+          setStaffAddress({ assigned_region: staffProfile.assigned_region || '', latitude: staffProfile.latitude, longitude: staffProfile.longitude })
+        }
+      }
       setNotifications((notificationRows || []).map(item => ({
         id: item.id,
         title: item.title,
@@ -200,6 +217,8 @@ export default function Layout({ children, role = 'manager' }) {
     .join('') || 'U'
 
   const isCustomerNav = role === 'customer'
+  const isOwnerNav = role === 'admin'
+  const isDarkNav = isCustomerNav || isOwnerNav
 
   const openSupportChat = () => {
     document.getElementById('chatbot-toggle-button')?.click()
@@ -252,14 +271,46 @@ export default function Layout({ children, role = 'manager' }) {
     </div>
   )
 
+  const ownerBusinessName = profileInfo?.business_name || businessName
+
+  const renderOwnerNavCard = (onLinkClick) => (
+    <div className="flex h-full flex-col rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-blue-950 p-4">
+      <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Navigation</p>
+      <div className="space-y-1">
+        {nav.map(item => renderNavLink(item, { onClick: onLinkClick }))}
+      </div>
+      <div className="mt-auto">
+        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-center gap-2 text-blue-400">
+            <Headphones className="h-5 w-5" />
+            <p className="text-sm font-semibold text-white">Need help?</p>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">Our support team is here to help you anytime.</p>
+          <button
+            type="button"
+            onClick={openSupportChat}
+            className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+          >
+            Contact Support →
+          </button>
+        </div>
+        <p className="mt-4 px-2 text-center text-[11px] text-slate-600">© {new Date().getFullYear()} {ownerBusinessName}</p>
+      </div>
+    </div>
+  )
+
   const renderNavLink = (item, options = {}) => {
     const [itemPath, itemQuery] = item.path.split('?')
     const isActive = itemQuery
       ? router.pathname === itemPath && router.asPath.includes(itemQuery)
       : router.pathname === itemPath && !(itemPath === '/admin' && router.asPath.includes('section='))
     const badgeCount = itemPath === '/manager-bookings' ? pendingBookingsCount : 0
-    const activeClasses = isCustomerNav ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600'
-    const inactiveClasses = isCustomerNav ? 'text-slate-300 hover:bg-slate-800 hover:text-white' : 'text-gray-600 hover:bg-gray-50'
+    const activeClasses = isDarkNav ? 'bg-blue-600 text-white shadow-md shadow-blue-950/40' : 'bg-blue-50 text-blue-600'
+    const inactiveClasses = isCustomerNav
+      ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
+      : isOwnerNav
+        ? 'text-slate-300 hover:bg-white/5 hover:text-white'
+        : 'text-gray-600 hover:bg-gray-50'
     return (
       <Link key={item.path} href={item.path}
         onClick={options.onClick}
@@ -277,19 +328,19 @@ export default function Layout({ children, role = 'manager' }) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <nav className={`sticky top-0 z-40 border-b ${isOwnerNav ? 'bg-gradient-to-r from-slate-900 to-blue-950 border-slate-800' : 'bg-white border-gray-200'}`}>
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 rounded-lg hover:bg-gray-100">
+              <button onClick={() => setMobileOpen(!mobileOpen)} className={`lg:hidden p-2 rounded-lg transition ${isOwnerNav ? 'text-slate-300 hover:bg-white/10' : 'hover:bg-gray-100'}`}>
                 {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg flex items-center justify-center">
                 <LayoutDashboard className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-base font-semibold text-gray-800 hidden sm:block">{businessName}</h1>
-                <p className="text-xs text-gray-400 hidden sm:block">{roleDisplay}</p>
+                <h1 className={`text-base font-semibold hidden sm:block ${isOwnerNav ? 'text-white' : 'text-gray-800'}`}>{isOwnerNav ? ownerBusinessName : businessName}</h1>
+                <p className={`text-xs hidden sm:block ${isOwnerNav ? 'text-slate-400' : 'text-gray-400'}`}>{roleDisplay}</p>
               </div>
             </div>
 
@@ -297,10 +348,10 @@ export default function Layout({ children, role = 'manager' }) {
               <div className="relative" ref={notificationRef}>
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative p-2 rounded-lg hover:bg-gray-100 transition"
+                  className={`relative p-2 rounded-lg transition ${isOwnerNav ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
                   aria-label="Open notifications"
                 >
-                  <Bell className="w-5 h-5 text-gray-600" />
+                  <Bell className={`w-5 h-5 ${isOwnerNav ? 'text-slate-300' : 'text-gray-600'}`} />
                   {notifications.length > 0 && (
                     <span className="absolute -top-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
                       {notifications.length > 9 ? '9+' : notifications.length}
@@ -382,6 +433,30 @@ export default function Layout({ children, role = 'manager' }) {
                           <p className="mt-1 font-medium text-gray-800">{profileInfo?.phone || 'No phone number added'}</p>
                         </div>
                       )}
+                      {role === 'staffMember' && (
+                        <div className="pt-2 border-t border-gray-100">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-gray-400">Home address</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAddressDraft({ location: staffAddress.assigned_region, coordinates: Number.isFinite(staffAddress.latitude) && Number.isFinite(staffAddress.longitude) ? { latitude: staffAddress.latitude, longitude: staffAddress.longitude } : null })
+                                setAddressError('')
+                                setEditingAddress(true)
+                                setShowProfileMenu(false)
+                              }}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                            >
+                              <Pencil className="h-3 w-3" /> Edit
+                            </button>
+                          </div>
+                          <p className="mt-1 flex items-start gap-1 font-medium text-gray-800">
+                            <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            <span>{staffAddress.assigned_region || 'No address added'}</span>
+                          </p>
+                          <p className="mt-1 text-xs text-gray-400">Used to recommend you for jobs near where you live.</p>
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={async () => {
@@ -402,9 +477,11 @@ export default function Layout({ children, role = 'manager' }) {
 
       </nav>
 
-      <aside className={`fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r lg:block ${isCustomerNav ? 'border-slate-950 bg-slate-950' : 'border-gray-200 bg-white'}`}>
+      <aside className={`fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r lg:block ${isDarkNav ? 'border-slate-950 bg-slate-950' : 'border-gray-200 bg-white'}`}>
         {isCustomerNav ? (
           <div className="h-full p-3">{renderCustomerNavCard()}</div>
+        ) : isOwnerNav ? (
+          <div className="h-full p-3">{renderOwnerNavCard()}</div>
         ) : (
           <div className="flex h-full flex-col px-4 py-5">
             <div className="mb-4 px-4">
@@ -425,9 +502,11 @@ export default function Layout({ children, role = 'manager' }) {
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation menu"
           />
-          <aside className={`relative h-full w-72 max-w-[85vw] overflow-y-auto shadow-xl ${isCustomerNav ? 'border-r border-slate-950 bg-slate-950 p-3' : 'border-r border-gray-200 bg-white px-4 py-5'}`}>
+          <aside className={`relative h-full w-72 max-w-[85vw] overflow-y-auto shadow-xl ${isDarkNav ? 'border-r border-slate-950 bg-slate-950 p-3' : 'border-r border-gray-200 bg-white px-4 py-5'}`}>
             {isCustomerNav ? (
               renderCustomerNavCard(() => setMobileOpen(false))
+            ) : isOwnerNav ? (
+              renderOwnerNavCard(() => setMobileOpen(false))
             ) : (
               <>
                 <div className="mb-4 px-4">
@@ -490,6 +569,70 @@ export default function Layout({ children, role = 'manager' }) {
               <button type="submit" disabled={savingProfile} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
                 {savingProfile ? 'Saving...' : 'Save Changes'}
               </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {editingAddress && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault()
+              if (!userId) {
+                setAddressError('Your session has expired. Please log in again.')
+                return
+              }
+              setSavingAddress(true)
+              setAddressError('')
+              const updatePayload = {
+                assigned_region: addressDraft.location || null,
+                latitude: addressDraft.coordinates?.latitude ?? null,
+                longitude: addressDraft.coordinates?.longitude ?? null,
+                updated_at: new Date().toISOString(),
+              }
+              const { data: updatedRows, error } = await supabase
+                .from('staff_profiles')
+                .update(updatePayload)
+                .eq('user_id', userId)
+                .select('id')
+
+              let saveError = error
+              if (!saveError && (!updatedRows || updatedRows.length === 0)) {
+                // No existing staff_profiles row for this account (e.g. created before this
+                // feature) — create one instead of failing silently.
+                const { error: insertError } = await supabase
+                  .from('staff_profiles')
+                  .insert({ user_id: userId, staff_name: profileInfo?.full_name || profileInfo?.email || 'Staff', email: profileInfo?.email || null, ...updatePayload })
+                saveError = insertError
+              }
+
+              setSavingAddress(false)
+              if (saveError) {
+                setAddressError(saveError.message || 'Could not save your address. Please try again.')
+                return
+              }
+              setStaffAddress({ assigned_region: addressDraft.location, latitude: addressDraft.coordinates?.latitude ?? null, longitude: addressDraft.coordinates?.longitude ?? null })
+              setEditingAddress(false)
+            }}
+            className="bg-white rounded-xl max-w-sm w-full p-6 max-h-[85vh] overflow-y-auto"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Edit Home Address</h3>
+              <button type="button" onClick={() => setEditingAddress(false)} aria-label="Close"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mb-3 text-xs text-gray-500">Used to recommend you for jobs close to home. Only the general area is shown to managers.</p>
+            {addressError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{addressError}</p>}
+            <div className="space-y-3">
+              <AddressFields
+                compact
+                onLocationChange={location => setAddressDraft(prev => ({ ...prev, location }))}
+                onCoordinatesChange={coordinates => setAddressDraft(prev => ({ ...prev, coordinates }))}
+              />
+              <button type="submit" disabled={savingAddress || !addressDraft.coordinates} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
+                {savingAddress ? 'Saving...' : 'Save Address'}
+              </button>
+              {!addressDraft.coordinates && <p className="text-xs text-gray-400">Enter a valid postal code to look up coordinates before saving.</p>}
             </div>
           </form>
         </div>

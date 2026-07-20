@@ -1,4 +1,4 @@
-import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, ShieldAlert, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
+import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
@@ -33,8 +33,6 @@ export const navMap = {
     { name: 'Categories', path: '/admin?section=categories', icon: Tags },
     { name: 'Attendance', path: '/admin?section=attendance', icon: UserCheck },
     { name: 'Marketing', path: '/admin?section=marketing', icon: Megaphone },
-    { name: 'Security Logs', path: '/admin?section=security', icon: ShieldAlert },
-    { name: 'Audit Logs', path: '/admin?section=audit', icon: FileText },
     { name: 'Global Parameters', path: '/admin?section=parameters', icon: Settings },
     { name: 'Scheduling', path: '/admin?section=closures', icon: CalendarOff },
     { name: 'Reports', path: '/admin?section=reports', icon: TrendingUp },

@@ -91,6 +91,11 @@ create table if not exists staff_profiles (
 
 alter table staff_profiles add column if not exists host_admin_id uuid references profiles(id) on delete set null;
 alter table staff_profiles add column if not exists manager_id uuid references profiles(id) on delete set null;
+-- Staff-entered home address coordinates (via postal code lookup), used to score proximity to a
+-- job's address in the recommendation engine (lib/recommendationEngine.js). assigned_region holds
+-- the human-readable address label shown alongside these.
+alter table staff_profiles add column if not exists latitude double precision;
+alter table staff_profiles add column if not exists longitude double precision;
 -- Fixed base pay, set individually per staff member by the owner. On top of this, staff earn an
 -- allowance for completed tasks (hours x the task's service_type rate — see service_pay_rates
 -- below); both are surfaced together in the owner's Business Reports (Staff Pay Summary).

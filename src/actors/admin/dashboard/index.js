@@ -9,11 +9,9 @@ import SchedulingCutoffPanel from '../closures/SchedulingCutoffPanel'
 import BookingsReviewPanel from '../../manager/bookings/BookingsReviewPanel'
 import CategoriesPanel from '../../manager/categories/CategoriesPanel'
 import MarketingPanel from '../marketing/MarketingPanel'
-import AuditLogsPanel from '../audit-logs/AuditLogsPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
 import ReportsPanel from '../reports/ReportsPanel'
 import PayRatesPanel from '../pay-rates/PayRatesPanel'
-import SecurityLogsPanel from '../security-logs/SecurityLogsPanel'
 import TimeOffRequestsPanel from '../timeoff/TimeOffRequestsPanel'
 import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 import DepartmentsPanel from '../departments/DepartmentsPanel'
@@ -22,8 +20,6 @@ export default function AdminPanel() {
   const router = useRouter()
   const [users, setUsers] = useState([])
   const [staffProfiles, setStaffProfiles] = useState([])
-  const [securityLogs, setSecurityLogs] = useState([])
-  const [auditLogs, setAuditLogs] = useState([])
   const [activeSection, setActiveSection] = useState('users')
   const [showReset, setShowReset] = useState(null)
   const [showCreate, setShowCreate] = useState(null)
@@ -35,7 +31,6 @@ export default function AdminPanel() {
     workloadThreshold: 3,
     proximityRadius: 10,
     availabilityWeight: 30,
-    skillWeight: 25,
     regionWeight: 20,
     hoursWeight: 15,
     workloadWeight: 10,
@@ -78,10 +73,8 @@ export default function AdminPanel() {
       profileRequests.push(supabase.from('profiles').select(baseProfileSelect).eq('business_name', businessName))
     }
 
-    const [profileResults, { data: security }, { data: audit }, { data: systemParams }, { data: staff }, { data: departmentRows }] = await Promise.all([
+    const [profileResults, { data: systemParams }, { data: staff }, { data: departmentRows }] = await Promise.all([
       Promise.all(profileRequests),
-      supabase.from('security_logs').select('id,email,event_type,details,created_at').order('created_at', { ascending: false }).limit(20),
-      supabase.from('audit_logs').select('id,action,details,created_at,profiles(email)').order('created_at', { ascending: false }).limit(20),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
       hostAdminId ? supabase.from('staff_profiles').select('id,user_id,manager_id,basic_salary').eq('host_admin_id', hostAdminId) : Promise.resolve({ data: [] }),
       hostAdminId ? supabase.from('departments').select('id,name').eq('host_admin_id', hostAdminId).order('name') : Promise.resolve({ data: [] }),
@@ -100,14 +93,11 @@ export default function AdminPanel() {
     setUsers(profiles || [])
     setStaffProfiles(staff || [])
     setDepartments(departmentRows || [])
-    setSecurityLogs(security || [])
-    setAuditLogs(audit || [])
     if (systemParams) {
       setParams({
         workloadThreshold: systemParams.workload_threshold,
         proximityRadius: systemParams.proximity_radius,
         availabilityWeight: systemParams.availability_weight,
-        skillWeight: systemParams.skill_weight,
         regionWeight: systemParams.region_weight,
         hoursWeight: systemParams.hours_weight,
         workloadWeight: systemParams.workload_weight,
@@ -147,7 +137,7 @@ export default function AdminPanel() {
   }, [])
 
   useEffect(() => {
-    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'security', 'audit', 'parameters', 'closures', 'reports', 'payrates', 'timeoff', 'departments']
+    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'parameters', 'closures', 'reports', 'payrates', 'timeoff', 'departments']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
@@ -264,7 +254,6 @@ export default function AdminPanel() {
       workload_threshold: Number(params.workloadThreshold),
       proximity_radius: Number(params.proximityRadius),
       availability_weight: Number(params.availabilityWeight),
-      skill_weight: Number(params.skillWeight),
       region_weight: Number(params.regionWeight),
       hours_weight: Number(params.hoursWeight),
       workload_weight: Number(params.workloadWeight),
@@ -299,8 +288,6 @@ export default function AdminPanel() {
           {activeSection === 'attendance' && <AttendancePanel />}
           {activeSection === 'categories' && <CategoriesPanel />}
           {activeSection === 'marketing' && <MarketingPanel />}
-          {activeSection === 'security' && <SecurityLogsPanel logs={securityLogs} />}
-          {activeSection === 'audit' && <AuditLogsPanel logs={auditLogs} />}
           {activeSection === 'parameters' && <ParametersPanel params={params} setParams={setParams} onSave={saveParameters} />}
           {activeSection === 'reports' && <ReportsPanel />}
           {activeSection === 'payrates' && <PayRatesPanel />}

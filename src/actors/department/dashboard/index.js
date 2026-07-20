@@ -112,7 +112,7 @@ export default function DepartmentDashboard() {
         .order('staff_name'),
       supabase
         .from('staff_profiles')
-        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
+        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
         .eq('host_admin_id', resolvedHostAdminId)
         .eq('is_suspended', false)
         .eq('status', 'active'),
@@ -193,8 +193,9 @@ export default function DepartmentDashboard() {
     const recs = generateRecommendations(
       recommendationPool,
       {
-        required_skill: 'Cleaning',
         location: form.location,
+        latitude: coordinates?.latitude ?? null,
+        longitude: coordinates?.longitude ?? null,
         estimated_hours: form.estimatedHours,
         requested_text: form.description || '',
       },
@@ -202,7 +203,7 @@ export default function DepartmentDashboard() {
       excludedStaffIds
     )
     setRecommendations(recs)
-  }, [form.location, form.estimatedHours, form.description, form.scheduledDate, recommendationPool, recommendationParams, approvedTimeOff])
+  }, [form.location, coordinates, form.estimatedHours, form.description, form.scheduledDate, recommendationPool, recommendationParams, approvedTimeOff])
 
   useEffect(() => {
     if (!recommendations.length) return

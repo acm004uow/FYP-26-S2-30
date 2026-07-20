@@ -216,7 +216,7 @@ export default function BookingsReviewPanel() {
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
       supabase
         .from('bookings')
-        .select('id,customer_id,service_type,location,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
+        .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
         .eq('host_admin_id', hostAdminIdResolved)
         .in('status', ['pending', 'approved', 'rejected'])
         .order('created_at', { ascending: false }),
@@ -299,8 +299,9 @@ export default function BookingsReviewPanel() {
     const recommendations = generateRecommendations(
       recommendationPool,
       {
-        required_skill: 'Cleaning',
         location: newBookingForm.location,
+        latitude: newBookingCoordinates?.latitude ?? null,
+        longitude: newBookingCoordinates?.longitude ?? null,
         estimated_hours: newBookingForm.estimatedHours,
         requested_text: `${newBookingForm.description || ''} ${newBookingForm.notes || ''}`,
       },
@@ -308,7 +309,7 @@ export default function BookingsReviewPanel() {
       excludedStaffIds
     )
     setNewBookingRecommendations(recommendations)
-  }, [showNewBooking, newBookingForm.location, newBookingForm.estimatedHours, newBookingForm.description, newBookingForm.notes, newBookingForm.scheduledDate, recommendationPool, recommendationParams, approvedTimeOff])
+  }, [showNewBooking, newBookingForm.location, newBookingCoordinates, newBookingForm.estimatedHours, newBookingForm.description, newBookingForm.notes, newBookingForm.scheduledDate, recommendationPool, recommendationParams, approvedTimeOff])
 
   useEffect(() => {
     if (!newBookingRecommendations.length) return
@@ -535,7 +536,7 @@ export default function BookingsReviewPanel() {
     const [{ data: freshStaff }, { data: systemParams }] = await Promise.all([
       supabase
         .from('staff_profiles')
-        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
+        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
         .eq('host_admin_id', hostAdminId)
         .eq('is_suspended', false)
         .eq('status', 'active'),
@@ -545,8 +546,9 @@ export default function BookingsReviewPanel() {
     const recommendations = generateRecommendations(
       freshStaff || [],
       {
-        required_skill: 'Cleaning',
         location: booking.location,
+        latitude: booking.latitude,
+        longitude: booking.longitude,
         estimated_hours: booking.estimated_hours,
         requested_text: `${booking.description || ''} ${booking.notes || ''}`,
       },
@@ -584,7 +586,7 @@ export default function BookingsReviewPanel() {
     const [{ data: pool }, { data: params }, types] = await Promise.all([
       supabase
         .from('staff_profiles')
-        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,weekly_working_hours,max_weekly_hours,is_suspended,status')
+        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
         .eq('host_admin_id', hostAdminId)
         .eq('is_suspended', false)
         .eq('status', 'active'),
