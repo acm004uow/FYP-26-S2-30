@@ -275,25 +275,10 @@ export default function Layout({ children, role = 'manager' }) {
 
   const renderOwnerNavCard = (onLinkClick) => (
     <div className="flex h-full flex-col rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-blue-950 p-4">
-      <p className="mb-3 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Navigation</p>
       <div className="space-y-1">
         {nav.map(item => renderNavLink(item, { onClick: onLinkClick }))}
       </div>
       <div className="mt-auto">
-        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="flex items-center gap-2 text-blue-400">
-            <Headphones className="h-5 w-5" />
-            <p className="text-sm font-semibold text-white">Need help?</p>
-          </div>
-          <p className="mt-1 text-xs text-slate-400">Our support team is here to help you anytime.</p>
-          <button
-            type="button"
-            onClick={openSupportChat}
-            className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
-          >
-            Contact Support →
-          </button>
-        </div>
         <p className="mt-4 px-2 text-center text-[11px] text-slate-600">© {new Date().getFullYear()} {ownerBusinessName}</p>
       </div>
     </div>
@@ -484,9 +469,6 @@ export default function Layout({ children, role = 'manager' }) {
           <div className="h-full p-3">{renderOwnerNavCard()}</div>
         ) : (
           <div className="flex h-full flex-col px-4 py-5">
-            <div className="mb-4 px-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Navigation</p>
-            </div>
             <div className="space-y-1">
               {nav.map(item => renderNavLink(item))}
             </div>
@@ -508,21 +490,16 @@ export default function Layout({ children, role = 'manager' }) {
             ) : isOwnerNav ? (
               renderOwnerNavCard(() => setMobileOpen(false))
             ) : (
-              <>
-                <div className="mb-4 px-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Navigation</p>
-                </div>
-                <div className="space-y-1">
-                  {nav.map(item => renderNavLink(item, { onClick: () => setMobileOpen(false) }))}
-                </div>
-              </>
+              <div className="space-y-1">
+                {nav.map(item => renderNavLink(item, { onClick: () => setMobileOpen(false) }))}
+              </div>
             )}
           </aside>
         </div>
       )}
 
       <main className="lg:pl-64">{children}</main>
-      <Chatbot role={role} addNotification={addNotification} />
+      {(role === 'customer' || role === 'staffMember') && <Chatbot role={role} addNotification={addNotification} />}
 
       {editingProfile && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

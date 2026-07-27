@@ -205,7 +205,7 @@ export default function ManagerUserAccounts() {
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Email</label>
-                <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="name@example.com" />
+                <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="someone@gmail.com" />
               </div>
               <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Send Invite</button>
             </div>

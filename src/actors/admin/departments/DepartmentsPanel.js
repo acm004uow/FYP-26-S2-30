@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertCircle, Briefcase, Plus, Trash2, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 
-export default function DepartmentsPanel() {
+export default function DepartmentsPanel({ onChange }) {
   const [departments, setDepartments] = useState([])
   const [hostAdminId, setHostAdminId] = useState(null)
   const [message, setMessage] = useState('')
@@ -70,6 +70,7 @@ export default function DepartmentsPanel() {
     setName('')
     setShowCreate(false)
     await loadDepartments()
+    onChange?.()
   }
 
   const handleDelete = async () => {
@@ -84,6 +85,7 @@ export default function DepartmentsPanel() {
     setMessage('Department deleted.')
     setDeleteTarget(null)
     await loadDepartments()
+    onChange?.()
   }
 
   return (

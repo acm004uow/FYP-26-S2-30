@@ -44,21 +44,23 @@ export default function AdminPanel() {
     const { data: { user } } = await supabase.auth.getUser()
     let { data: currentProfile, error: currentProfileError } = await supabase
       .from('profiles')
-      .select('business_name,host_admin_id')
+      .select('role,business_name,host_admin_id')
       .eq('id', user?.id)
       .single()
 
     if (currentProfileError) {
       const fallbackProfile = await supabase
         .from('profiles')
-        .select('business_name')
+        .select('role,business_name')
         .eq('id', user?.id)
         .single()
       currentProfile = fallbackProfile.data
     }
 
     const businessName = currentProfile?.business_name || ''
-    const hostAdminId = currentProfile?.host_admin_id || user?.id || ''
+    // An admin's own host_admin_id should always self-reference; don't trust a stale value left
+    // over from before a role change (e.g. this account used to be a manager under someone else).
+    const hostAdminId = currentProfile?.role === 'system_admin' ? user?.id || '' : currentProfile?.host_admin_id || user?.id || ''
     const baseProfileSelect = 'id,full_name,email,role,status,created_at,business_name'
     const hostProfileSelect = `${baseProfileSelect},host_admin_id`
     const profileRequests = [
@@ -292,7 +294,7 @@ export default function AdminPanel() {
           {activeSection === 'reports' && <ReportsPanel />}
           {activeSection === 'payrates' && <PayRatesPanel />}
           {activeSection === 'timeoff' && <TimeOffRequestsPanel />}
-          {activeSection === 'departments' && <DepartmentsPanel />}
+          {activeSection === 'departments' && <DepartmentsPanel onChange={loadAdminData} />}
           {activeSection === 'closures' && (
             <>
               <SchedulingCutoffPanel />
@@ -360,7 +362,7 @@ export default function AdminPanel() {
               <div>
                 <label className="text-sm font-medium text-gray-700">Role</label>
                 <select value={createForm.role} onChange={e => setCreateForm({ ...createForm, role: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
-                  {roleOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  {roleOptions.filter(option => option.value !== 'system_admin').map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
               {createForm.role === 'department_staff' && (
@@ -381,7 +383,7 @@ export default function AdminPanel() {
               </div>
               <div>
                 <label className="text-sm font-medium text-gray-700">Email</label>
-                <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="name@example.com" />
+                <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="someone@gmail.com" />
               </div>
               <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Send Invite</button>
             </div>
