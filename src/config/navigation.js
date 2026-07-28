@@ -3,7 +3,7 @@ import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2
 export const navMap = {
   manager: [
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
-    { name: 'Employees', path: '/manager-user-accounts', icon: UserCog },
+    { name: 'Staff', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Customers', path: '/manager-customers', icon: Users },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'Schedule', path: '/manager-schedule', icon: Calendar },
