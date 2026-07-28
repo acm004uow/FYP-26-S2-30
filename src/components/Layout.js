@@ -1,10 +1,11 @@
 import { useRouter } from 'next/router'
 import Link from 'next/link'
 import { useState, useEffect, useRef } from 'react'
-import { Bell, Headphones, LayoutDashboard, LogOut, MapPin, Menu, Pencil, X } from 'lucide-react'
+import { Bell, LayoutDashboard, LogOut, MapPin, Menu, Pencil, X } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import Chatbot from './Chatbot'
 import AddressFields from './AddressFields'
+import CustomerBottomNav from './CustomerBottomNav'
 import { navMap } from '../config/navigation'
 
 const roleDisplayMap = {
@@ -218,71 +219,8 @@ export default function Layout({ children, role = 'manager' }) {
 
   const isCustomerNav = role === 'customer'
   const isOwnerNav = role === 'admin'
-  const isDarkNav = isCustomerNav || isOwnerNav
-
-  const openSupportChat = () => {
-    document.getElementById('chatbot-toggle-button')?.click()
-  }
-
-  const renderHelpCard = () => (
-    isCustomerNav ? (
-      <div className="mt-4 border-t border-slate-700 pt-4">
-        <div className="flex items-center gap-2 text-teal-400">
-          <Headphones className="h-5 w-5" />
-          <p className="text-sm font-semibold text-white">Need help?</p>
-        </div>
-        <p className="mt-1 text-xs text-slate-400">Chat with our support team anytime.</p>
-        <button
-          type="button"
-          onClick={openSupportChat}
-          className="mt-3 w-full rounded-lg border border-teal-700 bg-slate-900 py-2 text-xs font-semibold text-teal-400 hover:bg-slate-700"
-        >
-          Contact Support →
-        </button>
-      </div>
-    ) : (
-      <div className="mt-4 rounded-xl border border-green-100 bg-green-50 p-4">
-        <div className="flex items-center gap-2 text-green-700">
-          <Headphones className="h-5 w-5" />
-          <p className="text-sm font-semibold">Need help?</p>
-        </div>
-        <p className="mt-1 text-xs text-gray-500">Chat with our support team anytime.</p>
-        <button
-          type="button"
-          onClick={openSupportChat}
-          className="mt-3 w-full rounded-lg border border-green-200 bg-white py-2 text-xs font-semibold text-green-700 hover:bg-green-50"
-        >
-          Contact Support
-        </button>
-      </div>
-    )
-  )
-
-  const renderCustomerNavCard = (onLinkClick) => (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-800 bg-slate-900 p-4">
-      <p className="mb-4 px-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Bookings</p>
-      <div className="space-y-1">
-        {nav.map(item => renderNavLink(item, { onClick: onLinkClick }))}
-      </div>
-      <div className="mt-auto">
-        {renderHelpCard()}
-        <p className="mt-4 px-2 text-center text-[11px] text-slate-600">© {new Date().getFullYear()} Smart Task Allocation</p>
-      </div>
-    </div>
-  )
 
   const ownerBusinessName = profileInfo?.business_name || businessName
-
-  const renderOwnerNavCard = (onLinkClick) => (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900 to-blue-950 p-4">
-      <div className="space-y-1">
-        {nav.map(item => renderNavLink(item, { onClick: onLinkClick }))}
-      </div>
-      <div className="mt-auto">
-        <p className="mt-4 px-2 text-center text-[11px] text-slate-600">© {new Date().getFullYear()} {ownerBusinessName}</p>
-      </div>
-    </div>
-  )
 
   const renderNavLink = (item, options = {}) => {
     const [itemPath, itemQuery] = item.path.split('?')
@@ -290,20 +228,14 @@ export default function Layout({ children, role = 'manager' }) {
       ? router.pathname === itemPath && router.asPath.includes(itemQuery)
       : router.pathname === itemPath && !(itemPath === '/admin' && router.asPath.includes('section='))
     const badgeCount = itemPath === '/manager-bookings' ? pendingBookingsCount : 0
-    const activeClasses = isDarkNav ? 'bg-blue-600 text-white shadow-md shadow-blue-950/40' : 'bg-blue-50 text-blue-600'
-    const inactiveClasses = isCustomerNav
-      ? 'text-slate-300 hover:bg-slate-800 hover:text-white'
-      : isOwnerNav
-        ? 'text-slate-300 hover:bg-white/5 hover:text-white'
-        : 'text-gray-600 hover:bg-gray-50'
     return (
       <Link key={item.path} href={item.path}
         onClick={options.onClick}
-        className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium transition ${isActive ? activeClasses : inactiveClasses}`}>
-        <item.icon className="h-5 w-5 shrink-0" />
+        className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-accent-100 text-accent-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+        <item.icon className="h-[17px] w-[17px] shrink-0" />
         <span className="flex-1">{item.name}</span>
         {badgeCount > 0 && (
-          <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-semibold text-white">
+          <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
             {badgeCount > 9 ? '9+' : badgeCount}
           </span>
         )}
@@ -312,58 +244,65 @@ export default function Layout({ children, role = 'manager' }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className={`sticky top-0 z-40 border-b ${isOwnerNav ? 'bg-gradient-to-r from-slate-900 to-blue-950 border-slate-800' : 'bg-white border-gray-200'}`}>
+    <div className="min-h-screen bg-gray-100">
+      <nav className="sticky top-0 z-40 border-b-2 border-divider bg-white">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMobileOpen(!mobileOpen)} className={`lg:hidden p-2 rounded-lg transition ${isOwnerNav ? 'text-slate-300 hover:bg-white/10' : 'hover:bg-gray-100'}`}>
-                {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </button>
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-green-500 rounded-lg flex items-center justify-center">
-                <LayoutDashboard className="w-6 h-6 text-white" />
+              {!isCustomerNav && (
+                <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 hover:bg-gray-100 transition">
+                  {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                </button>
+              )}
+              <div className="w-8 h-8 bg-accent flex items-center justify-center">
+                <LayoutDashboard className="w-[17px] h-[17px] text-white" />
               </div>
               <div>
-                <h1 className={`text-base font-semibold hidden sm:block ${isOwnerNav ? 'text-white' : 'text-gray-800'}`}>{isOwnerNav ? ownerBusinessName : businessName}</h1>
-                <p className={`text-xs hidden sm:block ${isOwnerNav ? 'text-slate-400' : 'text-gray-400'}`}>{roleDisplay}</p>
+                <h1 className="text-sm font-bold hidden sm:block text-gray-800">{isOwnerNav ? ownerBusinessName : businessName}</h1>
+                <p className="text-xs hidden sm:block text-gray-500">{roleDisplay}</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
               <div className="relative" ref={notificationRef}>
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className={`relative p-2 rounded-lg transition ${isOwnerNav ? 'hover:bg-white/10' : 'hover:bg-gray-100'}`}
+                  className="relative flex h-9 w-9 items-center justify-center border border-divider hover:bg-gray-100 transition"
                   aria-label="Open notifications"
                 >
-                  <Bell className={`w-5 h-5 ${isOwnerNav ? 'text-slate-300' : 'text-gray-600'}`} />
+                  <Bell className="w-[18px] h-[18px] text-gray-700" />
                   {notifications.length > 0 && (
-                    <span className="absolute -top-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                    <span className="absolute -top-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white">
                       {notifications.length > 9 ? '9+' : notifications.length}
                     </span>
                   )}
                 </button>
                 {showNotifications && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-100 z-50 overflow-hidden">
-                    <div className="p-3 border-b border-gray-100 font-semibold text-gray-700">Notifications</div>
+                  <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg z-50 overflow-hidden">
+                    <div className="p-3 border-b-2 border-divider font-semibold text-gray-800">Notifications</div>
                     <div className="max-h-96 overflow-y-auto">
                       {notifications.length === 0 ? (
                         <div className="p-4 text-center text-gray-400 text-sm">No notifications</div>
                       ) : (
                         notifications.map(notif => (
-                          <div key={notif.id} className="p-3 border-b border-gray-50 hover:bg-gray-50">
-                            {notif.title && (
-                              <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
-                            )}
-                            <p className="text-sm text-gray-600">{notif.message}</p>
-                            <p className="text-xs text-gray-400 mt-1">{notif.time}</p>
+                          <div key={notif.id} className="flex gap-3 p-3 border-b border-divider hover:bg-gray-50">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-100 text-accent-700">
+                              <Bell className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              {notif.title && (
+                                <p className="text-sm font-semibold text-gray-800">{notif.title}</p>
+                              )}
+                              <p className="text-sm text-gray-600">{notif.message}</p>
+                              <p className="text-xs text-gray-400 mt-1">{notif.time}</p>
+                            </div>
                           </div>
                         ))
                       )}
                     </div>
                     <button
                       onClick={() => setNotifications([])}
-                      className="w-full p-2 text-center text-xs text-blue-500 hover:bg-gray-50"
+                      className="w-full p-2 text-center text-xs font-semibold text-accent-600 hover:bg-gray-50"
                     >
                       Clear all
                     </button>
@@ -374,16 +313,16 @@ export default function Layout({ children, role = 'manager' }) {
               <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-green-500 text-sm font-semibold text-white shadow-sm hover:shadow-md transition"
+                  className="flex h-9 w-9 items-center justify-center bg-accent-800 text-sm font-bold text-white transition"
                   aria-label="Open profile menu"
                 >
                   {profileInitials}
                 </button>
                 {showProfileMenu && (
-                  <div className="absolute right-0 mt-2 w-72 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg z-50">
-                    <div className="p-4 border-b border-gray-100">
+                  <div className="absolute right-0 mt-2 w-72 overflow-hidden rounded-lg bg-white shadow-lg z-50">
+                    <div className="p-4 border-b-2 border-divider">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-green-500 text-sm font-semibold text-white">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-700 text-sm font-bold text-white">
                           {profileInitials}
                         </div>
                         <div className="min-w-0">
@@ -404,13 +343,13 @@ export default function Layout({ children, role = 'manager' }) {
                         <p className="font-medium text-gray-800">{profileRoleDisplay}</p>
                       </div>
                       {role === 'customer' && (
-                        <div className="pt-2 border-t border-gray-100">
+                        <div className="pt-2 border-t border-divider">
                           <div className="flex items-center justify-between">
                             <p className="text-xs text-gray-400">Personal info</p>
                             <button
                               type="button"
                               onClick={() => { setEditingProfile(true); setShowProfileMenu(false) }}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-accent-600 hover:underline"
                             >
                               <Pencil className="h-3 w-3" /> Edit
                             </button>
@@ -419,7 +358,7 @@ export default function Layout({ children, role = 'manager' }) {
                         </div>
                       )}
                       {role === 'staffMember' && (
-                        <div className="pt-2 border-t border-gray-100">
+                        <div className="pt-2 border-t border-divider">
                           <div className="flex items-center justify-between">
                             <p className="text-xs text-gray-400">Home address</p>
                             <button
@@ -430,7 +369,7 @@ export default function Layout({ children, role = 'manager' }) {
                                 setEditingAddress(true)
                                 setShowProfileMenu(false)
                               }}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+                              className="inline-flex items-center gap-1 text-xs font-medium text-accent-600 hover:underline"
                             >
                               <Pencil className="h-3 w-3" /> Edit
                             </button>
@@ -448,7 +387,7 @@ export default function Layout({ children, role = 'manager' }) {
                         await supabase.auth.signOut()
                         router.push('/login')
                       }}
-                      className="flex w-full items-center gap-2 border-t border-gray-100 px-4 py-3 text-sm font-medium text-red-500 hover:bg-red-50 transition"
+                      className="flex w-full items-center gap-2 border-t-2 border-divider px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition"
                     >
                       <LogOut className="w-4 h-4" />
                       Logout
@@ -462,21 +401,20 @@ export default function Layout({ children, role = 'manager' }) {
 
       </nav>
 
-      <aside className={`fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r lg:block ${isDarkNav ? 'border-slate-950 bg-slate-950' : 'border-gray-200 bg-white'}`}>
-        {isCustomerNav ? (
-          <div className="h-full p-3">{renderCustomerNavCard()}</div>
-        ) : isOwnerNav ? (
-          <div className="h-full p-3">{renderOwnerNavCard()}</div>
-        ) : (
-          <div className="flex h-full flex-col px-4 py-5">
-            <div className="space-y-1">
+      {!isCustomerNav && (
+        <aside className="fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r-2 border-divider bg-white lg:block">
+          <div className="flex h-full flex-col py-4">
+            <div className="flex-1 space-y-0.5 overflow-y-auto">
               {nav.map(item => renderNavLink(item))}
             </div>
+            {isOwnerNav && (
+              <p className="mt-4 px-4 text-center text-[11px] text-gray-400">© {new Date().getFullYear()} {ownerBusinessName}</p>
+            )}
           </div>
-        )}
-      </aside>
+        </aside>
+      )}
 
-      {mobileOpen && (
+      {mobileOpen && !isCustomerNav && (
         <div className="fixed inset-0 top-16 z-30 lg:hidden">
           <button
             type="button"
@@ -484,21 +422,19 @@ export default function Layout({ children, role = 'manager' }) {
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation menu"
           />
-          <aside className={`relative h-full w-72 max-w-[85vw] overflow-y-auto shadow-xl ${isDarkNav ? 'border-r border-slate-950 bg-slate-950 p-3' : 'border-r border-gray-200 bg-white px-4 py-5'}`}>
-            {isCustomerNav ? (
-              renderCustomerNavCard(() => setMobileOpen(false))
-            ) : isOwnerNav ? (
-              renderOwnerNavCard(() => setMobileOpen(false))
-            ) : (
-              <div className="space-y-1">
-                {nav.map(item => renderNavLink(item, { onClick: () => setMobileOpen(false) }))}
-              </div>
+          <aside className="relative h-full w-72 max-w-[85vw] overflow-y-auto border-r-2 border-divider bg-white py-4 shadow-xl">
+            <div className="space-y-0.5">
+              {nav.map(item => renderNavLink(item, { onClick: () => setMobileOpen(false) }))}
+            </div>
+            {isOwnerNav && (
+              <p className="mt-4 px-4 text-center text-[11px] text-gray-400">© {new Date().getFullYear()} {ownerBusinessName}</p>
             )}
           </aside>
         </div>
       )}
 
-      <main className="lg:pl-64">{children}</main>
+      <main className={isCustomerNav ? 'pb-24' : 'lg:pl-64'}>{children}</main>
+      {isCustomerNav && <CustomerBottomNav />}
       {(role === 'customer' || role === 'staffMember') && <Chatbot role={role} addNotification={addNotification} />}
 
       {editingProfile && (
@@ -518,7 +454,7 @@ export default function Layout({ children, role = 'manager' }) {
                 setEditingProfile(false)
               }
             }}
-            className="bg-white rounded-xl max-w-sm w-full p-6"
+            className="bg-white rounded-xl shadow-lg max-w-sm w-full p-6"
           >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Edit Personal Info</h3>
@@ -531,7 +467,7 @@ export default function Layout({ children, role = 'manager' }) {
                   required
                   value={profileEditForm.full_name}
                   onChange={e => setProfileEditForm(prev => ({ ...prev, full_name: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
                 />
               </div>
               <div>
@@ -540,10 +476,10 @@ export default function Layout({ children, role = 'manager' }) {
                   value={profileEditForm.phone}
                   onChange={e => setProfileEditForm(prev => ({ ...prev, phone: e.target.value }))}
                   placeholder="e.g. 9123 4567"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
                 />
               </div>
-              <button type="submit" disabled={savingProfile} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
+              <button type="submit" disabled={savingProfile} className="w-full bg-accent text-white py-2 rounded-lg text-sm font-semibold hover:bg-accent-600 active:bg-accent-700 transition disabled:opacity-60">
                 {savingProfile ? 'Saving...' : 'Save Changes'}
               </button>
             </div>
@@ -592,7 +528,7 @@ export default function Layout({ children, role = 'manager' }) {
               setStaffAddress({ assigned_region: addressDraft.location, latitude: addressDraft.coordinates?.latitude ?? null, longitude: addressDraft.coordinates?.longitude ?? null })
               setEditingAddress(false)
             }}
-            className="bg-white rounded-xl max-w-sm w-full p-6 max-h-[85vh] overflow-y-auto"
+            className="bg-white rounded-xl shadow-lg max-w-sm w-full p-6 max-h-[85vh] overflow-y-auto"
           >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold">Edit Home Address</h3>
@@ -606,7 +542,7 @@ export default function Layout({ children, role = 'manager' }) {
                 onLocationChange={location => setAddressDraft(prev => ({ ...prev, location }))}
                 onCoordinatesChange={coordinates => setAddressDraft(prev => ({ ...prev, coordinates }))}
               />
-              <button type="submit" disabled={savingAddress || !addressDraft.coordinates} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
+              <button type="submit" disabled={savingAddress || !addressDraft.coordinates} className="w-full bg-accent text-white py-2 rounded-lg text-sm font-semibold hover:bg-accent-600 active:bg-accent-700 transition disabled:opacity-60">
                 {savingAddress ? 'Saving...' : 'Save Address'}
               </button>
               {!addressDraft.coordinates && <p className="text-xs text-gray-400">Enter a valid postal code to look up coordinates before saving.</p>}

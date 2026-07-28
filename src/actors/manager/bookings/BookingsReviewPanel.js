@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { CheckCircle, XCircle, Bell, GripVertical, MapPin, Star, UserCheck, Calendar, Sparkles, ListChecks, Move, RefreshCw, Plus, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, MapPin, UserCheck, Calendar, Sparkles, RefreshCw, Plus, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, Trash2, Eye } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
@@ -8,6 +7,8 @@ import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDat
 import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
+
+const BOOKINGS_PAGE_SIZE = 8
 
 const TIME_FILTERS = [
   { value: 'all', label: 'All' },
@@ -71,19 +72,12 @@ const statusColor = {
   rejected: 'bg-red-100 text-red-700',
 }
 
-const staffStatusColor = {
-  Available: 'bg-green-100 text-green-700',
-  Busy: 'bg-blue-100 text-blue-700',
-  'Time Off': 'bg-amber-100 text-amber-700',
-  'On Leave': 'bg-gray-100 text-gray-600',
-}
-
-const STAFF_STATUS_FILTERS = ['All', 'Available', 'Busy', 'Time Off', 'On Leave']
-
 const BOOKING_STATUS_FILTERS = [
-  { value: 'all', label: 'Any status' },
+  { value: 'all', label: 'All' },
   { value: 'pending', label: 'Pending' },
   { value: 'approved', label: 'Approved' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
   { value: 'rejected', label: 'Rejected' },
 ]
 
@@ -138,8 +132,6 @@ export default function BookingsReviewPanel() {
   const [bookings, setBookings] = useState([])
   const [staffRows, setStaffRows] = useState([])
   const [notification, setNotification] = useState(null)
-  const [draggedStaffId, setDraggedStaffId] = useState(null)
-  const [dropTargetId, setDropTargetId] = useState(null)
   const [assigningBookingId, setAssigningBookingId] = useState(null)
   const [selectedStaffId, setSelectedStaffId] = useState({})
   const [reassigningId, setReassigningId] = useState(null)
@@ -166,13 +158,12 @@ export default function BookingsReviewPanel() {
   const [recurringRejecting, setRecurringRejecting] = useState(null)
   const [recurringRejectReason, setRecurringRejectReason] = useState('')
   const [approvedTimeOff, setApprovedTimeOff] = useState([])
-  const [staffSearch, setStaffSearch] = useState('')
-  const [staffStatusFilter, setStaffStatusFilter] = useState('All')
-  const [staffFiltersOpen, setStaffFiltersOpen] = useState(false)
   const [bookingSearch, setBookingSearch] = useState('')
   const [bookingStatusFilter, setBookingStatusFilter] = useState('all')
   const [bookingServiceTypeFilter, setBookingServiceTypeFilter] = useState('all')
   const [bookingFiltersOpen, setBookingFiltersOpen] = useState(false)
+  const [detailBookingId, setDetailBookingId] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const loadRecurringBookings = async (hostAdminIdParam) => {
     if (!hostAdminIdParam) {
@@ -317,6 +308,10 @@ export default function BookingsReviewPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newBookingRecommendations])
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [bookingSearch, bookingStatusFilter, bookingServiceTypeFilter, timeFilter, sourceFilter])
+
   const showNotification = (message) => {
     setNotification(message)
     setTimeout(() => setNotification(null), 3000)
@@ -456,20 +451,6 @@ export default function BookingsReviewPanel() {
     await loadRecurringBookings(hostAdminId)
   }
 
-  const handleStaffDragStart = (event, staff) => {
-    if (!staff.canAssign) return
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', staff.id)
-    setDraggedStaffId(staff.id)
-  }
-
-  const handleBookingDragOver = (event, booking) => {
-    if (booking.status === 'rejected') return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setDropTargetId(booking.id)
-  }
-
   const performAssignment = async (booking, staffId, action) => {
     const staff = staffRows.find(item => item.id === staffId)
     if (!staff || booking.status === 'rejected') return
@@ -505,14 +486,6 @@ export default function BookingsReviewPanel() {
     setAssigningBookingId(null)
     showNotification(result.message)
     await loadBookings()
-  }
-
-  const handleAssignStaff = async (event, booking) => {
-    event.preventDefault()
-    setDropTargetId(null)
-    const staffId = event.dataTransfer.getData('text/plain') || draggedStaffId
-    setDraggedStaffId(null)
-    await performAssignment(booking, staffId, 'assign_booking_drag_drop')
   }
 
   const handleManualAssign = async (booking) => {
@@ -788,19 +761,15 @@ export default function BookingsReviewPanel() {
   const bookingServiceTypes = Array.from(new Set(bookings.map(b => b.service_type).filter(Boolean))).sort()
   const timeFilterCounts = Object.fromEntries(TIME_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesTimeFilter(b, tab.value)).length]))
   const sourceFilterCounts = Object.fromEntries(SOURCE_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesSourceFilter(b, tab.value)).length]))
-
-  const visibleStaffRows = staffRows.filter(staff => {
-    if (staffSearch.trim() && !staff.name.toLowerCase().includes(staffSearch.trim().toLowerCase())) return false
-    if (staffStatusFilter !== 'All' && staff.status !== staffStatusFilter) return false
-    return true
-  })
-  const availableStaffCount = staffRows.filter(staff => staff.status === 'Available').length
+  const totalPages = Math.max(1, Math.ceil(visibleBookings.length / BOOKINGS_PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const pageBookings = visibleBookings.slice((safePage - 1) * BOOKINGS_PAGE_SIZE, safePage * BOOKINGS_PAGE_SIZE)
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
@@ -811,57 +780,70 @@ export default function BookingsReviewPanel() {
         <button
           type="button"
           onClick={openNewTaskModal}
-          className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md"
+          className="flex items-center gap-1.5 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2 text-sm font-semibold text-white transition"
         >
           <Plus className="w-4 h-4" /> New Task
         </button>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-          <ListChecks className="w-3.5 h-3.5" /> Select staff from the dropdown
-        </span>
-        <span className="text-xs text-gray-400">or</span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
-          <Move className="w-3.5 h-3.5" /> Drag a staff member onto a booking
-        </span>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px]">
+      <div className="mt-4 mb-6 flex flex-wrap items-center gap-3">
+        <div className="relative w-full sm:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             value={bookingSearch}
             onChange={e => setBookingSearch(e.target.value)}
-            placeholder="Search bookings by service, location, or customer..."
-            className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+            placeholder="Search bookings..."
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-200"
           />
         </div>
-        <div className="relative">
+        <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-gray-200">
+          {BOOKING_STATUS_FILTERS.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setBookingStatusFilter(option.value)}
+              className={`px-3.5 py-2 text-sm font-medium transition ${bookingStatusFilter === option.value ? 'bg-accent text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative sm:ml-auto">
           <button
             type="button"
             onClick={() => setBookingFiltersOpen(open => !open)}
-            className="flex items-center gap-1.5 px-3 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
           >
-            <Filter className="w-4 h-4" /> Filter <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+            <Filter className="w-4 h-4" /> Filters <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </button>
           {bookingFiltersOpen && (
-            <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
-              <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Status</p>
-              {BOOKING_STATUS_FILTERS.map(option => (
+            <div className="absolute right-0 mt-1 w-52 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
+              <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">When</p>
+              {TIME_FILTERS.map(tab => (
                 <button
-                  key={option.value}
+                  key={tab.value}
                   type="button"
-                  onClick={() => { setBookingStatusFilter(option.value); setBookingFiltersOpen(false) }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingStatusFilter === option.value ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                  onClick={() => { setTimeFilter(tab.value); setBookingFiltersOpen(false) }}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 ${timeFilter === tab.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
                 >
-                  {option.label}
+                  {tab.label} <span className="text-xs text-gray-400">{timeFilterCounts[tab.value]}</span>
+                </button>
+              ))}
+              <p className="border-t px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Source</p>
+              {SOURCE_FILTERS.map(tab => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => { setSourceFilter(tab.value); setBookingFiltersOpen(false) }}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 ${sourceFilter === tab.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
+                >
+                  {tab.label} <span className="text-xs text-gray-400">{sourceFilterCounts[tab.value]}</span>
                 </button>
               ))}
               <p className="border-t px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Service Type</p>
               <button
                 type="button"
                 onClick={() => { setBookingServiceTypeFilter('all'); setBookingFiltersOpen(false) }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingServiceTypeFilter === 'all' ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingServiceTypeFilter === 'all' ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
               >
                 Any service type
               </button>
@@ -870,7 +852,7 @@ export default function BookingsReviewPanel() {
                   key={type}
                   type="button"
                   onClick={() => { setBookingServiceTypeFilter(type); setBookingFiltersOpen(false) }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingServiceTypeFilter === type ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${bookingServiceTypeFilter === type ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
                 >
                   {type}
                 </button>
@@ -878,37 +860,6 @@ export default function BookingsReviewPanel() {
             </div>
           )}
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {TIME_FILTERS.map(tab => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setTimeFilter(tab.value)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${timeFilter === tab.value ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            {tab.label}
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${timeFilter === tab.value ? 'bg-white/20' : 'bg-white text-gray-500'}`}>
-              {timeFilterCounts[tab.value]}
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="mt-2 mb-6 flex flex-wrap items-center gap-2">
-        {SOURCE_FILTERS.map(tab => (
-          <button
-            key={tab.value}
-            type="button"
-            onClick={() => setSourceFilter(tab.value)}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ${sourceFilter === tab.value ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-          >
-            {tab.label}
-            <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${sourceFilter === tab.value ? 'bg-white/20' : 'bg-white text-gray-500'}`}>
-              {sourceFilterCounts[tab.value]}
-            </span>
-          </button>
-        ))}
       </div>
 
       {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
@@ -989,263 +940,300 @@ export default function BookingsReviewPanel() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_360px] gap-6">
-        <div className="space-y-4">
-          {visibleBookings.map(booking => {
-            const scheduleBadge = getScheduleBadge(booking)
-            const ServiceIcon = serviceIcon(booking.service_type)
-            return (
-            <div
-              key={booking.id}
-              onDragOver={(event) => handleBookingDragOver(event, booking)}
-              onDragLeave={() => setDropTargetId(null)}
-              onDrop={(event) => handleAssignStaff(event, booking)}
-              className={`bg-white rounded-xl shadow-sm border p-5 transition ${booking.status !== 'rejected' ? 'hover:bg-blue-50' : ''} ${dropTargetId === booking.id ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''}`}
-            >
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex min-w-0 gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-500">
-                    <ServiceIcon className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                  <h3 className="font-semibold text-gray-900">{booking.service_type}</h3>
-                  <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{booking.location}</p>
-                  <p className="text-xs text-gray-400 mt-2">
-                    {booking.source === 'manager'
-                      ? `Added by you${booking.guest_name ? ` for ${booking.guest_name}` : ''}`
-                      : booking.source === 'department'
-                        ? `Requested by ${booking.departments?.name ? `the ${booking.departments.name} department` : 'a department'}`
-                        : `Requested by ${booking.customer?.full_name || booking.customer?.email || 'Customer'}${booking.customer?.phone ? ` · ${booking.customer.phone}` : ''}`} on {new Date(booking.created_at).toLocaleDateString()}
-                  </p>
-                  {booking.status === 'pending' && booking.staff_profiles?.staff_name ? (
-                    <div className="mt-2 flex items-start justify-between gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2">
-                      <p className="text-sm text-indigo-700 flex items-start gap-1">
-                        <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
-                        <span>
-                          AI Recommended: <span className="font-medium">{booking.staff_profiles.staff_name}</span>
-                          {booking.recommendation_reason && <span className="block text-xs text-indigo-400 font-normal">{booking.recommendation_reason}</span>}
+      <div>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col className="w-[20%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[16%]" />
+                <col className="w-[13%]" />
+                <col className="w-[11%]" />
+                <col className="w-[10%]" />
+              </colgroup>
+              <thead>
+                <tr className="border-b bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <th className="px-3 py-2.5">Service</th>
+                  <th className="px-3 py-2.5">Customer</th>
+                  <th className="px-3 py-2.5">Location</th>
+                  <th className="px-3 py-2.5">Assignee</th>
+                  <th className="px-3 py-2.5">Date</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5"><span className="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {pageBookings.map(booking => {
+                  const scheduleBadge = getScheduleBadge(booking)
+                  const ServiceIcon = serviceIcon(booking.service_type)
+                  const customerLabel = booking.source === 'manager'
+                    ? `${booking.guest_name || 'Walk-in'}`
+                    : booking.source === 'department'
+                      ? (booking.departments?.name ? `${booking.departments.name} dept.` : 'Department')
+                      : (booking.customer?.full_name || booking.customer?.email || 'Customer')
+                  return (
+                    <tr
+                      key={booking.id}
+                      className="transition hover:bg-gray-50"
+                    >
+                      <td className="px-3 py-2.5">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-100 text-accent-600">
+                            <ServiceIcon className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="truncate font-semibold text-gray-900">{booking.service_type}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{customerLabel}</span></td>
+                      <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{booking.location}</span></td>
+                      <td className="px-3 py-2.5">
+                        {booking.staff_profiles?.staff_name ? (
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarColor(booking.staff_profiles.staff_name)}`}>
+                              {booking.staff_profiles.staff_name.split(' ').map(part => part[0]).join('').slice(0, 2)}
+                            </span>
+                            <span className="truncate text-gray-700">{booking.staff_profiles.staff_name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">Unassigned</span>
+                        )}
+                      </td>
+                      <td className={`px-3 py-2.5 truncate ${dateToneColor[scheduleBadge.tone].split(' ').filter(c => c.startsWith('text-')).join(' ') || 'text-gray-600'}`}>
+                        {scheduleBadge.label}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
+                          {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}
                         </span>
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => handleRerunMatch(booking)}
-                        disabled={rerunningId === booking.id}
-                        title="Re-run AI match using the latest notes and staff availability"
-                        className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-indigo-400 hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${rerunningId === booking.id ? 'animate-spin' : ''}`} /> Re-run match
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-600 mt-2 flex items-center gap-1"><UserCheck className="w-4 h-4" />Assigned staff: {booking.staff_profiles?.staff_name || 'Unassigned'}</p>
-                  )}
-                  {booking.description && (
-                    <p className="text-sm text-gray-600 mt-2"><span className="font-medium text-gray-700">Description:</span> {booking.description}</p>
-                  )}
-                  {booking.notes && (
-                    <p className="text-sm text-gray-600 mt-1"><span className="font-medium text-gray-700">Notes:</span> {booking.notes}</p>
-                  )}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${getSourceMeta(booking.source).badge}`}>
-                    {getSourceMeta(booking.source).label}
-                  </span>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setDetailBookingId(booking.id)}
+                          aria-label="View booking"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-50"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {visibleBookings.length === 0 && (
+            <div className="p-8 text-center text-gray-400">
+              {bookings.length === 0 ? 'No bookings found.' : 'No bookings match these filters.'}
+            </div>
+          )}
+          {visibleBookings.length > 0 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <span className="text-xs text-gray-500">Page {safePage} of {totalPages}</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage >= totalPages}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {detailBookingId && (() => {
+        const booking = bookings.find(b => b.id === detailBookingId)
+        if (!booking) return null
+        const scheduleBadge = getScheduleBadge(booking)
+        const closeDrawer = () => { setDetailBookingId(null); setReassigningId(null); setDeletingId(null) }
+        return (
+          <>
+            <div className="fixed inset-0 z-40 bg-gray-900/40" onClick={closeDrawer} />
+            <div className="fixed right-0 top-0 bottom-0 z-50 flex w-full max-w-[420px] flex-col bg-white shadow-lg">
+              <div className="flex items-center justify-between border-b p-5">
+                <h4 className="font-semibold text-gray-900">Booking detail</h4>
+                <button type="button" onClick={closeDrawer} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                <div>
+                  <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
                     {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}
                   </span>
-                  <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold ${dateToneColor[scheduleBadge.tone]}`}>
-                    <Calendar className="w-3.5 h-3.5" />{scheduleBadge.label}
-                  </span>
+                  <h3 className="mt-2 font-semibold text-gray-900">{booking.service_type}</h3>
+                  <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{booking.location}</p>
                 </div>
-              </div>
-              {booking.status === 'rejected' && (
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  {deletingId === booking.id ? (
-                    <>
-                      <span className="text-sm text-gray-500">Delete this booking permanently?</span>
-                      <button
-                        onClick={() => handleDeleteBooking(booking.id)}
-                        className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" /> Confirm Delete
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(null)}
-                        className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
+                <div className="border-t border-gray-100" />
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-[11px] uppercase text-gray-400">Customer</p>
+                    <p className="font-semibold text-gray-900">
+                      {booking.source === 'manager'
+                        ? `${booking.guest_name || 'Walk-in'}`
+                        : booking.source === 'department'
+                          ? (booking.departments?.name ? `${booking.departments.name} dept.` : 'Department')
+                          : (booking.customer?.full_name || booking.customer?.email || 'Customer')}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase text-gray-400">Assignee</p>
+                    <p className="font-semibold text-gray-900">{booking.staff_profiles?.staff_name || 'Unassigned'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase text-gray-400">Date</p>
+                    <p className="font-semibold text-gray-900">{scheduleBadge.label}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase text-gray-400">Source</p>
+                    <p className="font-semibold text-gray-900">{getSourceMeta(booking.source).label}</p>
+                  </div>
+                </div>
+                <div className="border-t border-gray-100" />
+                {booking.status === 'pending' && booking.staff_profiles?.staff_name && (
+                  <div className="flex items-start justify-between gap-2 rounded-lg border border-accent-200 bg-accent-100 px-3 py-2">
+                    <p className="text-sm text-accent-800 flex items-start gap-1">
+                      <Sparkles className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>
+                        AI Recommended: <span className="font-medium">{booking.staff_profiles.staff_name}</span>
+                        {booking.recommendation_reason && <span className="block text-xs text-accent-600 font-normal">{booking.recommendation_reason}</span>}
+                      </span>
+                    </p>
                     <button
                       type="button"
-                      onClick={() => setDeletingId(booking.id)}
-                      title="Delete"
-                      aria-label="Delete booking"
-                      className="flex items-center justify-center rounded-lg border border-red-200 p-2 text-red-600 transition hover:bg-red-50"
+                      onClick={() => handleRerunMatch(booking)}
+                      disabled={rerunningId === booking.id}
+                      title="Re-run AI match using the latest notes and staff availability"
+                      className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-accent-600 hover:bg-accent-200 disabled:opacity-50"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <RefreshCw className={`w-3.5 h-3.5 ${rerunningId === booking.id ? 'animate-spin' : ''}`} />
                     </button>
-                  )}
-                </div>
-              )}
-              {booking.status !== 'rejected' && (
-                <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex gap-2">
-                    {booking.status === 'pending' && (
-                      <>
-                        <button
-                          onClick={() => handleReview(booking.id, 'Approved')}
-                          className="flex items-center gap-1.5 rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-600 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-green-300 focus:ring-offset-1"
-                        >
-                          <CheckCircle className="w-4 h-4" /> Approve
-                        </button>
-                        <button
-                          onClick={() => handleReview(booking.id, 'Rejected')}
-                          className="flex items-center gap-1.5 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-600 hover:shadow-md active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-1"
-                        >
-                          <XCircle className="w-4 h-4" /> Reject
-                        </button>
-                      </>
-                    )}
                   </div>
+                )}
+                {booking.description && (
+                  <div>
+                    <p className="text-[11px] uppercase text-gray-400 mb-1">Description</p>
+                    <p className="text-sm text-gray-600">{booking.description}</p>
+                  </div>
+                )}
+                {booking.notes && (
+                  <div>
+                    <p className="text-[11px] uppercase text-gray-400 mb-1">Notes</p>
+                    <p className="text-sm text-gray-600">{booking.notes}</p>
+                  </div>
+                )}
+
+                {booking.status !== 'rejected' && (
                   <button
                     type="button"
                     onClick={() => setReassigningId(prev => prev === booking.id ? null : booking.id)}
-                    className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                    className="flex items-center gap-1 rounded-lg px-3 py-2 -mx-3 text-sm font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                   >
                     <UserCheck className="w-4 h-4" />
                     {reassigningId === booking.id ? 'Cancel' : booking.status === 'pending' ? 'Choose different staff' : 'Reassign staff'}
                   </button>
-                </div>
-              )}
-              {reassigningId === booking.id && (
-                <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
-                  {booking.status === 'pending' && (
-                    <p className="text-xs text-gray-500 mb-2">Assigning will also approve this booking.</p>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <select
-                      value={selectedStaffId[booking.id] || ''}
-                      onChange={(event) => setSelectedStaffId(prev => ({ ...prev, [booking.id]: event.target.value }))}
-                      className="min-w-[180px] flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
-                    >
-                      <option value="">Choose staff...</option>
-                      {staffRows.map(staff => {
-                        const offOnDate = isStaffOffOnDate(staff.id, booking.scheduled_date, approvedTimeOff)
-                        const assignable = staff.canAssign && !offOnDate
-                        return (
-                          <option key={staff.id} value={staff.id} disabled={!assignable}>
-                            {staff.name}{assignable ? '' : offOnDate ? ' (Off that day)' : ` (${staff.status})`}
-                          </option>
-                        )
-                      })}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => handleManualAssign(booking)}
-                      disabled={!selectedStaffId[booking.id] || assigningBookingId === booking.id}
-                      className="flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium disabled:opacity-50"
-                    >
-                      <UserCheck className="w-4 h-4" /> {booking.status === 'pending' ? 'Assign & Approve' : 'Confirm'}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            )
-          })}
-          {visibleBookings.length === 0 && (
-            <div className="bg-white rounded-xl border p-8 text-center text-gray-400">
-              {bookings.length === 0 ? 'No bookings found.' : 'No bookings match these filters.'}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border h-fit overflow-hidden">
-          <div className="p-5 border-b">
-            <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              Available Staff
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">{availableStaffCount}</span>
-            </h2>
-            <p className="text-sm text-gray-500 mt-1">Drag a staff member onto a booking.</p>
-            <div className="mt-3 flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  value={staffSearch}
-                  onChange={e => setStaffSearch(e.target.value)}
-                  placeholder="Search staff..."
-                  className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                />
-              </div>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setStaffFiltersOpen(open => !open)}
-                  className="flex items-center gap-1 px-3 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Filter className="w-4 h-4" /> <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                </button>
-                {staffFiltersOpen && (
-                  <div className="absolute right-0 mt-1 w-36 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
-                    {STAFF_STATUS_FILTERS.map(option => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => { setStaffStatusFilter(option); setStaffFiltersOpen(false) }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${staffStatusFilter === option ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                )}
+                {reassigningId === booking.id && (
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    {booking.status === 'pending' && (
+                      <p className="text-xs text-gray-500 mb-2">Assigning will also approve this booking.</p>
+                    )}
+                    <div className="flex flex-col gap-2">
+                      <select
+                        value={selectedStaffId[booking.id] || ''}
+                        onChange={(event) => setSelectedStaffId(prev => ({ ...prev, [booking.id]: event.target.value }))}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700"
                       >
-                        {option}
+                        <option value="">Choose staff...</option>
+                        {staffRows.map(staff => {
+                          const offOnDate = isStaffOffOnDate(staff.id, booking.scheduled_date, approvedTimeOff)
+                          const assignable = staff.canAssign && !offOnDate
+                          return (
+                            <option key={staff.id} value={staff.id} disabled={!assignable}>
+                              {staff.name}{assignable ? '' : offOnDate ? ' (Off that day)' : ` (${staff.status})`}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleManualAssign(booking)}
+                        disabled={!selectedStaffId[booking.id] || assigningBookingId === booking.id}
+                        className="flex items-center justify-center gap-1 px-4 py-2 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50"
+                      >
+                        <UserCheck className="w-4 h-4" /> {booking.status === 'pending' ? 'Assign & Approve' : 'Confirm'}
                       </button>
-                    ))}
+                    </div>
+                  </div>
+                )}
+
+                {booking.status === 'rejected' && (
+                  <div className="flex items-center justify-end gap-2">
+                    {deletingId === booking.id ? (
+                      <>
+                        <span className="text-sm text-gray-500">Delete permanently?</span>
+                        <button
+                          onClick={() => handleDeleteBooking(booking.id)}
+                          className="flex items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" /> Confirm Delete
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingId(null)}
+                          className="rounded-lg px-3 py-2 text-sm font-medium text-gray-500 hover:bg-gray-100"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingId(booking.id)}
+                        title="Delete"
+                        aria-label="Delete booking"
+                        className="flex items-center justify-center gap-1.5 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" /> Delete booking
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-          <div className="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
-            {visibleStaffRows.map(staff => (
-              <div
-                key={staff.id}
-                draggable={staff.canAssign}
-                onDragStart={(event) => handleStaffDragStart(event, staff)}
-                onDragEnd={() => {
-                  setDraggedStaffId(null)
-                  setDropTargetId(null)
-                }}
-                className={`p-4 transition ${staff.canAssign ? 'cursor-grab hover:bg-gray-50 active:cursor-grabbing' : 'cursor-not-allowed opacity-70'} ${draggedStaffId === staff.id ? 'bg-blue-50' : ''}`}
-                title={staff.canAssign ? 'Drag this staff member onto a booking' : 'Only available active staff can be assigned'}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 ${avatarColor(staff.name)}`}>
-                    {staff.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-800 truncate">{staff.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{staff.role} - {staff.tasks} active tasks</p>
-                  </div>
-                  {staff.canAssign && <GripVertical className="h-4 w-4 text-gray-300" />}
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${staffStatusColor[staff.status]}`}>{staff.status}</span>
-                    <span className="text-xs text-yellow-500 flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400" />{staff.rating}</span>
-                  </div>
+              {booking.status === 'pending' && (
+                <div className="flex gap-2 border-t p-5">
+                  <button
+                    onClick={() => handleReview(booking.id, 'Approved')}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600"
+                  >
+                    <CheckCircle className="w-4 h-4" /> Approve
+                  </button>
+                  <button
+                    onClick={() => handleReview(booking.id, 'Rejected')}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-600"
+                  >
+                    <XCircle className="w-4 h-4" /> Reject
+                  </button>
                 </div>
-              </div>
-            ))}
-            {visibleStaffRows.length === 0 && (
-              <div className="p-8 text-center text-gray-400">
-                {staffRows.length === 0 ? 'No active staff found.' : 'No staff match this search or filter.'}
-              </div>
-            )}
-          </div>
-          <Link href="/manager-user-accounts" className="flex items-center justify-center gap-1 border-t p-3 text-sm font-medium text-blue-600 hover:bg-gray-50">
-            View all staff <ChevronRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      </div>
+              )}
+            </div>
+          </>
+        )
+      })()}
 
       {showNewBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -1340,7 +1328,7 @@ export default function BookingsReviewPanel() {
                 <label className="text-sm font-medium text-gray-700">Notes</label>
                 <textarea value={newBookingForm.notes} onChange={e => setNewBookingForm({ ...newBookingForm, notes: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" rows={2} />
               </div>
-              <button type="submit" disabled={creatingBooking} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-60">
+              <button type="submit" disabled={creatingBooking} className="w-full bg-accent hover:bg-accent-600 text-white py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition disabled:opacity-60">
                 <Plus className="w-4 h-4" /> {creatingBooking ? 'Creating...' : 'Create Task'}
               </button>
             </div>

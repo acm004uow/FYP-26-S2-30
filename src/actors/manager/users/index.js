@@ -139,7 +139,7 @@ export default function ManagerUserAccounts() {
           <h1 className="text-2xl font-bold text-gray-900">User Accounts</h1>
           <p className="text-gray-500 text-sm mt-1">Manage system access and permissions</p>
         </div>
-        {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+        {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         <UserAccountsPanel
           users={users}
@@ -191,7 +191,7 @@ export default function ManagerUserAccounts() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleCreate} className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex justify-between"><h3 className="text-lg font-semibold">Invite User Account</h3><button type="button" onClick={() => setShowCreate(false)}><X /></button></div>
-            {message && <div className="mt-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+            {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
             <div className="space-y-3 mt-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Role</label>
@@ -207,7 +207,7 @@ export default function ManagerUserAccounts() {
                 <label className="text-sm font-medium text-gray-700">Email</label>
                 <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="someone@gmail.com" />
               </div>
-              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Send Invite</button>
+              <button type="submit" className="w-full bg-accent hover:bg-accent-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition"><UserPlus className="w-4 h-4" /> Send Invite</button>
             </div>
           </form>
         </div>

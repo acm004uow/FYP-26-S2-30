@@ -171,7 +171,7 @@ export default function ManagerTracking() {
   return (
     <Layout role="manager">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold flex items-center gap-2"><UserCheck className="w-6 h-6 text-blue-500" /> Staff Attendance &amp; Progress</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-2"><UserCheck className="w-6 h-6 text-accent" /> Staff Attendance &amp; Progress</h1>
         <p className="text-gray-500 mb-6">Track when staff check in and out of jobs, and how their assigned work is progressing.</p>
 
         <div className="bg-white rounded-xl shadow-sm border p-5 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -184,12 +184,12 @@ export default function ManagerTracking() {
                   ? `Checked in since ${new Date(myAttendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
                   : "You haven't checked in today."}
             </p>
-            {scannerMessage && <p className="text-xs text-blue-600 mt-1">{scannerMessage}</p>}
+            {scannerMessage && <p className="text-xs text-accent-600 mt-1">{scannerMessage}</p>}
           </div>
           {!(myAttendance?.clocked_in_at && myAttendance?.clocked_out_at) && (
             <button
               onClick={() => { setScannerMessage(''); setShowScanner(true) }}
-              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md"
+              className="flex items-center justify-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2 text-sm font-semibold text-white transition"
             >
               <QrCode className="w-4 h-4" /> {myAttendance?.clocked_in_at ? 'Clock Out' : 'Clock In'}
             </button>
@@ -204,7 +204,7 @@ export default function ManagerTracking() {
             <p className="text-xs text-gray-500 mt-1">Staff working this day</p>
           </div>
           <div className="bg-white rounded-xl border p-4">
-            <p className="text-2xl font-bold text-blue-600">{checkedInCount}</p>
+            <p className="text-2xl font-bold text-accent-600">{checkedInCount}</p>
             <p className="text-xs text-gray-500 mt-1">Currently checked in</p>
           </div>
           <div className="bg-white rounded-xl border p-4">

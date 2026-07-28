@@ -120,14 +120,14 @@ export default function ClosuresPanel() {
             </h2>
             <p className="mt-1 text-sm text-gray-500">Block dates for public holidays or any one-off situation — customers can&apos;t book on these dates, and recurring bookings automatically skip them.</p>
           </div>
-          <button onClick={() => setModalOpen(true)} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:shadow-lg">
+          <button onClick={() => setModalOpen(true)} className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-5 py-2.5 text-sm font-semibold text-white transition">
             <Plus className="w-5 h-5" />
             Add Closure
           </button>
         </div>
       </div>
 
-      {message && <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+      {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
       <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
         <div className="hidden grid-cols-[1fr_1.5fr_0.6fr] gap-4 border-b border-gray-100 bg-gray-50 px-5 py-3 text-xs font-semibold uppercase text-gray-500 md:grid">
@@ -175,18 +175,18 @@ export default function ClosuresPanel() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
-                  <input type="date" name="start_date" required className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="date" name="start_date" required className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-gray-700">End Date</label>
-                  <input type="date" name="end_date" required className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input type="date" name="end_date" required className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
                 </div>
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">Reason</label>
-                <input name="reason" placeholder="e.g. Public Holiday" className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input name="reason" placeholder="e.g. Public Holiday" className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
               </div>
-              <button type="submit" className="w-full rounded-lg bg-gradient-to-r from-blue-500 to-green-500 py-3 text-sm font-semibold text-white">
+              <button type="submit" className="w-full rounded-lg bg-accent hover:bg-accent-600 py-3 text-sm font-semibold text-white transition">
                 Add Closure
               </button>
             </form>

@@ -63,9 +63,9 @@ export default function AuthCallback() {
   }, [router, router.isReady])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 text-center shadow-xl border border-gray-100">
-        <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+    <div className="min-h-screen bg-accent2-500 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm rounded-xl bg-white p-8 text-center shadow-lg">
+        <div className="w-14 h-14 bg-accent rounded-lg flex items-center justify-center mx-auto mb-4">
           <LayoutDashboard className="w-8 h-8 text-white" />
         </div>
         <p className="text-sm text-gray-500">{error || 'Signing you in...'}</p>

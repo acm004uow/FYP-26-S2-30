@@ -75,7 +75,7 @@ export default function UserAdminDashboard() {
                 <p className="text-xs text-gray-500">Owner: {company.ownerName} ({company.ownerEmail})</p>
                 <p className="text-xs text-gray-400 mt-1">Joined {company.createdAt ? new Date(company.createdAt).toLocaleDateString() : 'Unknown'}</p>
               </div>
-              <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700 font-medium">{company.userCount} users</span>
+              <span className="text-xs px-2 py-1 rounded-full bg-accent-100 text-accent-800 font-medium">{company.userCount} users</span>
             </div>
           ))}
         </div>

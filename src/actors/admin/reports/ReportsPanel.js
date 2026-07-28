@@ -55,7 +55,7 @@ function DetailModal({ title, subtitle, onClose, children }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={event => event.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onClick={event => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-base font-bold text-gray-900">{title}</p>
@@ -387,7 +387,7 @@ export default function ReportsPanel() {
     <div className="max-w-4xl mx-auto">
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-          <FileText className="h-5 w-5 text-blue-500" /> Business Reports
+          <FileText className="h-5 w-5 text-accent" /> Business Reports
         </h2>
         <p className="mt-1 mb-5 text-sm text-gray-500">Daily, weekly, or monthly performance reports across your whole business — every manager&apos;s staff and bookings, not just one team.</p>
 
@@ -396,7 +396,7 @@ export default function ReportsPanel() {
             <button
               key={t.value}
               onClick={() => setReportType(t.value)}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               <t.icon className="w-4 h-4" /> {t.label}
             </button>
@@ -410,9 +410,9 @@ export default function ReportsPanel() {
               <span className="text-xs text-gray-400">Generated {data.generatedAt}</span>
             </>
           )}
-          <button onClick={generate} disabled={loading} className="ml-auto bg-gradient-to-r from-blue-500 to-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-sm transition hover:shadow-md disabled:opacity-60"><FileText className="w-4 h-4" /> {loading ? 'Loading...' : data ? 'Refresh' : 'Generate Report'}</button>
+          <button onClick={generate} disabled={loading} className="ml-auto bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition disabled:opacity-60"><FileText className="w-4 h-4" /> {loading ? 'Loading...' : data ? 'Refresh' : 'Generate Report'}</button>
         </div>
-        {message && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+        {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         {data ? (
           <div className="mt-6 space-y-5">
@@ -435,7 +435,7 @@ export default function ReportsPanel() {
                   <div key={cat} className="flex items-center gap-3 text-sm">
                     <span className="w-32 shrink-0 truncate text-gray-600">{cat}</span>
                     <div className="h-2 flex-1 rounded-full bg-gray-100">
-                      <div className="h-2 rounded-full bg-blue-500" style={{ width: `${(val / maxCategoryCount) * 100}%` }} />
+                      <div className="h-2 rounded-full bg-accent" style={{ width: `${(val / maxCategoryCount) * 100}%` }} />
                     </div>
                     <span className="w-6 shrink-0 text-right font-medium text-gray-900">{val}</span>
                   </div>
@@ -445,7 +445,7 @@ export default function ReportsPanel() {
             <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-100 text-accent-600">
                     <Clock className="h-4 w-4" />
                   </span>
                   <div>
@@ -457,7 +457,7 @@ export default function ReportsPanel() {
                   <select
                     value={attendanceFilter}
                     onChange={event => setAttendanceFilter(event.target.value)}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-100"
                     aria-label="Filter staff by attendance status"
                   >
                     <option value="all">All Staff</option>
@@ -534,7 +534,7 @@ export default function ReportsPanel() {
                   <select
                     value={payFilter}
                     onChange={event => setPayFilter(event.target.value)}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-100"
                     aria-label="Filter staff by pay status"
                   >
                     <option value="all">All Staff</option>
@@ -649,7 +649,7 @@ export default function ReportsPanel() {
             {row.breakdown.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {row.breakdown.map(b => (
-                  <span key={b.service_type} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                  <span key={b.service_type} className="inline-flex items-center gap-1 rounded-full bg-accent-100 px-2 py-0.5 text-xs text-accent-800">
                     {b.service_type}: {b.hours}h ({formatMoney(b.allowance)})
                   </span>
                 ))}

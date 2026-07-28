@@ -58,10 +58,10 @@ export default function ManagerCustomers() {
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-500 text-sm mt-1">Accounts auto-lock after 2 last-minute (within 24h) cancellations of an approved booking.</p>
         </div>
-        {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+        {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         <div className="bg-white rounded-xl shadow-sm border p-6">
-          <h2 className="text-lg font-semibold flex items-center gap-2"><Users className="w-5 h-5 text-blue-500" /> Customer Accounts</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Users className="w-5 h-5 text-accent" /> Customer Accounts</h2>
 
           <div className="mt-4 space-y-3">
             {customers.length === 0 && <p className="text-sm text-gray-400">No customers found.</p>}

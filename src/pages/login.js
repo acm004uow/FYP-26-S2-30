@@ -262,17 +262,17 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-accent2-500 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <LayoutDashboard className="w-9 h-9 text-white" />
+          <div className="w-9 h-9 bg-accent rounded-md flex items-center justify-center mx-auto mb-4">
+            <LayoutDashboard className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">Smart Task Allocation</h1>
-          <p className="text-gray-500 text-sm mt-1">Sign in to your account</p>
+          <h1 className="text-lg font-bold text-white">Smart Task Allocation</h1>
+          <p className="text-gray-300 text-sm mt-1">Sign in to your account</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+        <div className="bg-white rounded-xl shadow-lg p-8">
           <h2 className="text-xl font-semibold text-gray-800 mb-6">Welcome Back</h2>
 
           {error && (
@@ -294,7 +294,7 @@ export default function LoginPage() {
                 placeholder="Enter your email"
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-gray-50"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent text-sm bg-white"
               />
             </div>
 
@@ -306,7 +306,7 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   value={form.password}
                   onChange={e => setForm({ ...form, password: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-gray-50 pr-12"
+                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent text-sm bg-white pr-12"
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -317,14 +317,14 @@ export default function LoginPage() {
 
             <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2 text-gray-600 cursor-pointer">
-                <input type="checkbox" className="rounded border-gray-300 text-blue-500" />
+                <input type="checkbox" className="rounded border-gray-300 text-accent-500" />
                 Remember me
               </label>
-              <a href="#" className="text-blue-500 hover:underline">Forgot password?</a>
+              <a href="#" className="text-accent-600 hover:underline">Forgot password?</a>
             </div>
 
             <button type="submit"
-              className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md hover:shadow-lg">
+              className="w-full py-3 bg-accent text-white rounded-lg font-semibold text-sm hover:bg-accent-600 active:bg-accent-700 transition">
               Sign In
             </button>
 
@@ -337,7 +337,7 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={handleGoogleSignIn}
-              className="w-full py-3 border border-gray-200 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition flex items-center justify-center gap-2"
+              className="w-full py-3 border border-gray-200 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" viewBox="0 0 48 48" aria-hidden="true">
                 <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
@@ -354,7 +354,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => openSignup('system_admin')}
-                    className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
+                    className="w-full py-3 border border-accent-200 text-accent-600 rounded-lg font-semibold text-sm hover:bg-accent-100 transition"
                   >
                     Sign Up as Owner
                   </button>
@@ -363,7 +363,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => openSignup('customer')}
-                    className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
+                    className="w-full py-3 border border-accent-200 text-accent-600 rounded-lg font-semibold text-sm hover:bg-accent-100 transition"
                   >
                     Sign Up as Customer
                   </button>
@@ -380,7 +380,7 @@ export default function LoginPage() {
 
       {signupRole && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Create {signupRoleLabel} Account</h3>
@@ -406,7 +406,7 @@ export default function LoginPage() {
                   <input
                     value={signupForm.fullName}
                     onChange={e => setSignupForm({ ...signupForm, fullName: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-white"
                     placeholder="Enter your full name"
                   />
                 </div>
@@ -416,7 +416,7 @@ export default function LoginPage() {
                     <input
                       value={signupForm.businessName}
                       onChange={e => setSignupForm({ ...signupForm, businessName: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
+                      className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-white"
                       placeholder="Enter your business name"
                     />
                   </div>
@@ -427,7 +427,7 @@ export default function LoginPage() {
                     type="email"
                     value={signupForm.email}
                     onChange={e => setSignupForm({ ...signupForm, email: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-white"
                     placeholder={signupRole === 'system_admin' ? 'admin@example.com' : 'you@example.com'}
                   />
                 </div>
@@ -437,13 +437,13 @@ export default function LoginPage() {
                     type="password"
                     value={signupForm.password}
                     onChange={e => setSignupForm({ ...signupForm, password: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-white"
                     placeholder="Create a password"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md"
+                  className="w-full py-3 bg-accent text-white rounded-lg font-semibold text-sm hover:bg-accent-600 active:bg-accent-700 transition"
                 >
                   Send Verification Code
                 </button>
@@ -451,7 +451,7 @@ export default function LoginPage() {
             ) : (
               <form onSubmit={handleVerifySignup} className="space-y-5">
                 <div className="flex flex-col items-center gap-3 pt-1">
-                  <div className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600">
+                  <div className="grid h-14 w-14 place-items-center rounded-full bg-accent-100 text-accent-600">
                     <MailCheck className="h-7 w-7" />
                   </div>
                   <div className="text-center">
@@ -472,20 +472,20 @@ export default function LoginPage() {
                       onChange={e => handleCodeDigitChange(index, e.target.value)}
                       onKeyDown={e => handleCodeDigitKeyDown(index, e)}
                       onPaste={handleCodePaste}
-                      className="h-14 w-11 rounded-xl border border-gray-200 bg-gray-50 text-center text-lg font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="h-14 w-11 rounded-lg border border-gray-200 bg-white text-center text-lg font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
                     />
                   ))}
                 </div>
                 <button
                   type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md"
+                  className="w-full py-3 bg-accent text-white rounded-lg font-semibold text-sm hover:bg-accent-600 active:bg-accent-700 transition"
                 >
                   Verify Email
                 </button>
                 <button
                   type="button"
                   onClick={handleResendCode}
-                  className="w-full py-3 border border-blue-200 text-blue-600 rounded-xl font-semibold text-sm hover:bg-blue-50 transition"
+                  className="w-full py-3 border border-accent-200 text-accent-600 rounded-lg font-semibold text-sm hover:bg-accent-100 transition"
                 >
                   Resend Code
                 </button>

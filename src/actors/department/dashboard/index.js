@@ -309,7 +309,7 @@ export default function DepartmentDashboard() {
     <Layout role="departmentStaff">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-start gap-3 mb-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-orange-500 text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
             <Briefcase className="w-5 h-5" />
           </div>
           <div>
@@ -329,12 +329,12 @@ export default function DepartmentDashboard() {
                   ? `Checked in since ${new Date(todayAttendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
                   : "You haven't checked in today."}
             </p>
-            {scannerMessage && <p className="text-xs text-blue-600 mt-1">{scannerMessage}</p>}
+            {scannerMessage && <p className="text-xs text-accent-600 mt-1">{scannerMessage}</p>}
           </div>
           {!(todayAttendance?.clocked_in_at && todayAttendance?.clocked_out_at) && (
             <button
               onClick={() => { setScannerMessage(''); setShowScanner(true) }}
-              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md"
+              className="flex items-center justify-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2 text-sm font-semibold text-white transition"
             >
               <QrCode className="w-4 h-4" /> {todayAttendance?.clocked_in_at ? 'Clock Out' : 'Clock In'}
             </button>
@@ -347,14 +347,14 @@ export default function DepartmentDashboard() {
           <button
             type="button"
             onClick={() => setActiveTab('create')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'create' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'create' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}
           >
             <ListChecks className="w-4 h-4" /> Create Task
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('history')}
-            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'history' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-md transition ${activeTab === 'history' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}
           >
             <History className="w-4 h-4" /> History
           </button>
@@ -401,7 +401,7 @@ export default function DepartmentDashboard() {
 
             <div>
               <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Assign Staff
+                <Sparkles className="w-3.5 h-3.5 text-accent" /> Assign Staff
               </label>
               {form.location ? (
                 recommendations.length > 0 ? (
@@ -417,7 +417,7 @@ export default function DepartmentDashboard() {
                       ))}
                     </select>
                     {selectedStaffId && recommendations[0]?.staff_id === selectedStaffId && (
-                      <p className="mt-1 text-xs text-indigo-600 flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI-recommended top match</p>
+                      <p className="mt-1 text-xs text-accent-600 flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI-recommended top match</p>
                     )}
                   </>
                 ) : (
@@ -428,7 +428,7 @@ export default function DepartmentDashboard() {
               )}
             </div>
 
-            <button type="submit" disabled={creating} className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2 disabled:opacity-60">
+            <button type="submit" disabled={creating} className="w-full bg-accent hover:bg-accent-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-60">
               <UserCheck className="w-4 h-4" /> {creating ? 'Creating...' : 'Create & Assign Task'}
             </button>
           </form>
@@ -444,7 +444,7 @@ export default function DepartmentDashboard() {
                     value={staffSearch}
                     onChange={e => setStaffSearch(e.target.value)}
                     placeholder="Search staff..."
-                    className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-200"
                   />
                 </div>
                 <div className="relative">
@@ -462,7 +462,7 @@ export default function DepartmentDashboard() {
                           key={option}
                           type="button"
                           onClick={() => { setStaffStatusFilter(option); setStaffFiltersOpen(false) }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${staffStatusFilter === option ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${staffStatusFilter === option ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
                         >
                           {option}
                         </button>
@@ -479,7 +479,7 @@ export default function DepartmentDashboard() {
                   key={staff.id}
                   onClick={() => selectStaffManually(staff)}
                   disabled={!staff.canAssign}
-                  className={`w-full text-left p-4 transition ${staff.canAssign ? 'hover:bg-gray-50' : 'cursor-not-allowed opacity-70'} ${selectedStaffId === staff.id ? 'bg-blue-50' : ''}`}
+                  className={`w-full text-left p-4 transition ${staff.canAssign ? 'hover:bg-gray-50' : 'cursor-not-allowed opacity-70'} ${selectedStaffId === staff.id ? 'bg-accent-100' : ''}`}
                   title={staff.canAssign ? 'Assign this staff member to the task' : 'Only available active staff can be assigned'}
                 >
                   <div className="flex items-center gap-3">
@@ -490,7 +490,7 @@ export default function DepartmentDashboard() {
                       <p className="text-sm font-medium text-gray-800 truncate">{staff.name}</p>
                       <p className="text-xs text-gray-500 truncate">{staff.role} - {staff.tasks} active tasks</p>
                     </div>
-                    {selectedStaffId === staff.id && <GripVertical className="h-4 w-4 text-blue-400" />}
+                    {selectedStaffId === staff.id && <GripVertical className="h-4 w-4 text-accent-400" />}
                     <div className="flex flex-col items-end gap-1">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${staffStatusColor[staff.status]}`}>{staff.status}</span>
                       <span className="text-xs text-yellow-500 flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400" />{staff.rating}</span>

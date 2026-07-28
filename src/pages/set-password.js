@@ -67,10 +67,10 @@ export default function SetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl border border-gray-100 bg-white p-8 shadow-xl">
+    <div className="min-h-screen bg-accent2-500 flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-md">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-lg bg-accent text-white">
             <KeyRound className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-bold text-gray-800">Set Your Password</h1>
@@ -88,7 +88,7 @@ export default function SetPasswordPage() {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={event => setPassword(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                 placeholder="Create password"
                 disabled={checkingSession || loading}
               />
@@ -109,7 +109,7 @@ export default function SetPasswordPage() {
               type={showPassword ? 'text' : 'password'}
               value={confirmPassword}
               onChange={event => setConfirmPassword(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
               placeholder="Confirm password"
               disabled={checkingSession || loading}
             />
@@ -118,7 +118,7 @@ export default function SetPasswordPage() {
           <button
             type="submit"
             disabled={checkingSession || loading || !!error}
-            className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-green-500 py-3 text-sm font-semibold text-white shadow-md transition hover:from-blue-600 hover:to-green-600 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg bg-accent py-3 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? 'Saving...' : 'Save Password'}
           </button>
@@ -126,7 +126,7 @@ export default function SetPasswordPage() {
             <button
               type="button"
               onClick={() => router.push('/login')}
-              className="w-full rounded-xl border border-blue-200 py-3 text-sm font-semibold text-blue-600 transition hover:bg-blue-50"
+              className="w-full rounded-lg border border-accent-200 py-3 text-sm font-semibold text-accent-600 transition hover:bg-accent-100"
             >
               Back to Login
             </button>

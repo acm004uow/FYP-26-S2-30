@@ -172,11 +172,11 @@ export default function StaffTimeOff() {
   return (
     <Layout role="staffMember">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><CalendarOff className="w-6 h-6 text-indigo-500" /> Time Off</h1>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><CalendarOff className="w-6 h-6 text-accent" /> Time Off</h1>
         <p className="text-gray-500 text-sm mt-1 mb-6">Request a standing weekly day off, or a one-off leave period. The owner will review and approve or reject each request.</p>
 
         {notification && (
-          <div className="mb-5 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{notification}</div>
+          <div className="mb-5 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{notification}</div>
         )}
 
         <div className="bg-white rounded-xl shadow-sm border p-6 mb-8">
@@ -184,14 +184,14 @@ export default function StaffTimeOff() {
             <button
               type="button"
               onClick={() => setRequestType('weekly_day_off')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${requestType === 'weekly_day_off' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${requestType === 'weekly_day_off' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               Weekly Day Off
             </button>
             <button
               type="button"
               onClick={() => setRequestType('leave')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${requestType === 'leave' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${requestType === 'leave' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               One-off Leave
             </button>
@@ -205,7 +205,7 @@ export default function StaffTimeOff() {
                   <select
                     value={dayOfWeek}
                     onChange={event => setDayOfWeek(event.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                   >
                     {WEEKDAYS.map(day => <option key={day.value} value={day.value}>{day.label}</option>)}
                   </select>
@@ -217,7 +217,7 @@ export default function StaffTimeOff() {
                     value={startDate}
                     min={todayIso()}
                     onChange={event => setStartDate(event.target.value)}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                   />
                 </div>
                 <div>
@@ -226,7 +226,7 @@ export default function StaffTimeOff() {
                     value={reason}
                     onChange={event => setReason(event.target.value)}
                     rows={2}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                   />
                 </div>
               </>
@@ -240,7 +240,7 @@ export default function StaffTimeOff() {
                       value={startDate}
                       min={todayIso()}
                       onChange={event => setStartDate(event.target.value)}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                     />
                   </div>
                   <div>
@@ -250,7 +250,7 @@ export default function StaffTimeOff() {
                       value={endDate}
                       min={startDate || todayIso()}
                       onChange={event => setEndDate(event.target.value)}
-                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                     />
                   </div>
                 </div>
@@ -261,7 +261,7 @@ export default function StaffTimeOff() {
                     onChange={event => setReason(event.target.value)}
                     rows={3}
                     placeholder="e.g. family trip, medical leave"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                   />
                 </div>
               </>
@@ -272,7 +272,7 @@ export default function StaffTimeOff() {
             <button
               type="submit"
               disabled={submitting}
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2 text-sm font-semibold text-white transition disabled:opacity-60"
             >
               <Send className="w-4 h-4" /> {submitting ? 'Submitting...' : 'Submit Request'}
             </button>

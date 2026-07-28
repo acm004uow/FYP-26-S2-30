@@ -536,7 +536,7 @@ export default function ManagerSchedule() {
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div className="p-5 border-b flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <h2 className="font-semibold text-gray-900 flex items-center gap-2 text-xl"><Calendar className="w-5 h-5 text-blue-500" /> Weekly Schedule</h2>
+              <h2 className="font-semibold text-gray-900 flex items-center gap-2 text-xl"><Calendar className="w-5 h-5 text-accent" /> Weekly Schedule</h2>
               <div className="flex items-center gap-1 mt-1">
                 <button onClick={() => goToWeek(-7)} className="p-1 rounded hover:bg-gray-100" aria-label="Previous week"><ChevronLeft className="w-4 h-4 text-gray-500" /></button>
                 <p className="text-sm text-gray-500">
@@ -560,7 +560,7 @@ export default function ManagerSchedule() {
                 onClick={finalizeSchedule}
                 disabled={scheduledStaffRows.length === 0 || finalizing || !!pastSnapshot}
                 title={pastSnapshot ? 'This week is already finalized' : undefined}
-                className="flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-2 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm transition disabled:opacity-50"
               >
                 <Lock className="w-4 h-4" /> {finalizing ? 'Finalizing...' : pastSnapshot ? 'Finalized' : 'Finalize Schedule'}
               </button>
@@ -575,7 +575,7 @@ export default function ManagerSchedule() {
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Search staff..."
-                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="pl-9 pr-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-2 focus:ring-accent-200"
                 />
               </div>
               <div className="relative">
@@ -593,7 +593,7 @@ export default function ManagerSchedule() {
                         key={option.value}
                         type="button"
                         onClick={() => { setStatusFilter(option.value); setFiltersOpen(false) }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${statusFilter === option.value ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${statusFilter === option.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
                       >
                         {option.label}
                       </button>
@@ -638,9 +638,9 @@ export default function ManagerSchedule() {
                 <tr className="bg-gray-50">
                   <th className="text-left p-3 border-b font-semibold text-gray-700 sticky left-0 bg-gray-50">Staff</th>
                   {weekDates.map(date => (
-                    <th key={date} className={`text-left p-3 border-b font-semibold whitespace-nowrap ${date === today ? 'bg-blue-50 text-blue-700' : 'text-gray-700'}`}>
+                    <th key={date} className={`text-left p-3 border-b font-semibold whitespace-nowrap ${date === today ? 'bg-accent-100 text-accent-800' : 'text-gray-700'}`}>
                       {new Date(`${date}T00:00:00`).toLocaleDateString([], { weekday: 'short' }).toUpperCase()}
-                      <div className={`text-xs font-normal ${date === today ? 'text-blue-400' : 'text-gray-400'}`}>{date.slice(5)}</div>
+                      <div className={`text-xs font-normal ${date === today ? 'text-accent-500' : 'text-gray-400'}`}>{date.slice(5)}</div>
                     </th>
                   ))}
                 </tr>
@@ -672,7 +672,7 @@ export default function ManagerSchedule() {
                       {weekDates.map(date => {
                         const dayBookings = weekBookings.filter(b => b.assigned_staff_id === staff.id && b.scheduled_date === date)
                         return (
-                          <td key={date} className={`p-3 align-top ${date === today ? 'bg-blue-50/40' : ''}`}>
+                          <td key={date} className={`p-3 align-top ${date === today ? 'bg-accent-100/40' : ''}`}>
                             {dayBookings.length === 0
                               ? (pastSnapshot
                                 ? <span className="text-gray-300">–</span>
@@ -681,7 +681,7 @@ export default function ManagerSchedule() {
                                     type="button"
                                     onClick={() => openScheduleModal(staff, date)}
                                     title={`Schedule a task for ${staff.name}`}
-                                    className="flex h-6 w-6 items-center justify-center rounded text-gray-300 transition hover:bg-blue-100 hover:text-blue-500"
+                                    className="flex h-6 w-6 items-center justify-center rounded text-gray-300 transition hover:bg-accent-100 hover:text-accent-600"
                                   >
                                     <Plus className="w-3.5 h-3.5" />
                                   </button>
@@ -693,7 +693,7 @@ export default function ManagerSchedule() {
                                     <button
                                       type="button"
                                       onClick={() => openScheduleModal(staff, date)}
-                                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500"
+                                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-accent-600"
                                     >
                                       <Plus className="w-3 h-3" /> Add
                                     </button>
@@ -740,7 +740,7 @@ export default function ManagerSchedule() {
                             <button
                               type="button"
                               onClick={() => openScheduleModal(null, date)}
-                              className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500"
+                              className="flex items-center gap-1 text-xs text-gray-400 hover:text-accent-600"
                             >
                               <Plus className="w-3 h-3" /> Add
                             </button>
@@ -792,7 +792,7 @@ export default function ManagerSchedule() {
               {editError && <p className="text-sm text-red-500">{editError}</p>}
             </div>
             <div className="p-5 border-t flex gap-3">
-              <button onClick={saveEdit} disabled={editSaving} className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              <button onClick={saveEdit} disabled={editSaving} className="flex-1 py-2 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
                 {editSaving ? 'Saving...' : 'Save'}
               </button>
               <button onClick={closeEditModal} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>
@@ -831,14 +831,14 @@ export default function ManagerSchedule() {
                 <button
                   type="button"
                   onClick={() => setScheduleMode('existing')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${scheduleMode === 'existing' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${scheduleMode === 'existing' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}
                 >
                   Existing booking
                 </button>
                 <button
                   type="button"
                   onClick={() => setScheduleMode('new')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${scheduleMode === 'new' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${scheduleMode === 'new' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}
                 >
                   New task
                 </button>
@@ -914,7 +914,7 @@ export default function ManagerSchedule() {
               <button
                 onClick={saveManualSchedule}
                 disabled={scheduleSaving || !scheduleDate || !scheduleStaffId || (scheduleMode === 'existing' ? !scheduleBookingId : !newTaskLocation.trim())}
-                className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                className="flex-1 py-2 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
               >
                 {scheduleSaving ? 'Saving...' : scheduleMode === 'new' ? 'Create & Assign' : 'Schedule'}
               </button>

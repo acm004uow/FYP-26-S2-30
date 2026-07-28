@@ -318,7 +318,7 @@ export default function ManagerAiAgent() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="w-6 h-6 text-blue-500" /> AI Scheduling Agent</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="w-6 h-6 text-accent" /> AI Scheduling Agent</h1>
             <p className="text-gray-300 mt-1">Describe what you need in plain language. The agent proposes staff assignments — nothing is saved until you approve.</p>
           </div>
           <div className="relative flex-shrink-0">
@@ -342,7 +342,7 @@ export default function ManagerAiAgent() {
         <div className="grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)] gap-6">
           <div className="bg-white rounded-xl shadow-sm border p-5 lg:sticky lg:top-6 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white text-xs font-semibold flex-shrink-0">1</span>
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white text-xs font-semibold flex-shrink-0">1</span>
               <h2 className="font-semibold text-gray-900">Your request</h2>
             </div>
             <div className="mt-auto">
@@ -353,7 +353,7 @@ export default function ManagerAiAgent() {
                       ? 'border-gray-100 bg-gray-50 text-gray-500'
                       : lastReply.isError
                         ? 'border-red-100 bg-red-50 text-red-700'
-                        : 'border-indigo-100 bg-indigo-50 text-indigo-700'
+                        : 'border-accent-200 bg-accent-100 text-accent-800'
                   }`}
                 >
                   {isSending ? (
@@ -384,10 +384,10 @@ export default function ManagerAiAgent() {
                     placeholder="e.g. Create schedule for one week"
                     disabled={isSending}
                     rows={3}
-                    className="w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm resize-y max-h-56 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm resize-y max-h-56 focus:outline-none focus:ring-2 focus:ring-accent-200"
                   />
                 </div>
-                <button type="submit" disabled={isSending} className="flex items-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60 flex-shrink-0">
+                <button type="submit" disabled={isSending} className="flex items-center gap-1.5 px-4 py-2.5 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60 flex-shrink-0">
                   <Send className="w-4 h-4" /> 
                 </button>
               </form>
@@ -399,7 +399,7 @@ export default function ManagerAiAgent() {
                     type="button"
                     onClick={() => sendMessage(label)}
                     disabled={isSending}
-                    className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-600 transition disabled:opacity-50"
+                    className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:border-accent-300 hover:bg-accent-100 hover:text-accent-600 transition disabled:opacity-50"
                   >
                     {label}
                   </button>
@@ -440,7 +440,7 @@ export default function ManagerAiAgent() {
                 <button
                   onClick={approveAll}
                   disabled={pendingCount === 0}
-                  className="flex items-center gap-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm disabled:opacity-50"
+                  className="flex items-center gap-1 px-4 py-2 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm transition disabled:opacity-50"
                 >
                   <CheckCircle className="w-4 h-4" /> Approve All ({pendingCount})
                 </button>
@@ -466,12 +466,12 @@ export default function ManagerAiAgent() {
                           </p>
                         </div>
                       ) : (
-                        <div className="mt-2 rounded-lg bg-indigo-50 border border-indigo-100 px-3 py-2">
-                          <p className="text-sm text-indigo-700 flex items-center gap-1">
+                        <div className="mt-2 rounded-lg bg-accent-100 border border-accent-200 px-3 py-2">
+                          <p className="text-sm text-accent-800 flex items-center gap-1">
                             <Sparkles className="w-4 h-4" />
                             {row.recommended_staff_name ? `Recommended: ${row.recommended_staff_name}` : 'No suitable staff found'}
                           </p>
-                          <p className="text-xs text-indigo-500 mt-0.5">{row.reason} (score {row.score})</p>
+                          <p className="text-xs text-accent-600 mt-0.5">{row.reason} (score {row.score})</p>
                         </div>
                       )}
                       {row.errorMessage && <p className="text-sm text-red-500 mt-2">{row.errorMessage}</p>}
@@ -520,10 +520,10 @@ export default function ManagerAiAgent() {
               ))}
               {proposal.length === 0 && (
                 <div className="p-10 text-center">
-                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-purple-50">
+                  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-xl bg-accent-100">
                     <div className="relative">
-                      <Calendar className="w-9 h-9 text-blue-400" />
-                      <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-green-500">
+                      <Calendar className="w-9 h-9 text-accent-400" />
+                      <div className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
                         <Bot className="w-3 h-3 text-white" />
                       </div>
                     </div>
@@ -533,7 +533,7 @@ export default function ManagerAiAgent() {
 
                   <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
                     <div className="rounded-lg border border-gray-100 p-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600 mb-2"><RefreshCw className="w-4 h-4" /></div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-100 text-accent-600 mb-2"><RefreshCw className="w-4 h-4" /></div>
                       <p className="text-sm font-medium text-gray-800">Smart matching</p>
                       <p className="text-xs text-gray-400 mt-0.5">Considers availability, skills, and workload</p>
                     </div>
@@ -551,7 +551,7 @@ export default function ManagerAiAgent() {
                 </div>
               )}
             </div>
-            <div className="border-t bg-blue-50/60 px-5 py-3 flex items-center gap-2 text-xs text-blue-700">
+            <div className="border-t bg-accent-100/60 px-5 py-3 flex items-center gap-2 text-xs text-accent-800">
               <Info className="w-3.5 h-3.5 flex-shrink-0" /> Nothing is saved until you approve the schedule.
             </div>
           </div>
@@ -594,7 +594,7 @@ export default function ManagerAiAgent() {
               {editError && <p className="text-sm text-red-500">{editError}</p>}
             </div>
             <div className="p-5 border-t flex gap-3">
-              <button onClick={saveEdit} disabled={editSaving} className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              <button onClick={saveEdit} disabled={editSaving} className="flex-1 py-2 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
                 {editSaving ? 'Saving...' : 'Save'}
               </button>
               <button onClick={closeEditModal} className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium">Cancel</button>

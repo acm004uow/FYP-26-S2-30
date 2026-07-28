@@ -306,7 +306,7 @@ export default function CustomerBooking() {
             <h1 className="text-2xl font-bold text-gray-900">Book a Cleaning Service</h1>
     
           </div>
-          <div className="hidden sm:flex shrink-0 h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-100">
+          <div className="hidden sm:flex shrink-0 h-16 w-16 items-center justify-center rounded-xl bg-accent-100">
             <svg viewBox="0 0 64 64" className="h-11 w-11" xmlns="http://www.w3.org/2000/svg">
               <rect x="34" y="16" width="17" height="36" rx="2" fill="#93C5FD" />
               <rect x="38" y="22" width="3" height="3" rx="0.5" fill="#EFF6FF" />
@@ -330,14 +330,14 @@ export default function CustomerBooking() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2">
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-blue-50"><ClipboardList className="w-4 h-4 text-blue-500" /></span>
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-xs font-semibold text-white">1</span>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-100"><ClipboardList className="w-4 h-4 text-accent" /></span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-white">1</span>
               Service Details
             </h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
-                <select required value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50">
+                <select required value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
                   <option value="">Select a company...</option>
                   {companies.map(company => <option key={company.id} value={company.id}>{company.business_name}</option>)}
                 </select>
@@ -345,20 +345,20 @@ export default function CustomerBooking() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Service Type *</label>
-                <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50">
+                <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
                   {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <div className="relative">
-                  <textarea maxLength={500} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Describe what needs to be cleaned..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" />
+                  <textarea maxLength={500} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Describe what needs to be cleaned..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50 resize-none" />
                   <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.description.length} / 500</span>
                 </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">Estimated Hours <Info className="w-3.5 h-3.5 text-gray-400" /></label>
-                <div className="flex items-center gap-2 w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus-within:ring-2 focus-within:ring-blue-500">
+                <div className="flex items-center gap-2 w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus-within:ring-2 focus-within:ring-accent-500">
                   <Clock className="w-4 h-4 text-gray-400 shrink-0" />
                   <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: e.target.value })} className="flex-1 bg-transparent text-sm focus:outline-none" />
                   <span className="text-xs text-gray-400 shrink-0">hours</span>
@@ -377,8 +377,8 @@ export default function CustomerBooking() {
               <AddressFields onLocationChange={setComposedLocation} onCoordinatesChange={setCoordinates} />
 
               <div className="inline-flex rounded-lg bg-gray-100 p-1">
-                <button type="button" onClick={() => setBookingMode('one-time')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${bookingMode === 'one-time' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}>One-time</button>
-                <button type="button" onClick={() => setBookingMode('recurring')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition flex items-center gap-1 ${bookingMode === 'recurring' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}><Repeat className="w-3.5 h-3.5" /> Recurring</button>
+                <button type="button" onClick={() => setBookingMode('one-time')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${bookingMode === 'one-time' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}>One-time</button>
+                <button type="button" onClick={() => setBookingMode('recurring')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition flex items-center gap-1 ${bookingMode === 'recurring' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}><Repeat className="w-3.5 h-3.5" /> Recurring</button>
               </div>
 
               {bookingMode === 'one-time' ? (
@@ -386,7 +386,7 @@ export default function CustomerBooking() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Date *</label>
                     <div className="relative">
-                      <input required type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
+                      <input required type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
                       <Calendar className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     </div>
                     <p className="mt-1 flex items-start gap-1 text-xs text-gray-400"><Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Bookings open from {minDate} onward — this week&apos;s schedule is already finalized.</p>
@@ -398,11 +398,11 @@ export default function CustomerBooking() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Service Period Start</label>
-                      <input type="date" min={minDate} value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
+                      <input type="date" min={minDate} value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Service Period End</label>
-                      <input type="date" min={form.startDate || minDate} value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50" />
+                      <input type="date" min={form.startDate || minDate} value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
                     </div>
                   </div>
                   <p className="text-xs text-gray-400">Recurring bookings can only start from {minDate} onward — this week&apos;s schedule is already finalized.</p>
@@ -414,7 +414,7 @@ export default function CustomerBooking() {
                           key={day.value}
                           type="button"
                           onClick={() => toggleDayOfWeek(day.value)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${form.daysOfWeek.includes(day.value) ? 'bg-blue-500 border-blue-500 text-white' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-blue-300'}`}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${form.daysOfWeek.includes(day.value) ? 'bg-accent border-accent text-white' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-accent-300'}`}
                         >
                           {day.label}
                         </button>
@@ -428,7 +428,7 @@ export default function CustomerBooking() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
                 <div className="relative">
-                  <textarea maxLength={300} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Any special instructions..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-gray-50 resize-none" />
+                  <textarea maxLength={300} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Any special instructions..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50 resize-none" />
                   <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.notes.length} / 300</span>
                 </div>
               </div>
@@ -436,7 +436,7 @@ export default function CustomerBooking() {
           </div>
 
           <div className="space-y-3">
-            <button type="submit" disabled={submitting} className="w-full py-3 bg-gradient-to-r from-blue-500 to-green-500 text-white rounded-xl font-semibold text-sm hover:from-blue-600 hover:to-green-600 transition shadow-md disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            <button type="submit" disabled={submitting} className="w-full py-3 bg-accent hover:bg-accent-600 text-white rounded-xl font-semibold text-sm transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               <Calendar className="w-4 h-4" /> {submitting ? 'Submitting...' : bookingMode === 'recurring' ? 'Submit Recurring Booking Request' : 'Submit Booking'}
             </button>
             <button type="button" onClick={() => router.push('/customer')} className="w-full py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>

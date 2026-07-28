@@ -269,7 +269,7 @@ export default function AdminPanel() {
   return (
     <Layout role="admin">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {message && <div className="mb-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+        {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         <div>
           {activeSection === 'users' && (
@@ -316,7 +316,7 @@ export default function AdminPanel() {
               className="mb-4 w-full rounded-lg border p-2 text-sm"
               placeholder="New temporary password"
             />
-            <div className="flex gap-2"><button type="submit" className="flex-1 bg-blue-500 text-white py-2 rounded-lg">Reset</button><button type="button" onClick={() => setShowReset(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancel</button></div>
+            <div className="flex gap-2"><button type="submit" className="flex-1 bg-accent hover:bg-accent-600 text-white py-2 rounded-lg transition">Reset</button><button type="button" onClick={() => setShowReset(null)} className="flex-1 bg-gray-200 py-2 rounded-lg">Cancel</button></div>
           </form>
         </div>
       )}
@@ -357,7 +357,7 @@ export default function AdminPanel() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <form onSubmit={handleCreate} className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex justify-between"><h3 className="text-lg font-semibold">Invite User Account</h3><button type="button" onClick={() => setShowCreate(null)}><X /></button></div>
-            {message && <div className="mt-4 rounded-lg border bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+            {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
             <div className="space-y-3 mt-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Role</label>
@@ -385,7 +385,7 @@ export default function AdminPanel() {
                 <label className="text-sm font-medium text-gray-700">Email</label>
                 <input type="email" value={createForm.email} onChange={e => setCreateForm({ ...createForm, email: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="someone@gmail.com" />
               </div>
-              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg flex items-center justify-center gap-2"><UserPlus className="w-4 h-4" /> Send Invite</button>
+              <button type="submit" className="w-full bg-accent hover:bg-accent-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition"><UserPlus className="w-4 h-4" /> Send Invite</button>
             </div>
           </form>
         </div>

@@ -115,13 +115,13 @@ export default function ManagerCompletedTasks() {
               <button
                 type="button"
                 onClick={() => setShowAllCompletedTasks(value => !value)}
-                className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50"
+                className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-accent-600 hover:bg-accent-100"
               >
                 {showAllCompletedTasks ? 'Show latest 3' : 'View all'}
               </button>
             )}
           </div>
-          {reviewMessage && <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{reviewMessage}</div>}
+          {reviewMessage && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{reviewMessage}</div>}
           <div className="space-y-4">
             {completedTasks.length === 0 && <div className="rounded-lg border p-8 text-center text-gray-400">No completed tasks yet.</div>}
             {visibleCompletedTasks.map(task => {
@@ -150,7 +150,7 @@ export default function ManagerCompletedTasks() {
                       )}
                     </div>
                     {proof?.file_url ? (
-                      <a href={proof.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50">
+                      <a href={proof.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-accent-600 hover:bg-accent-100">
                         <ExternalLink className="h-4 w-4" /> View Proof
                       </a>
                     ) : (
@@ -177,7 +177,7 @@ export default function ManagerCompletedTasks() {
                       type="button"
                       onClick={() => saveReview(task)}
                       disabled={savingReviewId === task.id}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-60"
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 transition disabled:opacity-60"
                     >
                       <Save className="h-4 w-4" /> {savingReviewId === task.id ? 'Saving...' : 'Save'}
                     </button>

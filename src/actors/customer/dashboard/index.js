@@ -326,11 +326,11 @@ export default function CustomerDashboard() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <div><h1 className="text-2xl font-bold">My Bookings</h1><p className="text-gray-500 text-sm">Book a cleaning service and track its status</p></div>
-          <button onClick={() => router.push('/customer-book')} className="bg-gradient-to-r from-blue-500 to-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"><Plus className="w-4 h-4" /> New Booking</button>
+          <button onClick={() => router.push('/customer-book')} className="bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition"><Plus className="w-4 h-4" /> New Booking</button>
         </div>
 
         {notification && (
-          <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-lg flex items-center gap-2 border-l-4 border-blue-500">
+          <div className="mb-4 p-3 bg-accent-100 text-accent-800 rounded-lg flex items-center gap-2 border-l-4 border-accent">
             <Bell className="w-4 h-4" /> {notification}
           </div>
         )}
@@ -370,7 +370,7 @@ export default function CustomerDashboard() {
                   </div>
                 </div>
                 {activeFilterCount > 0 && (
-                  <button onClick={() => { setFilterServices([]); setFilterDateFrom(''); setFilterDateTo('') }} className="mt-3 text-xs text-blue-600 hover:underline">Clear filters</button>
+                  <button onClick={() => { setFilterServices([]); setFilterDateFrom(''); setFilterDateTo('') }} className="mt-3 text-xs text-accent-600 hover:underline">Clear filters</button>
                 )}
               </div>
             )}
@@ -389,7 +389,7 @@ export default function CustomerDashboard() {
                   <button
                     key={option}
                     onClick={() => { setSortOrder(option); setShowSortMenu(false) }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${sortOrder === option ? 'text-blue-600 font-medium' : 'text-gray-600'}`}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${sortOrder === option ? 'text-accent-600 font-medium' : 'text-gray-600'}`}
                   >
                     {option === 'newest' ? 'Newest' : 'Oldest'}
                   </button>
@@ -404,17 +404,17 @@ export default function CustomerDashboard() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition ${activeTab === tab.key ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition ${activeTab === tab.key ? 'bg-accent-100 text-accent-800' : 'text-gray-500 hover:bg-gray-50'}`}
             >
               {tab.label}
-              <span className={`text-xs rounded-full px-1.5 ${activeTab === tab.key ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>{counts[tab.key]}</span>
+              <span className={`text-xs rounded-full px-1.5 ${activeTab === tab.key ? 'bg-accent-200 text-accent-800' : 'bg-gray-100 text-gray-500'}`}>{counts[tab.key]}</span>
             </button>
           ))}
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-8">
           <div className="p-4 font-semibold border-b bg-gray-50 flex items-center gap-2">
-            <span className="w-1 h-4 bg-blue-500 rounded-full inline-block" /> {sectionLabel}
+            <span className="w-1 h-4 bg-accent rounded-full inline-block" /> {sectionLabel}
           </div>
           {pageBookings.length === 0 && <div className="p-8 text-center text-gray-400">No bookings found.</div>}
           {pageBookings.map(booking => {
@@ -435,11 +435,11 @@ export default function CustomerDashboard() {
                   {booking.scheduledDate && (
                     <p className="text-xs text-gray-500 flex flex-wrap items-center gap-1 mt-1">
                       <Calendar className="w-3 h-3" /> {formatScheduled(booking.scheduledDate)} {booking.scheduledTime && `• ${booking.scheduledTime}`}
-                      <button type="button" onClick={() => setViewBooking(booking)} className="ml-1 text-blue-600 hover:underline">View details</button>
+                      <button type="button" onClick={() => setViewBooking(booking)} className="ml-1 text-accent-600 hover:underline">View details</button>
                     </p>
                   )}
                   {!booking.scheduledDate && (
-                    <button type="button" onClick={() => setViewBooking(booking)} className="mt-1 text-xs text-blue-600 hover:underline">View details</button>
+                    <button type="button" onClick={() => setViewBooking(booking)} className="mt-1 text-xs text-accent-600 hover:underline">View details</button>
                   )}
 
                   {booking.rawStatus === 'pending' && booking.assignedStaff !== 'Unassigned' && (
@@ -490,13 +490,13 @@ export default function CustomerDashboard() {
                             type="button"
                             onClick={() => handleSubmitFeedback(booking)}
                             disabled={savingFeedbackId === booking.id}
-                            className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+                            className="text-xs text-accent-600 hover:underline disabled:opacity-50"
                           >
                             {savingFeedbackId === booking.id ? 'Saving...' : 'Submit feedback'}
                           </button>
                         </div>
                         <div className="flex items-center gap-2">
-                          <label className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 cursor-pointer">
+                          <label className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-accent-600 cursor-pointer">
                             <ImagePlus className="h-3.5 w-3.5" /> {feedbackDrafts[booking.id]?.imageFile ? 'Change photo' : 'Add photo'}
                             <input
                               type="file"
@@ -527,7 +527,7 @@ export default function CustomerDashboard() {
                   {['Pending', 'Approved'].includes(booking.status) && (
                     <div className="mt-2 flex justify-end gap-3">
                       {booking.status === 'Pending' && (
-                        <button onClick={() => setEditBooking(booking)} className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"><Edit3 className="h-3 w-3" /> Edit</button>
+                        <button onClick={() => setEditBooking(booking)} className="inline-flex items-center gap-1 text-xs text-accent-600 hover:underline"><Edit3 className="h-3 w-3" /> Edit</button>
                       )}
                       <button onClick={() => handleCancelClick(booking)} className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline"><Trash2 className="h-3 w-3" /> Cancel</button>
                     </div>
@@ -549,7 +549,7 @@ export default function CustomerDashboard() {
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium ${currentPage === pageNum ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                  className={`w-8 h-8 rounded-lg text-sm font-medium ${currentPage === pageNum ? 'bg-accent text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
                 >
                   {pageNum}
                 </button>
@@ -586,7 +586,7 @@ export default function CustomerDashboard() {
               </div>
               <input type="number" min="1" step="0.5" placeholder="Estimated hours" value={editBooking.estimatedHours} onChange={e => setEditBooking({...editBooking, estimatedHours: e.target.value})} className="w-full border rounded-lg p-2 text-sm" />
               <textarea placeholder="Additional notes" value={editBooking.notes} onChange={e => setEditBooking({...editBooking, notes: e.target.value})} className="w-full border rounded-lg p-2 text-sm resize-none" rows={2} />
-              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-green-500 text-white py-2 rounded-lg">Save Changes</button>
+              <button type="submit" className="w-full bg-accent hover:bg-accent-600 text-white py-2 rounded-lg font-semibold transition">Save Changes</button>
             </div>
           </form>
         </div>
@@ -625,7 +625,7 @@ export default function CustomerDashboard() {
                 <h3 className="flex items-center gap-2 text-lg font-semibold">
                   {isLateApproved
                     ? <AlertTriangle className="h-5 w-5 text-amber-500" />
-                    : <HelpCircle className="h-5 w-5 text-blue-500" />}
+                    : <HelpCircle className="h-5 w-5 text-accent" />}
                   Cancel This Booking?
                 </h3>
                 <button type="button" onClick={() => setCancelConfirmBooking(null)} aria-label="Close"><X /></button>

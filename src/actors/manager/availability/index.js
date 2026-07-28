@@ -123,7 +123,7 @@ export default function ManagerAvailability() {
         </div>
 
         {notice && (
-          <div className="mb-5 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          <div className="mb-5 flex items-center gap-2 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">
             <Bell className="h-4 w-4" />
             {notice}
           </div>
@@ -146,7 +146,7 @@ export default function ManagerAvailability() {
             value={search}
             onChange={event => setSearch(event.target.value)}
             placeholder="Search by name, skill, region, email, or availability..."
-            className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
           />
         </div>
 
@@ -208,7 +208,7 @@ function SummaryCard({ icon: Icon, label, value, tone = 'blue', active = false, 
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`w-full cursor-pointer rounded-xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${active ? 'border-blue-500 ring-2 ring-blue-100' : 'border-gray-100'}`}
+      className={`w-full cursor-pointer rounded-xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-accent-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 ${active ? 'border-accent-500 ring-2 ring-accent-100' : 'border-gray-100'}`}
     >
       <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-lg ${tones[tone]}`}>
         <Icon className="h-5 w-5" />

@@ -154,7 +154,7 @@ export default function AttendancePanel() {
     <div className="flex flex-col lg:flex-row gap-6 pb-16 items-start">
       <div className="w-full lg:w-72 shrink-0 space-y-4">
         <div className="bg-white rounded-xl shadow-sm border p-5">
-          <h2 className="text-sm font-semibold flex items-center gap-2 text-gray-900"><UserCheck className="w-4 h-4 text-blue-500" /> Office QR Check-in</h2>
+          <h2 className="text-sm font-semibold flex items-center gap-2 text-gray-900"><UserCheck className="w-4 h-4 text-accent" /> Office QR Check-in</h2>
           <p className="mt-1 text-xs text-gray-500">Display at the office entrance. Staff and managers scan it to clock in, and scan again to clock out.</p>
           <div className="mt-3 flex aspect-square items-center justify-center rounded-xl border bg-gray-50">
             {qr.loading ? <p className="text-xs text-gray-400">Loading...</p> : qr.dataUrl ? <img src={qr.dataUrl} alt="Office attendance QR code" className="h-5/6 w-5/6" /> : <p className="text-xs text-gray-400 px-4 text-center">QR unavailable</p>}
@@ -163,7 +163,7 @@ export default function AttendancePanel() {
           <button onClick={resetQrSecret} disabled={qr.loading} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60">
             <RefreshCw className="w-3.5 h-3.5" /> Reset QR Secret
           </button>
-          {qrMessage && <p className="mt-2 text-xs text-blue-600">{qrMessage}</p>}
+          {qrMessage && <p className="mt-2 text-xs text-accent-600">{qrMessage}</p>}
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border p-4">
@@ -194,7 +194,7 @@ export default function AttendancePanel() {
                 value={selectedDate}
                 onChange={handleDateInputChange}
                 onBlur={() => setShowDatePicker(false)}
-                className="absolute left-0 top-full z-10 mt-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="absolute left-0 top-full z-10 mt-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-100"
               />
             )}
           </div>

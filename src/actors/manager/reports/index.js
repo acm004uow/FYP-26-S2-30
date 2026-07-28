@@ -283,13 +283,13 @@ export default function ManagerReports() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold">Operational Reports</h1>
         <p className="text-gray-500 text-sm mb-6">Generate daily, weekly, or monthly performance reports with detailed breakdowns.</p>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sm:p-8">
           <div className="inline-flex rounded-xl bg-gray-100 p-1 mb-5">
             {REPORT_TYPES.map(t => (
               <button
                 key={t.value}
                 onClick={() => setReportType(t.value)}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
               >
                 <t.icon className="w-4 h-4" /> {t.label}
               </button>
@@ -303,9 +303,9 @@ export default function ManagerReports() {
                 <span className="text-xs text-gray-400">Generated {data.generatedAt}</span>
               </>
             )}
-            <button onClick={generate} disabled={loading} className="ml-auto bg-gradient-to-r from-blue-500 to-green-500 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium shadow-sm transition hover:shadow-md disabled:opacity-60"><FileText className="w-4 h-4" /> {loading ? 'Loading...' : data ? 'Refresh' : 'Generate Report'}</button>
+            <button onClick={generate} disabled={loading} className="ml-auto bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition disabled:opacity-60"><FileText className="w-4 h-4" /> {loading ? 'Loading...' : data ? 'Refresh' : 'Generate Report'}</button>
           </div>
-          {message && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+          {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
           {data ? (
             <div className="mt-6 space-y-5">
@@ -327,7 +327,7 @@ export default function ManagerReports() {
                     <div key={cat} className="flex items-center gap-3 text-sm">
                       <span className="w-32 shrink-0 truncate text-gray-600">{cat}</span>
                       <div className="h-2 flex-1 rounded-full bg-gray-100">
-                        <div className="h-2 rounded-full bg-blue-500" style={{ width: `${(val / maxCategoryCount) * 100}%` }} />
+                        <div className="h-2 rounded-full bg-accent" style={{ width: `${(val / maxCategoryCount) * 100}%` }} />
                       </div>
                       <span className="w-6 shrink-0 text-right font-medium text-gray-900">{val}</span>
                     </div>

@@ -22,10 +22,10 @@ const fallbackWorkloadData = [
 ]
 
 const statusPalette = {
-  Completed: '#078b98',
-  'In progress': '#31c8bd',
-  'Pending approval': '#f2ca63',
-  Unassigned: '#ef6b55',
+  Completed: '#164290',
+  'In progress': '#2564cf',
+  'Pending approval': '#a6c8f9',
+  Unassigned: '#d1d5db',
 }
 
 const fallbackStatusData = [
@@ -171,10 +171,10 @@ export default function ManagerDashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
           <div>
-            <h1 className="font-serif text-3xl font-bold leading-tight text-[#243033] sm:text-4xl">
-              Manager dashboard
+            <h1 className="text-2xl font-bold text-gray-900">
+              Dashboard
             </h1>
-            <p className="text-gray-500 text-sm mt-3">Welcome back! Here&apos;s an overview of today&apos;s operations.</p>
+            <p className="text-gray-500 text-sm mt-1">Welcome back — here&apos;s today&apos;s operations overview.</p>
           </div>
         </div>
 
@@ -188,12 +188,12 @@ export default function ManagerDashboard() {
                   ? `Checked in since ${new Date(myAttendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
                   : "You haven't checked in today."}
             </p>
-            {scannerMessage && <p className="text-xs text-blue-600 mt-1">{scannerMessage}</p>}
+            {scannerMessage && <p className="text-xs text-accent-600 mt-1">{scannerMessage}</p>}
           </div>
           {!(myAttendance?.clocked_in_at && myAttendance?.clocked_out_at) && (
             <button
               onClick={() => { setScannerMessage(''); setShowScanner(true) }}
-              className="flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:shadow-md"
+              className="flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 active:bg-accent-700 transition"
             >
               <QrCode className="w-4 h-4" /> {myAttendance?.clocked_in_at ? 'Clock Out' : 'Clock In'}
             </button>
@@ -202,16 +202,16 @@ export default function ManagerDashboard() {
 
         {showScanner && <AttendanceScanner onClose={() => setShowScanner(false)} onResult={handleScanResult} />}
 
-        <div className="grid grid-cols-1 gap-5 mb-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-px bg-divider mb-8 sm:grid-cols-2 lg:grid-cols-4">
           {operationStats.map(stat => (
             <button
               key={stat.label}
               type="button"
               onClick={() => router.push(stat.path)}
-              className={`rounded-lg p-6 text-center shadow-md transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#078b98] focus:ring-offset-2 ${stat.featured ? 'bg-[#073f46] text-white' : 'bg-[#f7fbfb] text-[#078b98]'}`}
+              className="bg-white p-5 text-left transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-inset"
             >
-              <p className={`font-serif text-4xl font-bold ${stat.featured ? 'text-white' : 'text-[#078b98]'}`}>{stat.value}</p>
-              <p className={`mt-5 text-sm ${stat.featured ? 'text-white/85' : 'text-gray-600'}`}>{stat.label}</p>
+              <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
+              <p className="mt-2 text-sm text-gray-500">{stat.label}</p>
             </button>
           ))}
         </div>
@@ -256,7 +256,7 @@ export default function ManagerDashboard() {
                 <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#617177' }} axisLine={{ stroke: '#9aa4a8' }} tickLine={false} />
                 <YAxis domain={[0, 20]} ticks={[0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20]} tick={{ fontSize: 12, fill: '#617177' }} axisLine={{ stroke: '#9aa4a8' }} tickLine={false} />
                 <Tooltip contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }} />
-                <Bar dataKey="hours" fill="#078b98" name="Hours" label={{ position: 'top', fill: '#243033', fontSize: 12 }} />
+                <Bar dataKey="hours" fill="#2564cf" name="Hours" label={{ position: 'top', fill: '#1f2937', fontSize: 12 }} />
               </BarChart>
             </ResponsiveContainer>
             <h3 className="mt-2 text-sm font-bold text-gray-900">Workload balance - hours per staff</h3>
@@ -267,7 +267,7 @@ export default function ManagerDashboard() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <h3 className="font-semibold text-gray-800">Recent Bookings</h3>
-              <button onClick={() => router.push('/manager-bookings')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
+              <button onClick={() => router.push('/manager-bookings')} className="text-accent-600 text-sm font-semibold hover:underline flex items-center gap-1">View all <ChevronRight className="w-3 h-3" /></button>
             </div>
             <div className="divide-y divide-gray-50">
               {recentTaskRows.map(task => (
@@ -295,7 +295,7 @@ export default function ManagerDashboard() {
                 <h3 className="font-semibold text-gray-800">Staff Availability</h3>
                 <p className="mt-1 text-sm text-gray-500">{availableStaffCount} available staff</p>
               </div>
-              <button onClick={() => router.push('/manager-availability')} className="text-blue-500 text-sm hover:underline flex items-center gap-1">Live view <ChevronRight className="w-3 h-3" /></button>
+              <button onClick={() => router.push('/manager-availability')} className="text-accent-600 text-sm font-semibold hover:underline flex items-center gap-1">Live view <ChevronRight className="w-3 h-3" /></button>
             </div>
             <div className="divide-y divide-gray-50">
               {staffRows.map(s => (
@@ -304,7 +304,7 @@ export default function ManagerDashboard() {
                   className="p-4 transition hover:bg-gray-50"
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-green-400 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                    <div className="w-9 h-9 bg-accent-100 flex items-center justify-center text-accent-800 font-bold text-xs flex-shrink-0">
                       {s.name.split(' ').map(n => n[0]).join('')}
                     </div>
                     <div className="flex-1 min-w-0">

@@ -109,12 +109,12 @@ export default function TimeOffRequestsPanel() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-          <CalendarClock className="h-5 w-5 text-indigo-500" /> Time-Off Requests
+          <CalendarClock className="h-5 w-5 text-accent" /> Time-Off Requests
         </h2>
         <p className="mt-1 text-sm text-gray-500">Review weekly day-off and one-off leave requests from staff and managers.</p>
       </div>
 
-      {message && <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+      {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
       <div className="rounded-xl border border-gray-100 bg-white shadow-sm divide-y divide-gray-100">
         {requests.map(request => {
@@ -129,7 +129,7 @@ export default function TimeOffRequestsPanel() {
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${isManager ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}`}>
                       {isManager ? 'Manager' : 'Staff'}
                     </span>
-                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700">
+                    <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[11px] font-medium text-accent-800">
                       {request.request_type === 'weekly_day_off' ? 'Weekly Day Off' : 'Leave'}
                     </span>
                     <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${requestStatusMeta[request.status]?.badge || 'bg-gray-100 text-gray-600'}`}>

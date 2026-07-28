@@ -63,7 +63,7 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl" onClick={event => event.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl" onClick={event => event.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${meta.avatarBg} ${meta.avatarText}`}>
@@ -72,7 +72,7 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
             <div className="min-w-0">
               <p className="flex flex-wrap items-center gap-1.5 text-base font-bold text-gray-900">
                 <span className="truncate">{user.full_name}</span>
-                {user.id === currentUserId && <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">You</span>}
+                {user.id === currentUserId && <span className="shrink-0 rounded-full bg-accent-100 px-1.5 py-0.5 text-[10px] font-medium text-accent-800">You</span>}
               </p>
               <p className="truncate text-xs text-gray-500">{user.email}</p>
             </div>
@@ -109,7 +109,7 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
                 id={`manager-${user.id}`}
                 value={staffProfile.manager_id || ''}
                 onChange={event => onSetManager(staffProfile.id, event.target.value || null)}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-accent-400 focus:outline-none focus:ring-2 focus:ring-accent-100"
                 aria-label={`Supervising manager for ${user.full_name}`}
               >
                 <option value="">— No manager assigned —</option>
@@ -128,7 +128,7 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
                   defaultValue={staffProfile.basic_salary || 0}
                   onBlur={event => onSalaryBlur(staffProfile.id, user.id, event.target.value)}
                   onKeyDown={onSalaryKeyDown}
-                  className="w-24 rounded-lg border border-blue-200 bg-white px-2 py-1 text-right text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  className="w-24 rounded-lg border border-accent-200 bg-white px-2 py-1 text-right text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-accent-100"
                   aria-label={`Basic salary for ${user.full_name}`}
                 />
               ) : (
@@ -200,10 +200,10 @@ export default function UserAccountsPanel({ users, staffProfiles = [], managers 
     <div className="bg-white rounded-xl shadow-sm border p-6">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2"><Shield className="w-5 h-5 text-blue-500" /> User Account Access</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Shield className="w-5 h-5 text-accent" /> User Account Access</h2>
           <p className="mt-1 text-xs text-gray-500">Deactivate inactive or departed staff so they can no longer access the system.</p>
         </div>
-        <button onClick={onAddUser} className="bg-gradient-to-r from-blue-500 to-green-500 text-white px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1"><Plus className="w-3 h-3" /> Add User</button>
+        <button onClick={onAddUser} className="bg-accent hover:bg-accent-600 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition"><Plus className="w-3 h-3" /> Add User</button>
       </div>
 
       <div className="space-y-8">
@@ -221,7 +221,7 @@ export default function UserAccountsPanel({ users, staffProfiles = [], managers 
                     key={user.id}
                     type="button"
                     onClick={() => setManagingUserId(user.id)}
-                    className={`flex flex-col items-center gap-2 rounded-2xl border ${meta.ring} bg-white px-4 py-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md`}
+                    className={`flex flex-col items-center gap-2 rounded-xl border ${meta.ring} bg-white px-4 py-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md`}
                   >
                     <div className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                       {user.status === 'active' ? 'active' : 'inactive'}
@@ -234,7 +234,7 @@ export default function UserAccountsPanel({ users, staffProfiles = [], managers 
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center justify-center gap-1.5">
                         <p className="max-w-[160px] truncate text-sm font-bold text-gray-900">{user.full_name}</p>
-                        {user.id === currentUserId && <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">You</span>}
+                        {user.id === currentUserId && <span className="shrink-0 rounded-full bg-accent-100 px-1.5 py-0.5 text-[10px] font-medium text-accent-800">You</span>}
                       </div>
                       <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.avatarBg} ${meta.avatarText}`}>{roleLabel(user.role)}</span>
                     </div>

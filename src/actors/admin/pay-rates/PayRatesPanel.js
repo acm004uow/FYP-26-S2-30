@@ -132,7 +132,7 @@ export default function PayRatesPanel() {
           Set an hourly rate per service type. When staff complete a task, they earn an allowance equal to the task&apos;s estimated hours multiplied by this rate — shown alongside their basic salary in Business Reports.
         </p>
 
-        {message && <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+        {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         <div className="mt-5 divide-y divide-gray-100 rounded-xl border border-gray-100">
           {serviceTypes.map(serviceType => (
@@ -149,7 +149,7 @@ export default function PayRatesPanel() {
                     defaultValue={rates[serviceType] || 0}
                     onBlur={event => handleSaveRate(serviceType, event.target.value)}
                     onKeyDown={event => handleEditKeyDown(event, () => cancelRateEdit(serviceType))}
-                    className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                     aria-label={`Hourly rate for ${serviceType}`}
                   />
                   <span className="text-sm text-gray-400">/hr</span>
@@ -175,7 +175,7 @@ export default function PayRatesPanel() {
 
       <div className="mt-6 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-          <Wallet className="h-5 w-5 text-blue-500" /> Basic Salary
+          <Wallet className="h-5 w-5 text-accent" /> Basic Salary
         </h2>
         <p className="mt-1 text-sm text-gray-500">
           Set each staff member&apos;s fixed base pay. This is paid regardless of tasks completed, on top of any allowance earned above.
@@ -196,7 +196,7 @@ export default function PayRatesPanel() {
                     defaultValue={staff.basic_salary || 0}
                     onBlur={event => handleSaveBasicSalary(staff.id, staff.staff_name, event.target.value)}
                     onKeyDown={event => handleEditKeyDown(event, () => cancelSalaryEdit(staff.id))}
-                    className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                     aria-label={`Basic salary for ${staff.staff_name}`}
                   />
                 </div>

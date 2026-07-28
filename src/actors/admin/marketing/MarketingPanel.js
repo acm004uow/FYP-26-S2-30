@@ -144,7 +144,7 @@ export default function MarketingPanel() {
     <div className="bg-white rounded-xl shadow-sm border p-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2"><Megaphone className="w-5 h-5 text-blue-500" /> Marketing Page</h2>
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Megaphone className="w-5 h-5 text-accent" /> Marketing Page</h2>
           <p className="mt-1 text-xs text-gray-500">Describe your business and set service rates for the public marketplace. Only published companies appear there.</p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -245,12 +245,12 @@ export default function MarketingPanel() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="bg-gradient-to-r from-blue-500 to-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+            className="bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-60"
           >
             {saving ? 'Saving...' : 'Save'}
           </button>
         )}
-        {message && <p className="text-sm text-blue-600">{message}</p>}
+        {message && <p className="text-sm text-accent-600">{message}</p>}
       </div>
     </div>
   )

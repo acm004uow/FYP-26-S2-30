@@ -95,13 +95,13 @@ export default function DepartmentsPanel({ onChange }) {
           <h1 className="text-2xl font-bold text-gray-900">Departments</h1>
           <p className="text-gray-500 text-sm mt-1">Departments that can request casual staff for their own tasks (e.g. Sales, Facilities).</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:shadow-lg">
+        <button onClick={() => setShowCreate(true)} className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-5 py-2.5 text-sm font-semibold text-white transition">
           <Plus className="w-5 h-5" />
           Add Department
         </button>
       </div>
 
-      {message && <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+      {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
       <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
         <div className="divide-y divide-gray-100">
@@ -143,10 +143,10 @@ export default function DepartmentsPanel({ onChange }) {
                   onChange={event => setName(event.target.value)}
                   required
                   placeholder="e.g. Sales, Facilities"
-                  className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
                 />
               </div>
-              <button type="submit" disabled={saving} className="w-full rounded-lg bg-gradient-to-r from-blue-500 to-green-500 py-3 text-sm font-semibold text-white disabled:opacity-60">
+              <button type="submit" disabled={saving} className="w-full rounded-lg bg-accent hover:bg-accent-600 py-3 text-sm font-semibold text-white transition disabled:opacity-60">
                 {saving ? 'Creating...' : 'Create Department'}
               </button>
             </form>

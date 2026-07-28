@@ -162,13 +162,13 @@ export default function CategoriesPanel() {
           <h1 className="text-2xl font-bold text-gray-900">Service Categories</h1>
           <p className="text-gray-500 text-sm mt-1">Manage the service types customers and tasks can choose from — bookings, tasks, and the marketing page all use this list.</p>
         </div>
-        <button onClick={handleCreate} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-blue-500 to-green-500 px-5 py-2.5 text-sm font-medium text-white shadow-md hover:shadow-lg">
+        <button onClick={handleCreate} className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-5 py-2.5 text-sm font-semibold text-white transition">
           <Plus className="w-5 h-5" />
           Create Category
         </button>
       </div>
 
-      {message && <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">{message}</div>}
+      {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
       <div className="relative mb-6">
         <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
@@ -176,7 +176,7 @@ export default function CategoriesPanel() {
           value={search}
           onChange={event => setSearch(event.target.value)}
           placeholder="Search categories..."
-          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-12 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
         />
       </div>
 
@@ -190,7 +190,7 @@ export default function CategoriesPanel() {
           {filtered.map(category => (
             <div key={category.id} className="grid gap-4 px-5 py-4 md:grid-cols-[1fr_1.5fr_0.8fr] md:items-center">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-100 text-accent-600">
                   <Tags className="h-5 w-5" />
                 </div>
                 <div>
@@ -203,7 +203,7 @@ export default function CategoriesPanel() {
                 <button
                   onClick={() => handleEdit(category)}
                   disabled={category.isShared}
-                  className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-lg bg-accent-100 px-3 py-2 text-xs font-medium text-accent-600 hover:bg-accent-200 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Edit className="h-3.5 w-3.5" />
                   Edit
@@ -235,14 +235,14 @@ export default function CategoriesPanel() {
             <form onSubmit={handleSave} className="space-y-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">Category Name</label>
-                <input name="name" defaultValue={modal.editing?.name} required className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input name="name" defaultValue={modal.editing?.name} required className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-700">Description</label>
-                <textarea name="description" defaultValue={modal.editing?.description} rows={3} className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <textarea name="description" defaultValue={modal.editing?.description} rows={3} className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
               </div>
               <input type="hidden" name="status" value={modal.editing?.status || 'active'} />
-              <button type="submit" className="w-full rounded-lg bg-gradient-to-r from-blue-500 to-green-500 py-3 text-sm font-semibold text-white">
+              <button type="submit" className="w-full rounded-lg bg-accent hover:bg-accent-600 py-3 text-sm font-semibold text-white transition">
                 {modal.editing?.id ? 'Update Category' : 'Create Category'}
               </button>
             </form>
