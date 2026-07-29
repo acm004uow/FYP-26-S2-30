@@ -33,6 +33,30 @@ function isValidIsoDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
+// Uses Azure OpenAI's newer unified "v1" surface (endpoint already ends in /openai/v1, from the
+// Foundry portal's "Azure OpenAI endpoint" field) rather than the older
+// /openai/deployments/{deployment}/chat/completions?api-version=... shape. On this surface the
+// deployment name is passed as `model` in the request body, same as OpenAI's own API, and
+// `api-version` is not required for stable (non-preview) endpoints like chat completions.
+function getAzureOpenAiConfig() {
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT?.replace(/\/+$/, '')
+  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT
+  const apiKey = process.env.AZURE_OPENAI_API_KEY
+  const missing = [
+    !endpoint && 'AZURE_OPENAI_ENDPOINT',
+    !deployment && 'AZURE_OPENAI_DEPLOYMENT',
+    !apiKey && 'AZURE_OPENAI_API_KEY',
+  ].filter(Boolean)
+  if (missing.length) throw new Error(`Missing Azure OpenAI environment variable(s): ${missing.join(', ')}.`)
+
+  const apiVersion = process.env.AZURE_OPENAI_API_VERSION
+  return {
+    url: `${endpoint}/chat/completions${apiVersion ? `?api-version=${apiVersion}` : ''}`,
+    apiKey,
+    deployment,
+  }
+}
+
 const scheduleTool = {
   type: 'function',
   function: {
@@ -101,8 +125,12 @@ export async function POST(request) {
     const userMessage = String(message || '').trim()
     if (!userMessage) return NextResponse.json({ error: 'Message is required.' }, { status: 400 })
 
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) return NextResponse.json({ error: 'OPENAI_API_KEY is not configured.' }, { status: 500 })
+    let azureConfig
+    try {
+      azureConfig = getAzureOpenAiConfig()
+    } catch (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
 
     const token = request.headers.get('authorization')?.replace('Bearer ', '')
     const managerProfile = await getManagerProfile(token)
@@ -112,7 +140,6 @@ export async function POST(request) {
     }
 
     const today = new Date().toISOString().slice(0, 10)
-    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
     const systemPrompt = [
       'You are the Manager Scheduling Agent for the Smart Task Allocation app.',
       `Today's date is ${today}.`,
@@ -125,29 +152,31 @@ export async function POST(request) {
     const messages = [{ role: 'system', content: systemPrompt }, ...cleanHistory(history), { role: 'user', content: userMessage }]
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 15000)
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    const response = await fetch(azureConfig.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+        'api-key': azureConfig.apiKey,
       },
       signal: controller.signal,
       body: JSON.stringify({
-        model,
+        model: azureConfig.deployment,
         messages,
         tools: [scheduleTool, createContractTool],
         tool_choice: 'auto',
-        temperature: 0.2,
-        max_tokens: 300,
+        // gpt-5 is a reasoning model: temperature is fixed at 1 (can't be overridden), and
+        // max_completion_tokens covers hidden reasoning tokens as well as the visible reply/tool
+        // call — 300 was silently exhausted entirely on reasoning with zero visible output.
+        max_completion_tokens: 2000,
       }),
     })
     clearTimeout(timeoutId)
 
     const data = await response.json().catch(() => null)
-    if (!data) return NextResponse.json({ error: 'OpenAI returned a non-JSON response.' }, { status: 502 })
+    if (!data) return NextResponse.json({ error: 'Azure OpenAI returned a non-JSON response.' }, { status: 502 })
     if (!response.ok) {
-      return NextResponse.json({ error: data.error?.message || 'OpenAI request failed.' }, { status: response.status })
+      return NextResponse.json({ error: data.error?.message || 'Azure OpenAI request failed.' }, { status: response.status })
     }
 
     const toolCalls = data.choices?.[0]?.message?.tool_calls || []
@@ -203,11 +232,11 @@ export async function POST(request) {
     }
 
     const reply = data.choices?.[0]?.message?.content?.trim()
-    if (!reply) return NextResponse.json({ error: 'OpenAI returned an empty reply.' }, { status: 502 })
+    if (!reply) return NextResponse.json({ error: 'Azure OpenAI returned an empty reply.' }, { status: 502 })
     return NextResponse.json({ reply })
   } catch (error) {
     if (error.name === 'AbortError') {
-      return NextResponse.json({ error: 'OpenAI request timed out. Check your network connection, API key, and model name.' }, { status: 504 })
+      return NextResponse.json({ error: 'Azure OpenAI request timed out. Check your network connection, endpoint, and deployment name.' }, { status: 504 })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }

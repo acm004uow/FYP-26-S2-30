@@ -1,14 +1,46 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
-import { ExternalLink, Save } from 'lucide-react'
+import { Calendar, CheckCircle2, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+
+function initials(name) {
+  return String(name || '?')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('') || '?'
+}
+
+function ratingTheme(rating) {
+  if (rating >= 4.5) return { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500 fill-green-500' }
+  if (rating >= 3.5) return { bg: 'bg-accent-100', text: 'text-accent-700', icon: 'text-accent-500 fill-accent-500' }
+  return { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500 fill-red-500' }
+}
+
+function relativeCompletedLabel(dateStr) {
+  if (!dateStr) return 'Recently'
+  const date = new Date(dateStr)
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const diffDays = Math.round((startOfToday - startOfDate) / 86400000)
+  if (diffDays <= 0) return 'Today'
+  if (diffDays === 1) return 'Yesterday'
+  const weekday = date.toLocaleDateString([], { weekday: 'short' })
+  if (diffDays < 7) return weekday
+  if (diffDays < 14) return `Last ${weekday}`
+  const weeks = Math.floor(diffDays / 7)
+  return `${weeks} week${weeks > 1 ? 's' : ''} ago`
+}
 
 export default function ManagerCompletedTasks() {
   const [completedTasks, setCompletedTasks] = useState([])
-  const [showAllCompletedTasks, setShowAllCompletedTasks] = useState(false)
   const [reviewDrafts, setReviewDrafts] = useState({})
   const [reviewMessage, setReviewMessage] = useState('')
   const [savingReviewId, setSavingReviewId] = useState(null)
+  const [activeTaskId, setActiveTaskId] = useState(null)
+  const [hoverRating, setHoverRating] = useState(0)
 
   const loadCompletedTasks = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -46,6 +78,10 @@ export default function ManagerCompletedTasks() {
   useEffect(() => {
     loadCompletedTasks()
   }, [])
+
+  useEffect(() => {
+    setHoverRating(0)
+  }, [activeTaskId])
 
   const saveReview = async (task) => {
     const draft = reviewDrafts[task.id] || {}
@@ -97,97 +133,216 @@ export default function ManagerCompletedTasks() {
     setTimeout(() => setReviewMessage(''), 3000)
   }
 
-  const visibleCompletedTasks = showAllCompletedTasks ? completedTasks : completedTasks.slice(0, 3)
+  const activeTask = completedTasks.find(task => task.id === activeTaskId) || null
+  const activeDraft = activeTask ? (reviewDrafts[activeTask.id] || { rating: '', feedback: '' }) : null
 
   return (
     <Layout role="manager">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold">Completed Tasks</h1>
-        <p className="text-gray-500 text-sm mb-6">View uploaded proof, then optionally rate and leave feedback.</p>
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Manager / Completed Tasks</p>
+        <h1 className="text-2xl font-bold">Completed tasks</h1>
+        <p className="text-gray-500 mb-6">Grade performance and leave feedback after completion.</p>
 
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Completed Task Reviews</h2>
-              <p className="text-sm text-gray-500 mt-1">View uploaded proof, then optionally rate and leave feedback.</p>
-            </div>
-            {completedTasks.length > 3 && (
-              <button
-                type="button"
-                onClick={() => setShowAllCompletedTasks(value => !value)}
-                className="inline-flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-accent-600 hover:bg-accent-100"
-              >
-                {showAllCompletedTasks ? 'Show latest 3' : 'View all'}
-              </button>
-            )}
-          </div>
-          {reviewMessage && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{reviewMessage}</div>}
-          <div className="space-y-4">
-            {completedTasks.length === 0 && <div className="rounded-lg border p-8 text-center text-gray-400">No completed tasks yet.</div>}
-            {visibleCompletedTasks.map(task => {
-              const proof = task.task_proofs?.[0]
-              const customerFeedback = task.booking_feedback?.[0]
-              const draft = reviewDrafts[task.id] || { rating: '', feedback: '' }
-              return (
-                <div key={task.id} className="rounded-xl border border-gray-100 p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{task.service_type}</h3>
-                      <p className="text-sm text-gray-500">{task.location} - Completed {task.updated_at ? new Date(task.updated_at).toLocaleString() : 'recently'}</p>
-                      <p className="text-sm text-gray-500">Assigned staff: {task.staff_profiles?.staff_name || 'Unassigned'}</p>
-                      {customerFeedback && (
-                        <div className="mt-1">
-                          <p className="text-sm text-gray-600">
-                            Customer feedback: <span className="text-yellow-500">{'★'.repeat(customerFeedback.rating)}{'☆'.repeat(5 - customerFeedback.rating)}</span>
-                            {customerFeedback.comment && <span className="italic text-gray-500"> &ldquo;{customerFeedback.comment}&rdquo;</span>}
-                          </p>
-                          {customerFeedback.image_url && (
-                            <a href={customerFeedback.image_url} target="_blank" rel="noreferrer">
-                              <img src={customerFeedback.image_url} alt="Customer feedback attachment" className="mt-1 h-16 w-16 rounded-lg object-cover border" />
-                            </a>
-                          )}
+        {reviewMessage && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{reviewMessage}</div>}
+
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <th className="px-5 py-3">Task</th>
+                  <th className="px-5 py-3">Staff</th>
+                  <th className="px-5 py-3">Completed</th>
+                  <th className="px-5 py-3">Proof</th>
+                  <th className="px-5 py-3">Rating</th>
+                  <th className="px-5 py-3 w-12" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {completedTasks.map(task => {
+                  const proof = task.task_proofs?.[0]
+                  const review = task.performance_reviews?.[0]
+                  const theme = review?.rating ? ratingTheme(Number(review.rating)) : null
+                  return (
+                    <tr key={task.id} className="hover:bg-gray-50/60">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-100 text-accent-600">
+                            <CheckCircle2 className="h-4 w-4" />
+                          </span>
+                          <span className="font-semibold text-gray-900">{task.service_type}</span>
                         </div>
-                      )}
-                    </div>
-                    {proof?.file_url ? (
-                      <a href={proof.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-accent-600 hover:bg-accent-100">
-                        <ExternalLink className="h-4 w-4" /> View Proof
-                      </a>
-                    ) : (
-                      <span className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-400">No proof uploaded</span>
-                    )}
-                  </div>
-                  {proof?.file_name && <p className="mt-2 text-xs text-gray-400">Proof file: {proof.file_name}</p>}
-                  <div className="mt-4 grid gap-3 sm:grid-cols-[160px_minmax(0,1fr)_auto]">
-                    <select
-                      value={draft.rating}
-                      onChange={event => setReviewDrafts(prev => ({ ...prev, [task.id]: { ...draft, rating: event.target.value } }))}
-                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                    >
-                      <option value="">No rating</option>
-                      {[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} star{value > 1 ? 's' : ''}</option>)}
-                    </select>
-                    <input
-                      value={draft.feedback}
-                      onChange={event => setReviewDrafts(prev => ({ ...prev, [task.id]: { ...draft, feedback: event.target.value } }))}
-                      placeholder="Optional feedback"
-                      className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => saveReview(task)}
-                      disabled={savingReviewId === task.id}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 transition disabled:opacity-60"
-                    >
-                      <Save className="h-4 w-4" /> {savingReviewId === task.id ? 'Saving...' : 'Save'}
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
+                            {initials(task.staff_profiles?.staff_name)}
+                          </span>
+                          <span className="text-gray-700">{task.staff_profiles?.staff_name || 'Unassigned'}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-gray-600">{relativeCompletedLabel(task.updated_at)}</td>
+                      <td className="px-5 py-4">
+                        {proof?.file_url ? (
+                          <a href={proof.file_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full bg-accent-100 px-3 py-1 text-xs font-semibold text-accent-700 hover:bg-accent-200">
+                            <FileText className="h-3.5 w-3.5" /> View
+                          </a>
+                        ) : (
+                          <span className="text-gray-400">No proof</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        {review?.rating ? (
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${theme.bg} ${theme.text}`}>
+                            <Star className={`h-3.5 w-3.5 ${theme.icon}`} /> {Number(review.rating).toFixed(1)}
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setActiveTaskId(task.id)}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-200"
+                          >
+                            <Star className="h-3.5 w-3.5 text-amber-500" /> Rate
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTaskId(task.id)}
+                          aria-label="View task details"
+                          className="inline-flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-accent-50 hover:text-accent-600 hover:border-accent-200"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {completedTasks.length === 0 && <div className="p-10 text-center text-gray-400">No completed tasks yet.</div>}
           </div>
         </div>
       </div>
+
+      {activeTask && activeDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setActiveTaskId(null)}>
+          <div className="w-full max-w-lg rounded-2xl bg-white max-h-[90vh] overflow-y-auto" onClick={event => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 p-6 pb-5 border-b border-gray-100">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-100 text-accent-600">
+                  <CheckCircle2 className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <h3 className="text-lg font-semibold text-gray-900">{activeTask.service_type}</h3>
+                  <p className="text-sm text-gray-500 mt-0.5 flex items-start gap-1"><MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-gray-400" /> {activeTask.location}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setActiveTaskId(null)} aria-label="Close" className="shrink-0 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-gray-600">
+                  <Calendar className="h-4 w-4 text-gray-400 shrink-0" />
+                  <span className="truncate">{activeTask.updated_at ? new Date(activeTask.updated_at).toLocaleString() : 'Recently'}</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-gray-600">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-700 text-[10px] font-bold">
+                    {(activeTask.staff_profiles?.staff_name || '?').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('') || '?'}
+                  </span>
+                  <span className="truncate">{activeTask.staff_profiles?.staff_name || 'Unassigned'}</span>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Proof of work</p>
+                {activeTask.task_proofs?.[0]?.file_url ? (
+                  <a
+                    href={activeTask.task_proofs[0].file_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm font-semibold text-accent-700 hover:bg-accent-200 transition"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{activeTask.task_proofs[0].file_name || 'View proof'}</span>
+                    </span>
+                    <span className="shrink-0 text-xs">Open →</span>
+                  </a>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-gray-200 px-4 py-3 text-sm text-gray-400">
+                    No proof uploaded
+                  </div>
+                )}
+              </div>
+
+              {activeTask.booking_feedback?.[0] && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Customer feedback</p>
+                  <div className="rounded-lg border-l-4 border-yellow-400 bg-yellow-50 p-3">
+                    <p className="text-sm text-gray-700">
+                      <span className="text-yellow-500">{'★'.repeat(activeTask.booking_feedback[0].rating)}{'☆'.repeat(5 - activeTask.booking_feedback[0].rating)}</span>
+                      {activeTask.booking_feedback[0].comment && <span className="italic text-gray-600"> &ldquo;{activeTask.booking_feedback[0].comment}&rdquo;</span>}
+                    </p>
+                    {activeTask.booking_feedback[0].image_url && (
+                      <a href={activeTask.booking_feedback[0].image_url} target="_blank" rel="noreferrer">
+                        <img src={activeTask.booking_feedback[0].image_url} alt="Customer feedback attachment" className="mt-2 h-16 w-16 rounded-lg object-cover border" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-gray-100 pt-5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">Rate this job</p>
+                <div className="flex items-center gap-1 mb-3" onMouseLeave={() => setHoverRating(0)}>
+                  {[1, 2, 3, 4, 5].map(value => {
+                    const filled = value <= (hoverRating || Number(activeDraft.rating) || 0)
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onMouseEnter={() => setHoverRating(value)}
+                        onClick={() => setReviewDrafts(prev => ({ ...prev, [activeTask.id]: { ...activeDraft, rating: String(value) } }))}
+                        aria-label={`${value} star${value > 1 ? 's' : ''}`}
+                        className="p-0.5"
+                      >
+                        <Star className={`h-7 w-7 transition ${filled ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'}`} />
+                      </button>
+                    )
+                  })}
+                  {activeDraft.rating && (
+                    <button
+                      type="button"
+                      onClick={() => setReviewDrafts(prev => ({ ...prev, [activeTask.id]: { ...activeDraft, rating: '' } }))}
+                      className="ml-2 text-xs text-gray-400 hover:text-gray-600"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={activeDraft.feedback}
+                  onChange={event => setReviewDrafts(prev => ({ ...prev, [activeTask.id]: { ...activeDraft, feedback: event.target.value } }))}
+                  placeholder="Optional feedback"
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm mb-3"
+                />
+                <button
+                  type="button"
+                  onClick={() => saveReview(activeTask)}
+                  disabled={savingReviewId === activeTask.id}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent-600 transition disabled:opacity-60"
+                >
+                  <Save className="h-4 w-4" /> {savingReviewId === activeTask.id ? 'Saving...' : 'Save review'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

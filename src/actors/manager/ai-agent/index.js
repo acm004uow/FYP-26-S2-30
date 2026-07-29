@@ -17,8 +17,6 @@ export default function ManagerAiAgent() {
   }])
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
-  // Latest agent reply shown under the request form — replaces the old chat log. { text, isError }
-  const [lastReply, setLastReply] = useState(null)
   const [proposal, setProposal] = useState([])
   const [hostAdminId, setHostAdminId] = useState(null)
   const [editingBooking, setEditingBooking] = useState(null)
@@ -33,6 +31,13 @@ export default function ManagerAiAgent() {
   // re-fetching auth.getUser()+profiles on every single row — that's what made bulk approval of
   // a large proposal slow (2 extra round trips x every booking).
   const managerRef = useRef(null)
+  const chatScrollRef = useRef(null)
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+    }
+  }, [messages, isSending])
 
   const loadApprovedTimeOff = async (hostAdminIdParam) => {
     if (!hostAdminIdParam) {
@@ -97,7 +102,11 @@ export default function ManagerAiAgent() {
       if (!response.ok || !data?.proposal) return
 
       setProposal(data.proposal.map(row => ({ ...row, uiStatus: row.already_assigned ? 'scheduled' : 'pending', errorMessage: null })))
-      setLastReply({ text: `An automatically generated schedule for the week of ${data.range.start_date} to ${data.range.end_date} is ready for review.`, isError: false })
+      setMessages(prev => [...prev, {
+        role: 'bot',
+        content: `An automatically generated schedule for the week of ${data.range.start_date} to ${data.range.end_date} is ready for review.`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }])
     } catch {
       // Silently ignore — this is a best-effort check, not a required part of loading the page.
     }
@@ -184,7 +193,6 @@ export default function ManagerAiAgent() {
     const nextMessages = [...messages, userMsg]
     setMessages(nextMessages)
     setInput('')
-    setLastReply(null)
     setIsSending(true)
 
     try {
@@ -200,15 +208,12 @@ export default function ManagerAiAgent() {
       const data = await response.json().catch(() => null)
       if (!response.ok) throw new Error(data?.error || 'Scheduling agent request failed.')
 
-      // Kept internally (not displayed) purely so /api/agent gets multi-turn context for
-      // follow-up requests — the visible chat log was removed in favor of the status line below.
       setMessages(prev => [...prev, { role: 'bot', content: data.reply, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
-      setLastReply({ text: data.reply, isError: false })
       if (Array.isArray(data.proposal)) {
         setProposal(data.proposal.map(row => ({ ...row, uiStatus: row.already_assigned ? 'scheduled' : 'pending', errorMessage: null })))
       }
     } catch (error) {
-      setLastReply({ text: error.message, isError: true })
+      setMessages(prev => [...prev, { role: 'bot', content: error.message, isError: true, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }])
     } finally {
       setIsSending(false)
     }
@@ -315,11 +320,11 @@ export default function ManagerAiAgent() {
 
   return (
     <Layout role="manager">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="w-6 h-6 text-accent" /> AI Scheduling Agent</h1>
-            <p className="text-gray-300 mt-1">Describe what you need in plain language. The agent proposes staff assignments — nothing is saved until you approve.</p>
+            <p className="text-gray-500 mt-1">Describe what you need in plain language. The agent proposes staff assignments — nothing is saved until you approve.</p>
           </div>
           <div className="relative flex-shrink-0">
             <button
@@ -339,36 +344,51 @@ export default function ManagerAiAgent() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)] gap-6">
-          <div className="bg-white rounded-xl shadow-sm border p-5 lg:sticky lg:top-6 flex flex-col">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white text-xs font-semibold flex-shrink-0">1</span>
-              <h2 className="font-semibold text-gray-900">Your request</h2>
-            </div>
-            <div className="mt-auto">
-              {(isSending || lastReply) && (
-                <div
-                  className={`mb-3 flex items-start gap-2 rounded-lg border px-3 py-2.5 text-sm ${
-                    isSending
-                      ? 'border-gray-100 bg-gray-50 text-gray-500'
-                      : lastReply.isError
-                        ? 'border-red-100 bg-red-50 text-red-700'
-                        : 'border-accent-200 bg-accent-100 text-accent-800'
-                  }`}
-                >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mt-0.5 flex-shrink-0 animate-spin" />
-                      <span>Thinking...</span>
-                    </>
-                  ) : (
-                    <>
-                      {lastReply.isError ? <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <Bot className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                      <span>{lastReply.text}</span>
-                    </>
-                  )}
+        <div className="bg-white rounded-xl shadow-sm border flex flex-col mb-6" style={{ height: '30rem' }}>
+          <div className="flex items-center gap-2 px-5 py-4 border-b flex-shrink-0">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white text-xs font-semibold flex-shrink-0">1</span>
+            <h2 className="font-semibold text-gray-900">Your request</h2>
+          </div>
+
+          <div ref={chatScrollRef} className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            {messages.map((msg, index) => (
+              <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`flex max-w-[85%] items-start gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
+                    msg.role === 'user' ? 'bg-accent-800 text-white' : msg.isError ? 'bg-red-100 text-red-600' : 'bg-accent-100 text-accent-600'
+                  }`}>
+                    {msg.role === 'user' ? <User className="h-3.5 w-3.5" /> : msg.isError ? <XCircle className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+                  </span>
+                  <div className={msg.role === 'user' ? 'text-right' : ''}>
+                    <div className={`rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'bg-accent text-white rounded-tr-sm'
+                        : msg.isError
+                          ? 'bg-red-50 text-red-700 rounded-tl-sm'
+                          : 'bg-gray-100 text-gray-800 rounded-tl-sm'
+                    }`}>
+                      {msg.content}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1">{msg.time}</p>
+                  </div>
                 </div>
-              )}
+              </div>
+            ))}
+            {isSending && (
+              <div className="flex justify-start">
+                <div className="flex items-start gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-100 text-accent-600">
+                    <Bot className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-2.5 text-sm text-gray-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking...
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="px-5 py-4 border-t flex-shrink-0">
               <form onSubmit={handleSubmit} className="flex gap-2 items-start">
                 <div className="relative flex-1">
                   <Wand2 className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
@@ -383,12 +403,12 @@ export default function ManagerAiAgent() {
                     }}
                     placeholder="e.g. Create schedule for one week"
                     disabled={isSending}
-                    rows={3}
+                    rows={2}
                     className="w-full pl-9 pr-3 py-2.5 border rounded-lg text-sm resize-y max-h-56 focus:outline-none focus:ring-2 focus:ring-accent-200"
                   />
                 </div>
                 <button type="submit" disabled={isSending} className="flex items-center gap-1.5 px-4 py-2.5 bg-accent hover:bg-accent-600 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60 flex-shrink-0">
-                  <Send className="w-4 h-4" /> 
+                  <Send className="w-4 h-4" />
                 </button>
               </form>
               <p className="text-[11px] text-gray-400 mt-1.5">Press Enter to send, Shift+Enter for a new line</p>
@@ -555,7 +575,6 @@ export default function ManagerAiAgent() {
               <Info className="w-3.5 h-3.5 flex-shrink-0" /> Nothing is saved until you approve the schedule.
             </div>
           </div>
-        </div>
       </div>
 
       {editingBooking && (

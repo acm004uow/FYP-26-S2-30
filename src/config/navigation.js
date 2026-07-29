@@ -1,18 +1,19 @@
-import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
+import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, Clock, DollarSign, FileText, Globe, LayoutDashboard, Megaphone, Settings, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
-    { name: 'Staff', path: '/manager-user-accounts', icon: UserCog },
+    { name: 'Crew', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Customers', path: '/manager-customers', icon: Users },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'Schedule', path: '/manager-schedule', icon: Calendar },
     { name: 'Availability', path: '/manager-availability', icon: Activity },
     { name: 'Time Off', path: '/manager-time-off', icon: CalendarOff },
+    { name: 'My Attendance', path: '/manager-my-attendance', icon: Clock },
     { name: 'Tracking', path: '/manager-tracking', icon: UserCheck },
     { name: 'Reports', path: '/manager-reports', icon: FileText },
     { name: 'Completed Tasks', path: '/manager-completed-tasks', icon: CheckCircle2 },
-    { name: 'AI Agent', path: '/manager-ai-agent', icon: Sparkles },
+    { name: 'Scheduler', path: '/manager-ai-agent', icon: Sparkles },
   ],
   staffMember: [
     { name: 'My Tasks', path: '/staffMember', icon: ClipboardList },
