@@ -16,6 +16,25 @@ const roleDisplayMap = {
   userAdmin: 'User Admin',
 }
 
+// Per-item icon badge colors for the sidebar nav — each pulled from the same accent used on that
+// item's own page (e.g. Reports' purple step badge, Availability/Completed Tasks' green "done"
+// state) so the nav reads as part of the same color system rather than a separate palette.
+const NAV_ICON_THEME = {
+  '/manager': { bg: 'bg-accent-100', icon: 'text-accent-600' },
+  '/manager-user-accounts': { bg: 'bg-purple-100', icon: 'text-purple-600' },
+  '/manager-customers': { bg: 'bg-teal-100', icon: 'text-teal-600' },
+  '/manager-bookings': { bg: 'bg-sky-100', icon: 'text-sky-600' },
+  '/manager-schedule': { bg: 'bg-indigo-100', icon: 'text-indigo-600' },
+  '/manager-availability': { bg: 'bg-green-100', icon: 'text-green-600' },
+  '/manager-time-off': { bg: 'bg-amber-100', icon: 'text-amber-600' },
+  '/manager-my-attendance': { bg: 'bg-accent-100', icon: 'text-accent-600' },
+  '/manager-tracking': { bg: 'bg-rose-100', icon: 'text-rose-600' },
+  '/manager-reports': { bg: 'bg-purple-100', icon: 'text-purple-600' },
+  '/manager-completed-tasks': { bg: 'bg-green-100', icon: 'text-green-600' },
+  '/manager-ai-agent': { bg: 'bg-violet-100', icon: 'text-violet-600' },
+}
+const DEFAULT_NAV_ICON_THEME = { bg: 'bg-gray-100', icon: 'text-gray-500' }
+
 const profileRoleDisplayMap = {
   manager: 'Manager',
   department_staff: 'Department Staff',
@@ -228,11 +247,14 @@ export default function Layout({ children, role = 'manager' }) {
       ? router.pathname === itemPath && router.asPath.includes(itemQuery)
       : router.pathname === itemPath && !(itemPath === '/admin' && router.asPath.includes('section='))
     const badgeCount = itemPath === '/manager-bookings' ? pendingBookingsCount : 0
+    const theme = NAV_ICON_THEME[itemPath] || DEFAULT_NAV_ICON_THEME
     return (
       <Link key={item.path} href={item.path}
         onClick={options.onClick}
-        className={`flex w-full items-center gap-3 px-4 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-accent-100 text-accent-800' : 'text-gray-700 hover:bg-gray-100'}`}>
-        <item.icon className="h-[17px] w-[17px] shrink-0" />
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-accent-100 text-accent-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${theme.bg}`}>
+          <item.icon className={`h-4 w-4 ${theme.icon}`} />
+        </span>
         <span className="flex-1">{item.name}</span>
         {badgeCount > 0 && (
           <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
@@ -402,9 +424,9 @@ export default function Layout({ children, role = 'manager' }) {
       </nav>
 
       {!isCustomerNav && (
-        <aside className="fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r-2 border-divider bg-white lg:block">
-          <div className="flex h-full flex-col py-4">
-            <div className="flex-1 space-y-0.5 overflow-y-auto">
+        <aside className="fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r-2 border-divider bg-gray-50 lg:block">
+          <div className="flex h-full flex-col p-3">
+            <div className="flex-1 space-y-0.5 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-sm">
               {nav.map(item => renderNavLink(item))}
             </div>
             {isOwnerNav && (
@@ -422,8 +444,8 @@ export default function Layout({ children, role = 'manager' }) {
             onClick={() => setMobileOpen(false)}
             aria-label="Close navigation menu"
           />
-          <aside className="relative h-full w-72 max-w-[85vw] overflow-y-auto border-r-2 border-divider bg-white py-4 shadow-xl">
-            <div className="space-y-0.5">
+          <aside className="relative h-full w-72 max-w-[85vw] overflow-y-auto bg-gray-50 p-3 shadow-xl">
+            <div className="space-y-0.5 rounded-2xl border border-gray-100 bg-white p-2 shadow-sm">
               {nav.map(item => renderNavLink(item, { onClick: () => setMobileOpen(false) }))}
             </div>
             {isOwnerNav && (
