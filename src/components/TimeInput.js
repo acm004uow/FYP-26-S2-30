@@ -1,73 +1,146 @@
 import { useEffect, useRef, useState } from 'react'
+import { Clock } from 'lucide-react'
 
-// Replaces the native <input type="time"> everywhere in the app — its picker is a
-// browser/OS-native overlay with zero CSS styling hooks and no control over where it renders
-// (it can render off-card, as in the cramped screenshot that prompted this). Three plain <select>
-// elements give a fully custom, consistent look with no popover positioning to manage.
-const HOURS = Array.from({ length: 12 }, (_, i) => i + 1)
-const MINUTES = Array.from({ length: 60 }, (_, i) => i)
-const PERIODS = ['AM', 'PM']
+// A custom modal time picker (type digits into Hour/Minute, tap AM/PM, Cancel/OK) instead of the
+// native <input type="time"> — that picker is a browser/OS-native overlay with zero CSS styling
+// hooks and no control over where it renders (it can render off-card in a cramped layout). A
+// centered modal with its own backdrop is always predictable regardless of where the trigger
+// button sits on the page, and typing digits directly is faster than scrolling any dropdown.
 
 function parseTime(value) {
-  if (!value) return { hour12: '', minute: '', period: '' }
+  if (!value) return null
   const [h, m] = value.split(':').map(Number)
   const period = h >= 12 ? 'PM' : 'AM'
   const hour12 = h % 12 || 12
   return { hour12: String(hour12), minute: String(m).padStart(2, '0'), period }
 }
 
-function toValue(hour12, minute, period) {
-  if (hour12 === '' || minute === '' || period === '') return ''
+function toValue({ hour12, minute, period }) {
   let h = Number(hour12) % 12
   if (period === 'PM') h += 12
   return `${String(h).padStart(2, '0')}:${minute}`
 }
 
-const selectClass = 'w-full rounded-lg border border-gray-200 bg-gray-50 px-2 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+function formatDisplay(value) {
+  const parts = parseTime(value)
+  if (!parts) return ''
+  return `${parts.hour12}:${parts.minute} ${parts.period}`
+}
 
-// `required` omits the blank "--" option — use for fields that must always hold a value (e.g.
-// the scheduling cutoff time). Leave it false for "preferred time" style fields where no
-// selection means "no time preference," matching what an empty native time input used to mean.
+function clampHour(raw) {
+  const n = Number(raw)
+  if (!raw || Number.isNaN(n) || n < 1 || n > 12) return '12'
+  return String(n)
+}
+
+function clampMinute(raw) {
+  const n = Number(raw)
+  if (!raw || Number.isNaN(n)) return '00'
+  return String(Math.min(59, n)).padStart(2, '0')
+}
+
+const DEFAULT_DRAFT = { hour12: '12', minute: '00', period: 'AM' }
+
+// `required` controls the trigger's placeholder text only ("Select time" vs "--") — the modal
+// itself always composes a full, valid time once confirmed, so there's no separate validation path.
 export default function TimeInput({ value, onChange, required = false, className = '' }) {
-  // Picking hour/minute/period one at a time is necessarily incomplete until all three are set,
-  // so `onChange` gets called with '' after the first pick or two (see toValue above). If the
-  // displayed selection were derived straight from `value`, that '' would round-trip back through
-  // parseTime('') and reset every select to "--", making it look like nothing could be chosen.
-  // Local `parts` state remembers what's been picked so far regardless of what the composed
-  // value is; a ref tracks the last value *we* emitted so an externally-set value (e.g. picking
-  // a different existing booking, which fills in its saved time while this stays mounted) is
-  // still detected and synced in, without fighting the incomplete-selection case above.
-  const [parts, setParts] = useState(() => parseTime(value))
-  const lastEmitted = useRef(value)
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState(() => parseTime(value) || DEFAULT_DRAFT)
+  const hourRef = useRef(null)
+  const minuteRef = useRef(null)
 
   useEffect(() => {
-    if (value === lastEmitted.current) return
-    lastEmitted.current = value
-    setParts(parseTime(value))
-  }, [value])
+    if (!open) setDraft(parseTime(value) || DEFAULT_DRAFT)
+  }, [value, open])
 
-  const updatePart = (patch) => {
-    const next = { ...parts, ...patch }
-    setParts(next)
-    const composed = toValue(next.hour12, next.minute, next.period)
-    lastEmitted.current = composed
-    onChange(composed)
+  useEffect(() => {
+    if (open) {
+      hourRef.current?.focus()
+      hourRef.current?.select()
+    }
+  }, [open])
+
+  const confirm = () => {
+    onChange(toValue({ ...draft, hour12: clampHour(draft.hour12), minute: clampMinute(draft.minute) }))
+    setOpen(false)
   }
 
+  const cancel = () => {
+    setDraft(parseTime(value) || DEFAULT_DRAFT)
+    setOpen(false)
+  }
+
+  const digitField = (field, ref, nextRef) => (
+    <input
+      ref={ref}
+      type="text"
+      inputMode="numeric"
+      maxLength={2}
+      value={draft[field]}
+      onFocus={e => e.target.select()}
+      onChange={e => {
+        const digits = e.target.value.replace(/\D/g, '').slice(0, 2)
+        setDraft(prev => ({ ...prev, [field]: digits }))
+        if (digits.length === 2) nextRef?.current?.focus()
+      }}
+      onBlur={() => setDraft(prev => ({ ...prev, [field]: (field === 'hour12' ? clampHour : clampMinute)(prev[field]) }))}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); confirm() }
+        if (e.key === 'Escape') { e.preventDefault(); cancel() }
+      }}
+      className="w-full rounded-xl bg-accent-50 text-center text-4xl font-medium text-gray-900 py-4 focus:outline-none focus:bg-accent-100 focus:ring-2 focus:ring-accent-500"
+    />
+  )
+
   return (
-    <div className={`grid grid-cols-3 gap-2 ${className}`}>
-      <select value={parts.hour12} onChange={e => updatePart({ hour12: e.target.value })} className={selectClass}>
-        {!required && <option value="">--</option>}
-        {HOURS.map(h => <option key={h} value={h}>{String(h).padStart(2, '0')}</option>)}
-      </select>
-      <select value={parts.minute} onChange={e => updatePart({ minute: e.target.value })} className={selectClass}>
-        {!required && <option value="">--</option>}
-        {MINUTES.map(m => <option key={m} value={String(m).padStart(2, '0')}>{String(m).padStart(2, '0')}</option>)}
-      </select>
-      <select value={parts.period} onChange={e => updatePart({ period: e.target.value })} className={selectClass}>
-        {!required && <option value="">--</option>}
-        {PERIODS.map(p => <option key={p} value={p}>{p}</option>)}
-      </select>
+    <div className={className}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-left text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
+      >
+        <span className={value ? 'text-gray-900' : 'text-gray-400'}>{value ? formatDisplay(value) : (required ? 'Select time' : '--')}</span>
+        <Clock className="h-4 w-4 shrink-0 text-gray-400" />
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={cancel}>
+          <div className="w-full max-w-xs rounded-2xl bg-white p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <p className="mb-5 text-sm font-medium text-gray-500">Enter time</p>
+            <div className="flex items-start gap-2.5">
+              <div className="flex-1">
+                {digitField('hour12', hourRef, minuteRef)}
+                <p className="mt-1.5 text-center text-xs text-gray-500">Hour</p>
+              </div>
+              <span className="pt-4 text-2xl text-gray-300">:</span>
+              <div className="flex-1">
+                {digitField('minute', minuteRef, null)}
+                <p className="mt-1.5 text-center text-xs text-gray-500">Minute</p>
+              </div>
+              <div className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setDraft(prev => ({ ...prev, period: 'AM' }))}
+                  className={`px-4 py-2.5 text-sm font-semibold transition ${draft.period === 'AM' ? 'bg-accent-100 text-accent-800' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                >
+                  AM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraft(prev => ({ ...prev, period: 'PM' }))}
+                  className={`border-t border-gray-200 px-4 py-2.5 text-sm font-semibold transition ${draft.period === 'PM' ? 'bg-accent-100 text-accent-800' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                >
+                  PM
+                </button>
+              </div>
+            </div>
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button type="button" onClick={cancel} className="rounded-lg px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancel</button>
+              <button type="button" onClick={confirm} className="rounded-lg px-3 py-2 text-sm font-semibold text-accent-700 hover:bg-accent-50">OK</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -73,25 +73,25 @@ export default function AddressFields({ onLocationChange, onCoordinatesChange, c
 
   return (
     <div className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Singapore Postal Code *</label>
-        <input
-          required
-          value={postalCode}
-          onChange={e => setPostalCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          inputMode="numeric"
-          pattern="\d{6}"
-          maxLength={6}
-          title="Enter a 6-digit Singapore postal code"
-          placeholder="e.g. 129588"
-          className={inputClass}
-        />
-        {postalLookupStatus === 'loading' && <p className="mt-1 text-xs text-gray-400">Looking up address...</p>}
-        {postalLookupStatus === 'not_found' && <p className="mt-1 text-xs text-red-500">No address found for this postal code. Enter it manually below.</p>}
-        {postalLookupStatus === 'error' && <p className="mt-1 text-xs text-red-500">Address lookup failed. Enter it manually below.</p>}
-        {postalLookupStatus === '' && <p className="mt-1 text-xs text-gray-400">6-digit postal code, e.g. 129588</p>}
-      </div>
       <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Singapore Postal Code *</label>
+          <input
+            required
+            value={postalCode}
+            onChange={e => setPostalCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            title="Enter a 6-digit Singapore postal code"
+            placeholder="e.g. 129588"
+            className={inputClass}
+          />
+          {postalLookupStatus === 'loading' && <p className="mt-1 text-xs text-accent-600">Looking up address...</p>}
+          {postalLookupStatus === 'not_found' && <p className="mt-1 text-xs text-red-500">No address found for this postal code. Enter it manually below.</p>}
+          {postalLookupStatus === 'error' && <p className="mt-1 text-xs text-red-500">Address lookup failed. Enter it manually below.</p>}
+          {postalLookupStatus === '' && <p className="mt-1 text-xs text-accent-600">6-digit postal code, e.g. 129588</p>}
+        </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Block No. *</label>
           <input
@@ -102,6 +102,8 @@ export default function AddressFields({ onLocationChange, onCoordinatesChange, c
             className={inputClass}
           />
         </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Unit No.</label>
           <input
@@ -111,16 +113,16 @@ export default function AddressFields({ onLocationChange, onCoordinatesChange, c
             className={inputClass}
           />
         </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Street Name *</label>
-        <input
-          required
-          value={address.streetName}
-          onChange={e => setAddress({ ...address, streetName: e.target.value })}
-          placeholder="e.g. Hougang Street 61"
-          className={inputClass}
-        />
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Street Name *</label>
+          <input
+            required
+            value={address.streetName}
+            onChange={e => setAddress({ ...address, streetName: e.target.value })}
+            placeholder="e.g. Hougang Street 61"
+            className={inputClass}
+          />
+        </div>
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Building Name (optional)</label>
@@ -131,7 +133,7 @@ export default function AddressFields({ onLocationChange, onCoordinatesChange, c
           className={inputClass}
         />
       </div>
-      {!compact && <p className="text-xs text-gray-400">Enter the postal code above to auto-fill block, street, and building. Add your unit number manually.</p>}
+      {!compact && <p className="text-xs text-accent-600">Enter the postal code above to auto-fill block, street, and building. Add your unit number manually.</p>}
     </div>
   )
 }

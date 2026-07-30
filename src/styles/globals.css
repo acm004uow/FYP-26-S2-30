@@ -34,3 +34,18 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* Native <input type="date"> ships its own calendar icon that can't be removed, only hidden —
+   this makes it invisible but stretches it over the whole field (still clickable, opens the
+   native picker from anywhere) so it doesn't visually clash with our own Lucide icon drawn on
+   top via a sibling element. Scoped to .date-input so it doesn't affect unrelated date inputs. */
+.date-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}

@@ -3,7 +3,7 @@ import TimeInput from '../../../components/TimeInput'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, ArrowUpDown, Bell, Building, Building2, Calendar, CheckCircle2, ChevronDown, ChevronLeft,
-  ChevronRight, ClipboardList, Edit3, Filter, Home, HelpCircle, ImagePlus, Lightbulb, Layers, MapPin, Plus, Search,
+  ChevronRight, ClipboardList, Edit3, Filter, Home, HelpCircle, ImagePlus, Lightbulb, Layers, MapPin, Search,
   Sparkles, Trash2, X,
 } from 'lucide-react'
 import { useRouter } from 'next/router'
@@ -324,9 +324,9 @@ export default function CustomerDashboard() {
   return (
     <Layout role="customer">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <div><h1 className="text-2xl font-bold">My Bookings</h1><p className="text-gray-500 text-sm">Book a cleaning service and track its status</p></div>
-          <button onClick={() => router.push('/customer-book')} className="bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 transition"><Plus className="w-4 h-4" /> New Booking</button>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">My Bookings</h1>
+          <p className="text-gray-500 text-sm">Book a cleaning service and track its status</p>
         </div>
 
         {notification && (

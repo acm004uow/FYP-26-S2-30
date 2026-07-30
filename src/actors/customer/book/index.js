@@ -1,9 +1,9 @@
 import Layout from '../../../components/Layout'
 import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/router'
-import { ArrowLeft, Calendar, CheckCircle, ClipboardList, Clock, Info, MapPin, Repeat, Sparkles } from 'lucide-react'
+import { ArrowLeft, Calendar, CheckCircle, ChevronDown, ClipboardList, Clock, Info, MapPin, Repeat, Sparkles } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { getMinBookableDate, DEFAULT_CUTOFF } from '../../../../lib/businessWeek'
@@ -31,6 +31,8 @@ export default function CustomerBooking() {
   const [bookingMode, setBookingMode] = useState('one-time')
   const [closures, setClosures] = useState([])
   const [cutoff, setCutoff] = useState(DEFAULT_CUTOFF)
+  const [daysDropdownOpen, setDaysDropdownOpen] = useState(false)
+  const daysDropdownRef = useRef(null)
   const [form, setForm] = useState({
     companyId: '', serviceType: SERVICE_TYPES[0], description: '',
     scheduledDate: '', scheduledTime: '', estimatedHours: 2, notes: '',
@@ -43,6 +45,17 @@ export default function CustomerBooking() {
       daysOfWeek: prev.daysOfWeek.includes(day) ? prev.daysOfWeek.filter(d => d !== day) : [...prev.daysOfWeek, day],
     }))
   }
+
+  useEffect(() => {
+    if (!daysDropdownOpen) return
+    const handleClickOutside = (event) => {
+      if (daysDropdownRef.current && !daysDropdownRef.current.contains(event.target)) {
+        setDaysDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [daysDropdownOpen])
 
   // Service type is chosen before company (customers know what they need before they know who
   // offers it), so the full type list loads once up front rather than being scoped to a company.
@@ -321,32 +334,11 @@ export default function CustomerBooking() {
   return (
     <Layout role="customer">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <button type="button" onClick={() => router.push('/customer')} className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-              <ArrowLeft className="w-4 h-4" /> Back
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">Book a Cleaning Service</h1>
-    
-          </div>
-          <div className="hidden sm:flex shrink-0 h-16 w-16 items-center justify-center rounded-xl bg-accent-100">
-            <svg viewBox="0 0 64 64" className="h-11 w-11" xmlns="http://www.w3.org/2000/svg">
-              <rect x="34" y="16" width="17" height="36" rx="2" fill="#93C5FD" />
-              <rect x="38" y="22" width="3" height="3" rx="0.5" fill="#EFF6FF" />
-              <rect x="44.5" y="22" width="3" height="3" rx="0.5" fill="#EFF6FF" />
-              <rect x="38" y="29" width="3" height="3" rx="0.5" fill="#EFF6FF" />
-              <rect x="44.5" y="29" width="3" height="3" rx="0.5" fill="#EFF6FF" />
-              <rect x="38" y="36" width="3" height="3" rx="0.5" fill="#EFF6FF" />
-              <rect x="44.5" y="36" width="3" height="3" rx="0.5" fill="#EFF6FF" />
-              <rect x="13" y="30" width="21" height="22" rx="1.5" fill="#3B82F6" />
-              <path d="M11 31 L23.5 19 L36 31" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              <rect x="20" y="40" width="6.5" height="12" rx="1" fill="#1E3A8A" />
-              <rect x="28.5" y="35" width="4" height="4" rx="0.5" fill="#DBEAFE" />
-              <path d="M51 8 L52.6 12.4 L57 14 L52.6 15.6 L51 20 L49.4 15.6 L45 14 L49.4 12.4 Z" fill="#A5B4FC" />
-              <circle cx="15" cy="13" r="1.8" fill="#BFDBFE" />
-              <circle cx="55" cy="34" r="1.4" fill="#BFDBFE" />
-            </svg>
-          </div>
+        <div className="mb-8">
+          <button type="button" onClick={() => router.push('/customer')} className="mb-2 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+          <h1 className="text-2xl font-bold text-gray-900">Book a Cleaning Service</h1>
         </div>
         {error && <div className="mb-4 rounded-lg border bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
@@ -358,54 +350,59 @@ export default function CustomerBooking() {
               Service Details
             </h3>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Service Type *</label>
-                <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value, companyId: '' })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
-                  {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Service Type *</label>
+                  <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value, companyId: '' })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
+                    {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </div>
                 {recommendedCompany && (
-                  <button
-                    type="button"
-                    onClick={() => setForm(prev => ({ ...prev, companyId: recommendedCompany.id }))}
-                    className={`mb-2 flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition ${form.companyId === recommendedCompany.id ? 'border-accent-300 bg-accent-100' : 'border-accent-100 bg-accent-50 hover:bg-accent-100'}`}
-                  >
-                    <Sparkles className="w-4 h-4 text-accent-600 mt-0.5 shrink-0" />
-                    <span className="text-sm">
-                      <span className="font-semibold text-accent-800">AI Recommended: {recommendedCompany.business_name}</span>
-                      <span className="block text-xs text-accent-600 mt-0.5">{recommendedCompany.reason}</span>
-                    </span>
-                  </button>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">&nbsp;</label>
+                    <button
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, companyId: recommendedCompany.id }))}
+                      className={`flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition ${form.companyId === recommendedCompany.id ? 'border-accent-300 bg-accent-100' : 'border-accent-100 bg-accent-50 hover:bg-accent-100'}`}
+                    >
+                      <Sparkles className="w-4 h-4 text-accent-600 mt-0.5 shrink-0" />
+                      <span className="text-sm">
+                        <span className="font-semibold text-accent-800">AI Recommended: {recommendedCompany.business_name}</span>
+                        <span className="block text-xs text-accent-600 mt-0.5">{recommendedCompany.reason}</span>
+                      </span>
+                    </button>
+                  </div>
                 )}
-                <select required value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
-                  <option value="">{companiesLoading ? 'Loading companies...' : 'Select a company...'}</option>
-                  {companies.map(company => (
-                    <option key={company.id} value={company.id}>
-                      {company.id === recommendedCompany?.id ? '⭐ ' : ''}{company.business_name}{company.rating ? ` — ★${company.rating.average.toFixed(1)} (${company.rating.count})` : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-gray-400">
-                  {companies.length === 0 && !companiesLoading
-                    ? 'No companies are available to book with yet.'
-                    : 'Sorted by suitability for this service, based on past customer reviews.'}
-                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">Estimated Hours <Info className="w-3.5 h-3.5 text-gray-400" /></label>
+                  <div className="flex items-center gap-2 w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus-within:ring-2 focus-within:ring-accent-500">
+                    <Clock className="w-4 h-4 text-gray-400 shrink-0" />
+                    <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: e.target.value })} className="flex-1 bg-transparent text-sm focus:outline-none" />
+                    <span className="text-xs text-gray-400 shrink-0">hours</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
+                  <select required value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
+                    <option value="">{companiesLoading ? 'Loading companies...' : 'Select a company...'}</option>
+                    {companies.map(company => (
+                      <option key={company.id} value={company.id}>
+                        {company.id === recommendedCompany?.id ? '⭐ ' : ''}{company.business_name}{company.rating ? ` — ★${company.rating.average.toFixed(1)} (${company.rating.count})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-accent-600">
+                    {companies.length === 0 && !companiesLoading
+                      ? 'No companies are available to book with yet.'
+                      : 'Sorted by suitability for this service, based on past customer reviews.'}
+                  </p>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
                 <div className="relative">
                   <textarea maxLength={500} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={4} placeholder="Describe what needs to be cleaned..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50 resize-none" />
                   <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.description.length} / 500</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">Estimated Hours <Info className="w-3.5 h-3.5 text-gray-400" /></label>
-                <div className="flex items-center gap-2 w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 focus-within:ring-2 focus-within:ring-accent-500">
-                  <Clock className="w-4 h-4 text-gray-400 shrink-0" />
-                  <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: e.target.value })} className="flex-1 bg-transparent text-sm focus:outline-none" />
-                  <span className="text-xs text-gray-400 shrink-0">hours</span>
                 </div>
               </div>
             </div>
@@ -415,11 +412,18 @@ export default function CustomerBooking() {
             <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2">
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-green-50"><MapPin className="w-4 h-4 text-green-500" /></span>
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-xs font-semibold text-white">2</span>
-              Location & Schedule
+              Location
+            </h3>
+            <AddressFields onLocationChange={setComposedLocation} onCoordinatesChange={setCoordinates} />
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+            <h3 className="font-semibold text-gray-800 mb-5 flex items-center gap-2">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-50"><Clock className="w-4 h-4 text-purple-500" /></span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-purple-500 text-xs font-semibold text-white">3</span>
+              Schedule
             </h3>
             <div className="space-y-4">
-              <AddressFields onLocationChange={setComposedLocation} onCoordinatesChange={setCoordinates} />
-
               <div className="inline-flex rounded-lg bg-gray-100 p-1">
                 <button type="button" onClick={() => setBookingMode('one-time')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${bookingMode === 'one-time' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}>One-time</button>
                 <button type="button" onClick={() => setBookingMode('recurring')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition flex items-center gap-1 ${bookingMode === 'recurring' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500'}`}><Repeat className="w-3.5 h-3.5" /> Recurring</button>
@@ -430,60 +434,74 @@ export default function CustomerBooking() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Date *</label>
                     <div className="relative">
-                      <input required type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
-                      <Calendar className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      <input required type="date" min={minDate} value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="date-input w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
+                      <Calendar className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     </div>
-                    <p className="mt-1 flex items-start gap-1 text-xs text-gray-400"><Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Bookings open from {minDate} onward — this week&apos;s schedule is already finalized.</p>
+                    <p className="mt-1 flex items-start gap-1 text-xs text-accent-600"><Info className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Bookings open from {minDate} onward — this week&apos;s schedule is already finalized.</p>
                   </div>
                   <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><TimeInput value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} /></div>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Service Period Start</label>
-                      <input type="date" min={minDate} value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
+                      <div className="relative">
+                        <input type="date" min={minDate} value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} className="date-input w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
+                        <Calendar className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      </div>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Service Period End</label>
-                      <input type="date" min={form.startDate || minDate} value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
+                      <div className="relative">
+                        <input type="date" min={form.startDate || minDate} value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} className="date-input w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
+                        <Calendar className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                      </div>
+                    </div>
+                    <div className="relative" ref={daysDropdownRef}>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Days of Week</label>
+                      <button
+                        type="button"
+                        onClick={() => setDaysDropdownOpen(o => !o)}
+                        className="w-full flex items-center justify-between gap-1 px-3 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 text-left focus:outline-none focus:ring-2 focus:ring-accent-500"
+                      >
+                        <span className={`truncate ${form.daysOfWeek.length ? 'text-gray-800' : 'text-gray-400'}`}>
+                          {form.daysOfWeek.length
+                            ? DAY_LABELS.filter(d => form.daysOfWeek.includes(d.value)).map(d => d.label).join(', ')
+                            : 'Select days'}
+                        </span>
+                        <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${daysDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {daysDropdownOpen && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-md p-1.5 space-y-0.5">
+                          {DAY_LABELS.map(day => {
+                            const checked = form.daysOfWeek.includes(day.value)
+                            return (
+                              <label key={day.value} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-gray-50 cursor-pointer text-sm text-gray-700">
+                                <input type="checkbox" checked={checked} onChange={() => toggleDayOfWeek(day.value)} className="w-4 h-4 rounded border-gray-300 accent-accent" />
+                                {day.label}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label>
+                      <TimeInput value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} />
                     </div>
                   </div>
-                  <p className="text-xs text-gray-400">Recurring bookings can only start from {minDate} onward — this week&apos;s schedule is already finalized.</p>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Days of Week</label>
-                    <div className="flex flex-wrap gap-2">
-                      {DAY_LABELS.map(day => (
-                        <button
-                          key={day.value}
-                          type="button"
-                          onClick={() => toggleDayOfWeek(day.value)}
-                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition ${form.daysOfWeek.includes(day.value) ? 'bg-accent border-accent text-white' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-accent-300'}`}
-                        >
-                          {day.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-2">Preferred Time</label><TimeInput value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} /></div>
+                  <p className="text-xs text-accent-600">Recurring bookings can only start from {minDate} onward — this week&apos;s schedule is already finalized.</p>
                 </div>
               )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Additional Notes</label>
-                <div className="relative">
-                  <textarea maxLength={300} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Any special instructions..." className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50 resize-none" />
-                  <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.notes.length} / 300</span>
-                </div>
-              </div>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <button type="submit" disabled={submitting} className="w-full py-3 bg-accent hover:bg-accent-600 text-white rounded-xl font-semibold text-sm transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+          <div className="flex items-center justify-end gap-3">
+            <button type="button" onClick={() => router.push('/customer')} className="px-5 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>
+            <button type="submit" disabled={submitting} className="px-5 py-2.5 bg-accent hover:bg-accent-600 text-white rounded-xl font-semibold text-sm transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               <Calendar className="w-4 h-4" /> {submitting ? 'Submitting...' : bookingMode === 'recurring' ? 'Submit Recurring Booking Request' : 'Submit Booking'}
             </button>
-            <button type="button" onClick={() => router.push('/customer')} className="w-full py-3 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>
           </div>
         </form>
       </div>

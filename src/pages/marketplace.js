@@ -1,13 +1,15 @@
 import Head from 'next/head'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { ArrowRight, Building2, LayoutDashboard } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Building2, LayoutDashboard } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { SERVICE_TYPES } from '../../lib/serviceTypes'
+import CustomerBottomNav from '../components/CustomerBottomNav'
 
 export default function Marketplace() {
   const [companies, setCompanies] = useState([])
   const [loading, setLoading] = useState(true)
+  const [isCustomer, setIsCustomer] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -20,6 +22,13 @@ export default function Marketplace() {
       setCompanies(data || [])
       setLoading(false)
     })()
+
+    ;(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      if (profile?.role === 'customer') setIsCustomer(true)
+    })()
   }, [])
 
   return (
@@ -29,10 +38,10 @@ export default function Marketplace() {
         <meta name="description" content="Browse cleaning service companies and book a slot." />
       </Head>
 
-      <main className="min-h-screen bg-[#f6f9fc] text-slate-950">
+      <main className={`min-h-screen bg-[#f6f9fc] text-slate-950 ${isCustomer ? 'pb-24' : ''}`}>
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
           <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
-            <Link href="/" className="flex min-w-0 items-center gap-3">
+            <Link href={isCustomer ? '/customer' : '/'} className="flex min-w-0 items-center gap-3">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-lg">
                 <LayoutDashboard className="h-7 w-7" />
               </span>
@@ -41,13 +50,23 @@ export default function Marketplace() {
                 <span className="block text-xs font-medium text-slate-500">Browse companies</span>
               </span>
             </Link>
-            <Link
-              href="/login?mode=signin"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
-            >
-              Sign in
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            {isCustomer ? (
+              <Link
+                href="/customer"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                My Bookings
+              </Link>
+            ) : (
+              <Link
+                href="/login?mode=signin"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
+              >
+                Sign in
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
           </nav>
         </header>
 
@@ -101,6 +120,7 @@ export default function Marketplace() {
           )}
         </section>
       </main>
+      {isCustomer && <CustomerBottomNav />}
     </>
   )
 }
