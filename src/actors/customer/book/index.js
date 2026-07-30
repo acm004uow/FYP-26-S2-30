@@ -3,11 +3,12 @@ import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { ArrowLeft, Calendar, CheckCircle, ClipboardList, Clock, Info, MapPin, Repeat } from 'lucide-react'
+import { ArrowLeft, Calendar, CheckCircle, ClipboardList, Clock, Info, MapPin, Repeat, Sparkles } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { getMinBookableDate, DEFAULT_CUTOFF } from '../../../../lib/businessWeek'
-import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
+import { SERVICE_TYPES, loadAllServiceTypes } from '../../../../lib/serviceTypes'
+import { loadCompaniesForServiceType, loadCompanyRatings, rankCompaniesForServiceType } from '../../../../lib/companyDirectory'
 import { createRecurringBookingRequest, expandRecurrenceDates } from '../../../../lib/recurringBookings'
 import { fetchClosuresClient, isDateClosed } from '../../../../lib/businessClosures'
 import { fetchSchedulingSettingsClient } from '../../../../lib/scheduleSettings'
@@ -25,6 +26,7 @@ export default function CustomerBooking() {
   const [composedLocation, setComposedLocation] = useState('')
   const [coordinates, setCoordinates] = useState(null)
   const [companies, setCompanies] = useState([])
+  const [companiesLoading, setCompaniesLoading] = useState(true)
   const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
   const [bookingMode, setBookingMode] = useState('one-time')
   const [closures, setClosures] = useState([])
@@ -42,18 +44,14 @@ export default function CustomerBooking() {
     }))
   }
 
+  // Service type is chosen before company (customers know what they need before they know who
+  // offers it), so the full type list loads once up front rather than being scoped to a company.
   useEffect(() => {
-    async function loadCompanies() {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id,business_name')
-        .eq('role', 'system_admin')
-        .eq('status', 'active')
-        .not('business_name', 'is', null)
-        .order('business_name')
-      setCompanies(data || [])
-    }
-    loadCompanies()
+    (async () => {
+      const types = await loadAllServiceTypes(supabase)
+      setServiceTypes(types)
+      setForm(prev => (types.includes(prev.serviceType) ? prev : { ...prev, serviceType: types[0] }))
+    })()
   }, [])
 
   useEffect(() => {
@@ -62,13 +60,35 @@ export default function CustomerBooking() {
     if (companyId) setForm(prev => ({ ...prev, companyId }))
   }, [router.isReady, router.query.companyId])
 
+  // Narrows the company picker to companies that actually offer the chosen service type, then
+  // ranks them by suitability for THAT service specifically (rating + review volume for that
+  // service type, not a blanket company-wide average) — the same weighted-score-with-explanation
+  // approach the staff recommendation engine already uses, just applied to companies. Never drops
+  // an already-selected company just because it doesn't match this filter — e.g. the marketplace
+  // page deep-links here with ?companyId=X, and that explicit choice must stay intact even if it
+  // doesn't cleanly match the category name.
   useEffect(() => {
-    (async () => {
-      const types = await loadServiceTypes(supabase, form.companyId || null)
-      setServiceTypes(types)
-      setForm(prev => (types.includes(prev.serviceType) ? prev : { ...prev, serviceType: types[0] }))
+    if (!form.serviceType) return
+    let cancelled = false
+    setCompaniesLoading(true)
+    ;(async () => {
+      const eligible = await loadCompaniesForServiceType(supabase, form.serviceType)
+      let list = eligible
+      if (form.companyId && !eligible.some(c => c.id === form.companyId)) {
+        const { data: selected } = await supabase
+          .from('profiles')
+          .select('id,business_name')
+          .eq('id', form.companyId)
+          .maybeSingle()
+        if (selected) list = [selected, ...eligible]
+      }
+      const ratings = await loadCompanyRatings(supabase, list.map(c => c.id), form.serviceType)
+      if (cancelled) return
+      setCompanies(rankCompaniesForServiceType(list, ratings))
+      setCompaniesLoading(false)
     })()
-  }, [form.companyId])
+    return () => { cancelled = true }
+  }, [form.serviceType, form.companyId])
 
   useEffect(() => {
     if (!form.companyId) {
@@ -87,6 +107,9 @@ export default function CustomerBooking() {
   }, [form.companyId])
 
   const minDate = getMinBookableDate(new Date(), cutoff)
+  // Companies are pre-sorted by score in the ranking effect, so the top entry is the AI pick —
+  // but only surface it as a recommendation once it actually has reviews backing it up.
+  const recommendedCompany = companies[0]?.score > 0 ? companies[0] : null
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -336,18 +359,39 @@ export default function CustomerBooking() {
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
-                <select required value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
-                  <option value="">Select a company...</option>
-                  {companies.map(company => <option key={company.id} value={company.id}>{company.business_name}</option>)}
-                </select>
-                {companies.length === 0 && <p className="mt-1 text-xs text-gray-400">No companies are available to book with yet.</p>}
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Service Type *</label>
-                <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
+                <select required value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value, companyId: '' })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
                   {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Company *</label>
+                {recommendedCompany && (
+                  <button
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, companyId: recommendedCompany.id }))}
+                    className={`mb-2 flex w-full items-start gap-2 rounded-xl border px-3 py-2.5 text-left transition ${form.companyId === recommendedCompany.id ? 'border-accent-300 bg-accent-100' : 'border-accent-100 bg-accent-50 hover:bg-accent-100'}`}
+                  >
+                    <Sparkles className="w-4 h-4 text-accent-600 mt-0.5 shrink-0" />
+                    <span className="text-sm">
+                      <span className="font-semibold text-accent-800">AI Recommended: {recommendedCompany.business_name}</span>
+                      <span className="block text-xs text-accent-600 mt-0.5">{recommendedCompany.reason}</span>
+                    </span>
+                  </button>
+                )}
+                <select required value={form.companyId} onChange={e => setForm({ ...form, companyId: e.target.value })} className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50">
+                  <option value="">{companiesLoading ? 'Loading companies...' : 'Select a company...'}</option>
+                  {companies.map(company => (
+                    <option key={company.id} value={company.id}>
+                      {company.id === recommendedCompany?.id ? '⭐ ' : ''}{company.business_name}{company.rating ? ` — ★${company.rating.average.toFixed(1)} (${company.rating.count})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  {companies.length === 0 && !companiesLoading
+                    ? 'No companies are available to book with yet.'
+                    : 'Sorted by suitability for this service, based on past customer reviews.'}
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
