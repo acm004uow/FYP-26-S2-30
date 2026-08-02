@@ -252,7 +252,7 @@ export default function Layout({ children, role = 'manager' }) {
     return (
       <Link key={item.path} href={item.path}
         onClick={options.onClick}
-        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-accent-100 text-accent-800' : 'text-gray-700 hover:bg-gray-100'}`}>
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-[#e6edf7] text-[#0b1f3a]' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${theme.bg}`}>
           <item.icon className={`h-4 w-4 ${theme.icon}`} />
         </span>
@@ -429,7 +429,7 @@ export default function Layout({ children, role = 'manager' }) {
       {!isCustomerNav && (
         <aside className="fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r-2 border-divider bg-gray-50 lg:block">
           <div className="flex h-full flex-col p-3">
-            <div className="flex-1 space-y-0.5 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-sm">
+            <div className="flex-1 space-y-0.5 overflow-y-auto rounded-2xl border border-gray-100 bg-[#003152] p-2 shadow-sm">
               {nav.map(item => renderNavLink(item))}
             </div>
             {isOwnerNav && (

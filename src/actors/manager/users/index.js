@@ -177,7 +177,7 @@ export default function ManagerUserAccounts() {
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Manager / Employees</p>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900">Employees</h1>
+            <h1 className="text-4xl font-bold text-gray-900">Crew</h1>
             <p className="text-gray-500 text-sm mt-1">{filteredUsers.length} of {users.length} staff profiles</p>
           </div>
           <button

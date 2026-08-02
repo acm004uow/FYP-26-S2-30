@@ -4,7 +4,6 @@ export const navMap = {
   manager: [
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
     { name: 'Crew', path: '/manager-user-accounts', icon: UserCog },
-    { name: 'Customers', path: '/manager-customers', icon: Users },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'Schedule', path: '/manager-schedule', icon: Calendar },
     { name: 'Availability', path: '/manager-availability', icon: Activity },
