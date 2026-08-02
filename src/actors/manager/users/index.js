@@ -2,6 +2,7 @@ import Layout from '../../../components/Layout'
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Eye, Filter, Pencil, Plus, Search, Star, UserPlus, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const MANAGER_ROLE_OPTIONS = [
   { value: 'manager', label: 'Manager', permissions: 'Approve requests, assign tasks, manage staff profiles, and view reports.' },
@@ -27,6 +28,7 @@ const roleLabel = (role) => ({ manager: 'Manager', staff_member: 'Staff Member' 
 const avatarInitials = (name) => (name || '?').split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()
 
 export default function ManagerUserAccounts() {
+  const { user } = useAuthUser()
   const [users, setUsers] = useState([])
   const [staffProfilesByUserId, setStaffProfilesByUserId] = useState({})
   const [message, setMessage] = useState('')
@@ -42,7 +44,7 @@ export default function ManagerUserAccounts() {
   const [currentPage, setCurrentPage] = useState(1)
 
   const loadUsers = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     let { data: currentProfile, error: currentProfileError } = await supabase
       .from('profiles')
       .select('business_name,host_admin_id')
@@ -103,7 +105,7 @@ export default function ManagerUserAccounts() {
 
   useEffect(() => {
     loadUsers()
-  }, [])
+  }, [user])
 
   useEffect(() => {
     setCurrentPage(1)

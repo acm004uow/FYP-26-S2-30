@@ -4,15 +4,17 @@ import { useEffect, useState } from 'react'
 import { Calendar, CheckCircle2, Clock, QrCode, UserCheck } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatDuration } from '../../../../lib/attendance'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 export default function ManagerMyAttendance() {
+  const { user } = useAuthUser()
   const [records, setRecords] = useState([])
   const [loading, setLoading] = useState(true)
   const [showScanner, setShowScanner] = useState(false)
   const [scannerMessage, setScannerMessage] = useState('')
 
   const loadRecords = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
     const { data } = await supabase
       .from('attendance_records')
@@ -27,7 +29,7 @@ export default function ManagerMyAttendance() {
 
   useEffect(() => {
     loadRecords()
-  }, [])
+  }, [user])
 
   const handleScanResult = ({ status, message }) => {
     setShowScanner(false)

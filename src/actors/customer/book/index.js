@@ -12,6 +12,7 @@ import { loadCompaniesForServiceType, loadCompanyRatings, rankCompaniesForServic
 import { createRecurringBookingRequest, expandRecurrenceDates } from '../../../../lib/recurringBookings'
 import { fetchClosuresClient, isDateClosed } from '../../../../lib/businessClosures'
 import { fetchSchedulingSettingsClient } from '../../../../lib/scheduleSettings'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const DAY_LABELS = [
   { value: 1, label: 'Mon' }, { value: 2, label: 'Tue' }, { value: 3, label: 'Wed' },
@@ -20,6 +21,7 @@ const DAY_LABELS = [
 
 export default function CustomerBooking() {
   const router = useRouter()
+  const { user } = useAuthUser()
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -162,7 +164,6 @@ export default function CustomerBooking() {
 
       setSubmitting(true)
       setError('')
-      const { data: { user } } = await supabase.auth.getUser()
 
       try {
         await createRecurringBookingRequest(supabase, form.companyId, user?.id, {
@@ -228,7 +229,6 @@ export default function CustomerBooking() {
     }
     setSubmitting(true)
     setError('')
-    const { data: { user } } = await supabase.auth.getUser()
     const { data: createdBooking, error: insertError } = await supabase.from('bookings').insert({
       customer_id: user?.id,
       host_admin_id: form.companyId,
@@ -499,7 +499,7 @@ export default function CustomerBooking() {
 
           <div className="flex items-center justify-end gap-3">
             <button type="button" onClick={() => router.push('/customer')} className="px-5 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-medium text-sm hover:bg-gray-50 transition">Cancel</button>
-            <button type="submit" disabled={submitting} className="px-5 py-2.5 bg-accent hover:bg-accent-600 text-white rounded-xl font-semibold text-sm transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            <button type="submit" disabled={submitting} className="px-5 py-2.5 bg-[#003152] hover: bg-[#003152]-600 text-white rounded-xl font-semibold text-sm transition disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
               <Calendar className="w-4 h-4" /> {submitting ? 'Submitting...' : bookingMode === 'recurring' ? 'Submit Recurring Booking Request' : 'Submit Booking'}
             </button>
           </div>

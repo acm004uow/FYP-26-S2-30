@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, Clock, Send, Sun } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { fetchOwnTimeOffRequests } from '../../../../lib/staffTimeOff'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const WEEKDAYS = [
   { value: 0, label: 'Sunday' },
@@ -59,6 +60,7 @@ function formatSubmitted(createdAt) {
 }
 
 export default function StaffTimeOff() {
+  const { user } = useAuthUser()
   const [profile, setProfile] = useState(null)
   const [requests, setRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -83,7 +85,7 @@ export default function StaffTimeOff() {
     }
 
     const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
       const { data: staffProfile } = await supabase
         .from('staff_profiles')
         .select('id,host_admin_id,staff_name')
@@ -116,7 +118,7 @@ export default function StaffTimeOff() {
       cancelled = true
       if (requestChannel) supabase.removeChannel(requestChannel)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
     const year = new Date().getFullYear()
@@ -177,7 +179,6 @@ export default function StaffTimeOff() {
     }
 
     setSubmitting(true)
-    const { data: { user } } = await supabase.auth.getUser()
 
     const reason = requestType === 'weekly_day_off' ? (note.trim() || null) : combineReason(leaveReasonCategory, note)
 

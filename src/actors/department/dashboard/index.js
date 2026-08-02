@@ -9,6 +9,7 @@ import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
 import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 import { formatDuration } from '../../../../lib/attendance'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const bookingStatusColor = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -57,6 +58,7 @@ function avatarColor(name) {
 }
 
 export default function DepartmentDashboard() {
+  const { user } = useAuthUser()
   const [hostAdminId, setHostAdminId] = useState(null)
   const [departmentId, setDepartmentId] = useState(null)
   const [departmentName, setDepartmentName] = useState('')
@@ -87,7 +89,7 @@ export default function DepartmentDashboard() {
   }
 
   const loadDashboard = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const { data: myProfile } = await supabase
       .from('profiles')
       .select('host_admin_id,department_id')
@@ -142,7 +144,7 @@ export default function DepartmentDashboard() {
   }
 
   const loadAttendanceToday = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const todayIso = new Date().toISOString().slice(0, 10)
     const { data } = await supabase
       .from('attendance_records')
@@ -154,8 +156,8 @@ export default function DepartmentDashboard() {
   }
 
   const loadHistory = async () => {
+    if (!user) return
     setHistoryLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
     const { data } = await supabase
       .from('bookings')
       .select('id,service_type,location,scheduled_date,scheduled_time,status,created_at,staff_profiles(staff_name)')
@@ -171,7 +173,7 @@ export default function DepartmentDashboard() {
     loadDashboard()
     loadAttendanceToday()
     loadHistory()
-  }, [])
+  }, [user])
 
   const handleScanResult = ({ status, message }) => {
     setShowScanner(false)
@@ -212,7 +214,7 @@ export default function DepartmentDashboard() {
   }, [recommendations])
 
   const getActiveDepartmentStaff = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
     const { data: myProfile } = await supabase
       .from('profiles')
       .select('role,status')

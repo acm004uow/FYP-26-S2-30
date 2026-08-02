@@ -2,6 +2,7 @@ import Layout from '../../../components/Layout'
 import { useEffect, useRef, useState } from 'react'
 import { Calendar, ChevronLeft, ChevronRight, Lock, MoreVertical, Printer } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 // Dates are kept entirely in UTC arithmetic (parse with a "Z" suffix, use getUTC*/setUTC*).
 // Mixing local-time parsing with .toISOString() (always UTC) would silently shift every
@@ -57,6 +58,7 @@ function escapeHtml(value) {
 }
 
 export default function ManagerSchedule() {
+  const { user } = useAuthUser()
   const [staffRows, setStaffRows] = useState([])
   const [hostAdminId, setHostAdminId] = useState(null)
   const [weekAnchor, setWeekAnchor] = useState(new Date().toISOString().slice(0, 10))
@@ -67,14 +69,14 @@ export default function ManagerSchedule() {
   const jumpDateRef = useRef(null)
 
   useEffect(() => {
+    if (!user) return
     (async () => {
       const id = await loadStaff()
       if (id) await loadWeeklyGrid(id, weekAnchor)
     })()
-  }, [])
+  }, [user])
 
   const loadStaff = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')
@@ -145,7 +147,7 @@ export default function ManagerSchedule() {
   }
 
   const getActiveManager = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('role,status')

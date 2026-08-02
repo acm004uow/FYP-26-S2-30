@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const PAGE_SIZE = 3
 
@@ -39,6 +40,7 @@ const TABS = [
 
 export default function CustomerDashboard() {
   const router = useRouter()
+  const { user } = useAuthUser()
   const [bookings, setBookings] = useState([])
   const [search, setSearch] = useState('')
   const [notification, setNotification] = useState(null)
@@ -82,7 +84,6 @@ export default function CustomerDashboard() {
   })
 
   const loadBookings = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     const { data } = await supabase
       .from('bookings')
@@ -99,7 +100,6 @@ export default function CustomerDashboard() {
     loadBookings()
 
     async function subscribeToUpdates() {
-      const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
       channel = supabase
@@ -125,7 +125,7 @@ export default function CustomerDashboard() {
     return () => {
       if (channel) supabase.removeChannel(channel)
     }
-  }, [])
+  }, [user])
 
   useEffect(() => {
     const onClickOutside = (event) => {
@@ -173,7 +173,6 @@ export default function CustomerDashboard() {
 
     let locked = false
     if (!error && isLate && rawStatus === 'approved') {
-      const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: profile } = await supabase.from('profiles').select('late_cancellation_count').eq('id', user.id).single()
         const nextCount = (profile?.late_cancellation_count || 0) + 1
@@ -230,7 +229,6 @@ export default function CustomerDashboard() {
       return
     }
     setSavingFeedbackId(booking.id)
-    const { data: { user } } = await supabase.auth.getUser()
 
     let imageUrl = null
     const imageFile = feedbackDrafts[booking.id]?.imageFile

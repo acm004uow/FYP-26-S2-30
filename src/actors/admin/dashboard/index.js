@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { UserPlus, X } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 import AttendancePanel from '../attendance/AttendancePanel'
 import ClosuresPanel from '../closures/ClosuresPanel'
 import SchedulingCutoffPanel from '../closures/SchedulingCutoffPanel'
@@ -18,6 +19,7 @@ import DepartmentsPanel from '../departments/DepartmentsPanel'
 
 export default function AdminPanel() {
   const router = useRouter()
+  const { user } = useAuthUser()
   const [users, setUsers] = useState([])
   const [staffProfiles, setStaffProfiles] = useState([])
   const [activeSection, setActiveSection] = useState('users')
@@ -41,7 +43,7 @@ export default function AdminPanel() {
   const [currentBusinessName, setCurrentBusinessName] = useState('')
 
   const loadAdminData = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     let { data: currentProfile, error: currentProfileError } = await supabase
       .from('profiles')
       .select('role,business_name,host_admin_id')
@@ -136,7 +138,7 @@ export default function AdminPanel() {
 
   useEffect(() => {
     loadAdminData()
-  }, [])
+  }, [user])
 
   useEffect(() => {
     const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'parameters', 'closures', 'reports', 'payrates', 'timeoff', 'departments']

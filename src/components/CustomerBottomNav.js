@@ -12,7 +12,7 @@ export default function CustomerBottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-4 z-40 flex justify-center px-4" aria-label="Customer navigation">
-      <div className="flex items-center gap-1 rounded-full bg-slate-900/95 p-1.5 shadow-xl shadow-slate-900/30 backdrop-blur">
+      <div className="flex items-center gap-1 rounded-full bg-[#003152] p-1.5 shadow-xl shadow-slate-900/30 backdrop-blur">
         {items.map(item => {
           const isActive = router.pathname === item.path
           return (

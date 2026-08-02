@@ -2,14 +2,16 @@ import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Lock, ShieldCheck, Unlock, Users, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 export default function ManagerCustomers() {
+  const { user } = useAuthUser()
   const [customers, setCustomers] = useState([])
   const [message, setMessage] = useState('')
   const [unlockTarget, setUnlockTarget] = useState(null)
 
   const loadCustomers = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')
@@ -35,7 +37,7 @@ export default function ManagerCustomers() {
 
   useEffect(() => {
     loadCustomers()
-  }, [])
+  }, [user])
 
   const confirmUnlock = async () => {
     if (!unlockTarget) return

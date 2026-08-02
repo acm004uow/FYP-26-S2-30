@@ -9,6 +9,7 @@ import {
   PieChart, Pie, Cell
 } from 'recharts'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const fallbackWorkloadData = [
   { name: 'Amir', hours: 18 },
@@ -50,6 +51,7 @@ const staffStatusColor = {
 
 export default function ManagerDashboard() {
   const router = useRouter()
+  const { user } = useAuthUser()
   const [operationStats, setOperationStats] = useState([
     { label: 'active bookings', value: '24', path: '/manager-bookings' },
     { label: 'pending approvals', value: '6', path: '/manager-bookings' },
@@ -63,7 +65,7 @@ export default function ManagerDashboard() {
   const [workloadBalanceData, setWorkloadBalanceData] = useState(fallbackWorkloadData)
 
   const loadDashboard = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')
@@ -137,7 +139,7 @@ export default function ManagerDashboard() {
 
   useEffect(() => {
     loadDashboard()
-  }, [])
+  }, [user])
 
   return (
     <Layout role="manager">

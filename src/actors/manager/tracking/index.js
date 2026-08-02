@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatDuration } from '../../../../lib/attendance'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 // Leaflet touches `window` on import, so it can only load in the browser —
 // dynamic + ssr:false keeps it out of the Next.js server bundle.
@@ -19,6 +20,7 @@ function initials(name) {
 }
 
 export default function ManagerTracking() {
+  const { user } = useAuthUser()
   const [onSite, setOnSite] = useState([])
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(new Date())
@@ -30,10 +32,10 @@ export default function ManagerTracking() {
 
   useEffect(() => {
     loadOnSite()
-  }, [])
+  }, [user])
 
   const loadOnSite = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')

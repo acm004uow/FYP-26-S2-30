@@ -5,10 +5,12 @@ import { Bot, Calendar, CheckCircle, CheckSquare, Filter, Info, Loader2, MapPin,
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking, rejectBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
 import { fetchApprovedTimeOffClient, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const suggestions = ['Create schedule for one week', 'Build a schedule for the next 3 days', 'Schedule deep cleaning tasks', 'Fill last-minute bookings']
 
 export default function ManagerAiAgent() {
+  const { user } = useAuthUser()
   const [staffRows, setStaffRows] = useState([])
   const [messages, setMessages] = useState([{
     role: 'bot',
@@ -49,6 +51,7 @@ export default function ManagerAiAgent() {
   }
 
   useEffect(() => {
+    if (!user) return
     (async () => {
       const id = await loadStaff()
       if (id) {
@@ -56,10 +59,9 @@ export default function ManagerAiAgent() {
       }
       await checkPendingAutoProposal()
     })()
-  }, [])
+  }, [user])
 
   const loadStaff = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')
@@ -114,8 +116,8 @@ export default function ManagerAiAgent() {
 
   const getActiveManager = async () => {
     if (managerRef.current) return managerRef.current
+    if (!user) return null
 
-    const { data: { user } } = await supabase.auth.getUser()
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('role,status')

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { BarChart, Bar, XAxis, CartesianGrid, ResponsiveContainer, LabelList, Cell } from 'recharts'
 import { CheckCircle2, ClipboardList, Star, Users } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const REPORT_TYPES = [
   { value: 'daily', label: 'Daily' },
@@ -59,16 +60,17 @@ function StatCard({ icon: Icon, label, value, theme }) {
 }
 
 export default function ManagerReports() {
+  const { user } = useAuthUser()
   const [reportType, setReportType] = useState('daily')
   const [data, setData] = useState(null)
   const [completionsPerDay, setCompletionsPerDay] = useState([])
   const [loading, setLoading] = useState(true)
 
   const generate = async () => {
+    if (!user) return
     setLoading(true)
     const days = reportType === 'daily' ? 1 : reportType === 'weekly' ? 7 : 30
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
-    const { data: { user } } = await supabase.auth.getUser()
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')
@@ -118,7 +120,7 @@ export default function ManagerReports() {
   useEffect(() => {
     generate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType])
+  }, [reportType, user])
 
   return (
     <Layout role="manager">

@@ -5,6 +5,7 @@ import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
 import { getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
 import { CHECK_IN_RADIUS_METERS, getCurrentPosition, getDistanceMeters } from '../../../../lib/geolocation'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 const getTaskDisplayStatus = (task) => {
   if (task.rawStatus === 'overdue' || isTaskPastDue(task)) {
@@ -33,6 +34,7 @@ const availabilityDot = {
 }
 
 export default function StaffMemberDashboard() {
+  const { user } = useAuthUser()
   const [availability, setAvailability] = useState('available')
   const [profile, setProfile] = useState(null)
   const [myTasks, setMyTasks] = useState([])
@@ -54,7 +56,7 @@ export default function StaffMemberDashboard() {
   const [checkInError, setCheckInError] = useState('')
 
   const loadDashboard = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
 
     const { data: staffProfile } = await supabase
       .from('staff_profiles')
@@ -86,7 +88,7 @@ export default function StaffMemberDashboard() {
     async function initDashboard() {
       await loadDashboard()
 
-      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
       const { data: staffProfile } = await supabase
         .from('staff_profiles')
@@ -123,7 +125,7 @@ export default function StaffMemberDashboard() {
     return () => {
       if (bookingChannel) supabase.removeChannel(bookingChannel)
     }
-  }, [])
+  }, [user])
 
   const handleStartTask = async (taskId) => {
     const task = myTasks.find(item => item.id === taskId)

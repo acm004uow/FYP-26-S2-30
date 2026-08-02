@@ -3,17 +3,19 @@ import { useEffect, useState } from 'react'
 import { Calendar, ChevronRight, Clock, MapPin } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getNextWeekRange, isTaskAssignedToday, isTaskInRange, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 export default function StaffNextWeek() {
+  const { user } = useAuthUser()
   const [tasks, setTasks] = useState([])
   const [selectedTask, setSelectedTask] = useState(null)
   const [nextWeekRange] = useState(() => getNextWeekRange())
 
   useEffect(() => {
+    if (!user) return
     let bookingChannel = null
 
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
       const { data: staffProfile } = await supabase
         .from('staff_profiles')
         .select('id')
@@ -47,7 +49,7 @@ export default function StaffNextWeek() {
     return () => {
       if (bookingChannel) supabase.removeChannel(bookingChannel)
     }
-  }, [nextWeekRange])
+  }, [nextWeekRange, user])
 
   return (
     <Layout role="staffMember">

@@ -2,6 +2,7 @@ import Layout from '../../../components/Layout'
 import { useEffect, useState } from 'react'
 import { Calendar, CheckCircle2, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { useAuthUser } from '../../../context/AuthUserContext'
 
 function initials(name) {
   return String(name || '?')
@@ -35,6 +36,7 @@ function relativeCompletedLabel(dateStr) {
 }
 
 export default function ManagerCompletedTasks() {
+  const { user } = useAuthUser()
   const [completedTasks, setCompletedTasks] = useState([])
   const [reviewDrafts, setReviewDrafts] = useState({})
   const [reviewMessage, setReviewMessage] = useState('')
@@ -43,7 +45,7 @@ export default function ManagerCompletedTasks() {
   const [hoverRating, setHoverRating] = useState(0)
 
   const loadCompletedTasks = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
     const { data: managerProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')
@@ -77,7 +79,7 @@ export default function ManagerCompletedTasks() {
 
   useEffect(() => {
     loadCompletedTasks()
-  }, [])
+  }, [user])
 
   useEffect(() => {
     setHoverRating(0)
@@ -98,7 +100,6 @@ export default function ManagerCompletedTasks() {
     }
 
     setSavingReviewId(task.id)
-    const { data: { user } } = await supabase.auth.getUser()
     const payload = {
       booking_id: task.id,
       staff_id: task.assigned_staff_id,

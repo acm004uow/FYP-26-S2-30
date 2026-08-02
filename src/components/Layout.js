@@ -7,6 +7,7 @@ import Chatbot from './Chatbot'
 import AddressFields from './AddressFields'
 import CustomerBottomNav from './CustomerBottomNav'
 import { navMap } from '../config/navigation'
+import { useAuthUser } from '../context/AuthUserContext'
 
 const roleDisplayMap = {
   manager: 'Manager',
@@ -49,6 +50,7 @@ const profileRoleDisplayMap = {
 
 export default function Layout({ children, role = 'manager' }) {
   const router = useRouter()
+  const { user, initializing } = useAuthUser()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
@@ -80,8 +82,7 @@ export default function Layout({ children, role = 'manager' }) {
     let cancelled = false
 
     async function loadSessionData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (cancelled) return
+      if (initializing) return
       if (!user) {
         router.push(`/login?next=${encodeURIComponent(router.asPath)}`)
         return
@@ -225,7 +226,7 @@ export default function Layout({ children, role = 'manager' }) {
       if (notificationChannel) supabase.removeChannel(notificationChannel)
       if (bookingsChannel) supabase.removeChannel(bookingsChannel)
     }
-  }, [role, router])
+  }, [role, router, user, initializing])
 
   const roleDisplay = roleDisplayMap[role]
   const profileRoleDisplay = profileRoleDisplayMap[profileInfo?.role || role] || roleDisplay
@@ -266,7 +267,9 @@ export default function Layout({ children, role = 'manager' }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className={`min-h-screen ${
+      isCustomerNav ? 'bg-[#d8e2f0]' : 'bg-gray-100'
+    }`}>
       <nav className="sticky top-0 z-40 border-b-2 border-divider bg-white">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
