@@ -8,6 +8,25 @@ const roleNames = {
   customer: 'Customer',
 }
 
+const CHATBOT_ROLE_THEME = {
+  manager: {
+    main: 'bg-blue-600',
+    hover: 'hover:bg-blue-700',
+  },
+  staffMember: {
+    main: 'bg-emerald-700',
+    hover: 'hover:bg-emerald-800',
+  },
+  admin: {
+    main: 'bg-purple-600',
+    hover: 'hover:bg-purple-700',
+  },
+  customer: {
+    main: 'bg-sky-600',
+    hover: 'hover:bg-sky-700',
+  },
+}
+
 const assistantSuggestions = {
   manager: ['Generate quick report', 'Check allocation status', 'Show availability'],
   staffMember: ['Update availability', 'Start a task', 'Upload proof'],
@@ -49,6 +68,8 @@ const readChatbotResponse = async (response) => {
 export default function Chatbot({ role, addNotification }) {
   const [isOpen, setIsOpen] = useState(false)
   const normalizedRole = normalizeRole(role)
+  const chatbotTheme =
+    CHATBOT_ROLE_THEME[normalizedRole] || CHATBOT_ROLE_THEME.manager
   const messagesEndRef = useRef(null)
   const [messages, setMessages] = useState([{
     role: 'bot',
@@ -116,13 +137,14 @@ export default function Chatbot({ role, addNotification }) {
         <button onClick={() => setIsOpen(true)}
           id="chatbot-toggle-button"
           aria-label="Open AI assistant"
-          className="fixed bottom-6 right-6 w-14 h-14 bg-accent text-white rounded-full shadow-lg hover:bg-accent-600 transition flex items-center justify-center z-50">
+          className={`fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg transition flex items-center justify-center z-50 ${chatbotTheme.main} ${chatbotTheme.hover}`}
+          >
           <MessageCircle className="w-6 h-6" />
         </button>
       )}
       {isOpen && (
         <section className="fixed bottom-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-white rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden" style={{ height: '520px' }} aria-label="AI assistant">
-          <div className="bg-accent text-white p-4 rounded-t-2xl flex justify-between items-center">
+          <div className={`text-white p-4 rounded-t-2xl flex justify-between items-center ${chatbotTheme.main}`}>
             <div className="flex items-center gap-2"><Bot className="w-5 h-5" /><h3 className="font-medium">Buddy</h3></div>
             <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-lg" aria-label="Close AI assistant"><XIcon className="w-5 h-5" /></button>
           </div>

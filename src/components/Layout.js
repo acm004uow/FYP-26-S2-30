@@ -71,6 +71,33 @@ const NAV_LINK_ROLE_THEME = {
   },
 }
 
+const HEADER_ROLE_THEME = {
+  manager: {
+    logo: 'bg-blue-600',
+    profile: 'bg-blue-900',
+  },
+  staffMember: {
+    logo: 'bg-emerald-900',
+    profile: 'bg-emerald-900',
+  },
+  departmentStaff: {
+    logo: 'bg-amber-500',
+    profile: 'bg-amber-800',
+  },
+  admin: {
+    logo: 'bg-purple-600',
+    profile: 'bg-purple-900',
+  },
+  userAdmin: {
+    logo: 'bg-orange-600',
+    profile: 'bg-orange-900',
+  },
+  customer: {
+    logo: 'bg-sky-600',
+    profile: 'bg-sky-900',
+  },
+}
+
 const profileRoleDisplayMap = {
   manager: 'Manager',
   department_staff: 'Department Staff',
@@ -277,6 +304,9 @@ export default function Layout({ children, role = 'manager' }) {
 
   const ownerBusinessName = profileInfo?.business_name || businessName
 
+  const headerTheme =
+    HEADER_ROLE_THEME[role] || HEADER_ROLE_THEME.manager
+
   const renderNavLink = (item, options = {}) => {
     const [itemPath, itemQuery] = item.path.split('?')
     const isActive = itemQuery
@@ -319,7 +349,7 @@ export default function Layout({ children, role = 'manager' }) {
                   {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
                 </button>
               )}
-              <div className="w-8 h-8 bg-accent flex items-center justify-center">
+              <div className={`w-8 h-8 flex items-center justify-center ${headerTheme.logo}`}>
                 <LayoutDashboard className="w-[17px] h-[17px] text-white" />
               </div>
               <div>
@@ -378,7 +408,7 @@ export default function Layout({ children, role = 'manager' }) {
               <div className="relative" ref={profileRef}>
                 <button
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
-                  className="flex h-9 w-9 items-center justify-center bg-accent-800 text-sm font-bold text-white transition"
+                  className={`flex h-9 w-9 items-center justify-center text-sm font-bold text-white transition ${headerTheme.profile}`}
                   aria-label="Open profile menu"
                 >
                   {profileInitials}
@@ -387,7 +417,7 @@ export default function Layout({ children, role = 'manager' }) {
                   <div className="absolute right-0 mt-2 w-72 overflow-hidden rounded-lg bg-white shadow-lg z-50">
                     <div className="p-4 border-b-2 border-divider">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-700 text-sm font-bold text-white">
+                        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${headerTheme.profile}`}>
                           {profileInitials}
                         </div>
                         <div className="min-w-0">
