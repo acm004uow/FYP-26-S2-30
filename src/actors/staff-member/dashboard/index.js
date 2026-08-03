@@ -599,12 +599,12 @@ export default function StaffMemberDashboard() {
     return (
       <div key={task.id} className={`rounded-xl border border-gray-100 bg-white shadow-sm transition ${isExpanded ? 'p-4' : 'px-3 py-2'} `}>
         <div className="flex items-start gap-4">
-          <span className={`flex shrink-0 items-center justify-center rounded-full transition-all ${iconBg} ${iconColor} ${isExpanded ? 'h-20 w-20' : 'h-12 w-12'}`}>
-            <Icon className={isExpanded ? 'h-9 w-9' : 'h-5 w-5'} />
+          <span className={`flex shrink-0 items-center justify-center rounded-full transition-all ${iconBg} ${iconColor} ${isExpanded ? 'h-12 w-12' : 'h-10 w-10'}`}>
+            <Icon className={isExpanded ? 'h-5 w-5' : 'h-4 w-4'} />
           </span>
 
           <div className="min-w-0 flex-1">
-            <p className={`font-bold text-gray-900 ${isExpanded ? 'text-2xl' : ''}`}>{task.title}</p>
+            <p className={`font-bold text-gray-900 ${isExpanded ? 'text-lg' : ''}`}>{task.title}</p>
 
             <p className={`mt-1 flex items-center gap-1.5 text-gray-500 ${isExpanded ? 'text-base' : 'text-sm'}`}>
               <MapPin className={`shrink-0 text-emerald-600 ${isExpanded ? 'h-4 w-4' : 'h-3.5 w-3.5'}`} />
@@ -1013,7 +1013,7 @@ export default function StaffMemberDashboard() {
               detail: (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-gray-50 p-4">
+                    <div className="rounded-lg bg-gray-50 p-4">
                       <div className="flex items-start gap-3">
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                           <Calendar className="h-5 w-5" />
@@ -1025,7 +1025,7 @@ export default function StaffMemberDashboard() {
                       </div>
                     </div>
 
-                    <div className="rounded-xl bg-gray-50 p-4">
+                    <div className="rounded-lg bg-gray-50 p-4">
                       <div className="flex items-start gap-3">
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500">
                           <AlertCircle className="h-5 w-5" />
@@ -1102,7 +1102,7 @@ export default function StaffMemberDashboard() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl bg-gray-50 p-4">
+                      <div className="rounded-lg bg-gray-50 p-4">
                         <div className="flex items-start gap-3">
                           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                             <LogOut className="h-5 w-5" />
@@ -1114,7 +1114,7 @@ export default function StaffMemberDashboard() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl bg-gray-50 p-4">
+                      <div className="rounded-lg bg-gray-50 p-4">
                         <div className="flex items-start gap-3">
                           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-500">
                             <Star className="h-5 w-5" />
@@ -1129,7 +1129,7 @@ export default function StaffMemberDashboard() {
                         </div>
                       </div>
 
-                      <div className="rounded-xl bg-gray-50 p-4">
+                      <div className="rounded-lg bg-gray-50 p-4">
                         <div className="flex items-start gap-3">
                           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-500">
                             <MessageCircle className="h-5 w-5" />
