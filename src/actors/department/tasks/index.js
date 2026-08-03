@@ -263,11 +263,11 @@ export default function DepartmentTasks() {
           <span className="font-medium text-gray-900">New Task</span>
         </nav>
 
-        {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
+        {notification && <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#BFE0E0] bg-[#E6F2F2] p-3 text-[#003333]"><Bell className="w-4 h-4" />{notification}</div>}
 
         <form onSubmit={handleCreateTask} className="bg-white rounded-2xl shadow-sm border p-6 space-y-5">
           <div className="flex items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-100 text-accent-600">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F2F2] text-[#005252]">
               <ClipboardList className="w-5 h-5" />
             </div>
             <div>
@@ -287,13 +287,13 @@ export default function DepartmentTasks() {
                   required
                   value={form.serviceType}
                   onChange={e => setForm({ ...form, serviceType: e.target.value })}
-                  className="w-full border rounded-lg p-2 pl-9 text-sm"
+                  className="w-full rounded-lg border border-gray-200 p-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
                 >
                   {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
               </div>
             </div>
-            <div className="flex items-start gap-2 rounded-lg border border-accent-200 bg-accent-100 p-3 text-sm text-accent-800 self-end">
+            <div className="flex items-start gap-2 rounded-lg border border-[#BFE0E0] bg-[#E6F2F2] p-3 text-sm text-[#003333] self-end">
               <Lightbulb className="w-4 h-4 mt-0.5 shrink-0" />
               <span>Tip: The more details you provide, the better AI can match the right staff.</span>
             </div>
@@ -309,7 +309,7 @@ export default function DepartmentTasks() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium text-gray-700">Scheduled Date <span className="text-red-500">*</span></label>
-              <input required type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+              <input required type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]" />
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Scheduled Time</label>
@@ -329,7 +329,7 @@ export default function DepartmentTasks() {
                   step="0.5"
                   value={form.estimatedHours}
                   onChange={e => setForm({ ...form, estimatedHours: Number(e.target.value) })}
-                  className="w-full border rounded-lg p-2 pl-9 pr-14 text-sm"
+                  className="w-full rounded-lg border border-gray-200 p-2 pl-9 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
                 />
                 <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">hours</span>
               </div>
@@ -340,7 +340,7 @@ export default function DepartmentTasks() {
                 <button
                   type="button"
                   onClick={() => setUrgencyOpen(open => !open)}
-                  className="flex w-full items-center justify-between gap-2 rounded-lg border p-2 text-sm text-left"
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-200 p-2 text-sm text-left focus:outline-none focus:ring-2 focus:ring-[#005252]"
                 >
                   <span className="flex items-center gap-2">
                     <span className={`h-2 w-2 rounded-full ${urgencyMeta[form.urgency].dot}`} />
@@ -355,7 +355,7 @@ export default function DepartmentTasks() {
                         key={option}
                         type="button"
                         onClick={() => { setForm(prev => ({ ...prev, urgency: option })); setUrgencyOpen(false) }}
-                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-gray-700 hover:bg-[#E6F2F2]"
                       >
                         <span className={`h-2 w-2 rounded-full ${urgencyMeta[option].dot}`} />
                         {urgencyMeta[option].label}
@@ -376,7 +376,7 @@ export default function DepartmentTasks() {
                 maxLength={500}
                 rows={3}
                 placeholder="Add any special instructions or notes for this task..."
-                className="w-full border rounded-lg p-2 pr-14 text-sm"
+                className="w-full rounded-lg border border-gray-200 p-2 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
               />
               <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.description.length}/500</span>
             </div>
@@ -384,12 +384,12 @@ export default function DepartmentTasks() {
 
           <div>
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-accent" /> Assign Staff
+              <Sparkles className="w-3.5 h-3.5 text-[#005252]" /> Assign Staff
             </label>
             <select
               value={selectedStaffId}
               onChange={e => setSelectedStaffId(e.target.value)}
-              className="mt-1 w-full border rounded-lg p-2 text-sm"
+              className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
             >
               <option value="">— Unassigned (assign later) —</option>
               {staffRows.map(staff => {
@@ -402,7 +402,7 @@ export default function DepartmentTasks() {
               })}
             </select>
             {selectedStaffId && recommendations[0]?.staff_id === selectedStaffId ? (
-              <p className="mt-1 text-xs text-accent-600 flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI-recommended top match</p>
+              <p className="mt-1 text-xs text-[#005252] flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI-recommended top match</p>
             ) : !form.location ? (
               <p className="mt-1 text-xs text-gray-400">Enter a location above to get an AI-recommended match, or pick someone manually.</p>
             ) : null}
@@ -415,14 +415,14 @@ export default function DepartmentTasks() {
             <button
               type="button"
               onClick={handleClearAll}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-300"
             >
               <Trash2 className="w-4 h-4" /> Clear All
             </button>
             <button
               type="submit"
               disabled={creating}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-5 py-2.5 text-sm font-semibold text-white transition disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#003333] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#005252] focus:outline-none focus:ring-2 focus:ring-[#005252] focus:ring-offset-2 disabled:opacity-60"
             >
               <UserCheck className="w-4 h-4" /> {creating ? 'Creating...' : 'Create & Assign Task'} <ChevronRight className="w-4 h-4" />
             </button>
