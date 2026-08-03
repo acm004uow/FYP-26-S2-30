@@ -1,8 +1,9 @@
 import Layout from '../../../components/Layout'
 import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
-import { useEffect, useState } from 'react'
-import { Bell, ListChecks, Sparkles, UserCheck } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
+import { Bell, Briefcase, ChevronDown, ChevronRight, ClipboardList, Clock, Home, Layers, Lightbulb, Sparkles, Trash2, Truck, UserCheck } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
@@ -21,6 +22,23 @@ const emptyForm = {
 
 const urgencyOptions = ['low', 'normal', 'high', 'urgent']
 
+const urgencyMeta = {
+  low: { label: 'Low', dot: 'bg-gray-400' },
+  normal: { label: 'Normal', dot: 'bg-green-500' },
+  high: { label: 'High', dot: 'bg-orange-500' },
+  urgent: { label: 'Urgent', dot: 'bg-red-500' },
+}
+
+const SERVICE_TYPE_ICONS = {
+  'Home Cleaning': Home,
+  'Office Cleaning': Briefcase,
+  'Deep Cleaning': Sparkles,
+  'Move-Out Cleaning': Truck,
+  'Carpet Cleaning': Layers,
+}
+
+const serviceTypeIcon = (type) => SERVICE_TYPE_ICONS[type] || ClipboardList
+
 export default function DepartmentTasks() {
   const { user } = useAuthUser()
   const [hostAdminId, setHostAdminId] = useState(null)
@@ -37,6 +55,9 @@ export default function DepartmentTasks() {
   const [selectedStaffId, setSelectedStaffId] = useState('')
   const [notification, setNotification] = useState('')
   const [creating, setCreating] = useState(false)
+  const [urgencyOpen, setUrgencyOpen] = useState(false)
+  const [formResetKey, setFormResetKey] = useState(0)
+  const urgencyRef = useRef(null)
 
   const showNotification = (message) => {
     setNotification(message)
@@ -103,6 +124,14 @@ export default function DepartmentTasks() {
   }, [user])
 
   useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (urgencyRef.current && !urgencyRef.current.contains(event.target)) setUrgencyOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  useEffect(() => {
     if (!form.location) {
       setRecommendations([])
       return
@@ -144,6 +173,13 @@ export default function DepartmentTasks() {
       return null
     }
     return user
+  }
+
+  const handleClearAll = () => {
+    setForm(prev => ({ ...emptyForm, serviceType: serviceTypes.includes(emptyForm.serviceType) ? emptyForm.serviceType : serviceTypes[0] }))
+    setCoordinates(null)
+    setSelectedStaffId('')
+    setFormResetKey(key => key + 1)
   }
 
   const handleCreateTask = async (event) => {
@@ -208,39 +244,63 @@ export default function DepartmentTasks() {
 
     await supabase.from('audit_logs').insert({ user_id: user.id, action: 'department_create_task', details: `${form.serviceType} (${createdBooking?.id || ''})` })
     showNotification(staff ? `Task created and assigned to ${staff.name}.` : 'Task created, unassigned.')
-    setForm(emptyForm)
-    setCoordinates(null)
-    setSelectedStaffId('')
+    handleClearAll()
     await loadDashboard()
   }
 
+  const SelectedServiceIcon = serviceTypeIcon(form.serviceType)
+
   return (
     <Layout role="departmentStaff">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="flex items-start gap-3 mb-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
-            <ListChecks className="w-5 h-5" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{departmentName ? `${departmentName} Department` : 'Department'} / Task</p>
-            <h1 className="text-2xl font-bold text-gray-900">Create a task</h1>
-            <p className="text-gray-500 mt-1">Create a task and assign it to available staff — pick someone yourself, or let AI recommend the best match.</p>
-          </div>
-        </div>
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <nav className="mb-4 flex items-center gap-1.5 text-sm text-gray-400">
+          <Link href="/department" className="flex items-center hover:text-gray-600">
+            <Home className="w-4 h-4" />
+          </Link>
+          <ChevronRight className="w-3.5 h-3.5" />
+          <Link href="/department" className="hover:text-gray-600">Task</Link>
+          <ChevronRight className="w-3.5 h-3.5" />
+          <span className="font-medium text-gray-900">New Task</span>
+        </nav>
 
         {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
 
-        <form onSubmit={handleCreateTask} className="bg-white rounded-xl shadow-sm border p-5 space-y-4">
-          <h2 className="font-semibold text-gray-900">New Task</h2>
+        <form onSubmit={handleCreateTask} className="bg-white rounded-2xl shadow-sm border p-6 space-y-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-accent-100 text-accent-600">
+              <ClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">New Task</h1>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {departmentName ? `${departmentName} — ` : ''}Provide task details and assign to the right staff.
+              </p>
+            </div>
+          </div>
 
-          <div>
-            <label className="text-sm font-medium text-gray-700">Service Type</label>
-            <select value={form.serviceType} onChange={e => setForm({ ...form, serviceType: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
-              {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Service Type <span className="text-red-500">*</span></label>
+              <div className="relative mt-1">
+                <SelectedServiceIcon className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <select
+                  required
+                  value={form.serviceType}
+                  onChange={e => setForm({ ...form, serviceType: e.target.value })}
+                  className="w-full border rounded-lg p-2 pl-9 text-sm"
+                >
+                  {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 rounded-lg border border-accent-200 bg-accent-100 p-3 text-sm text-accent-800 self-end">
+              <Lightbulb className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Tip: The more details you provide, the better AI can match the right staff.</span>
+            </div>
           </div>
 
           <AddressFields
+            key={formResetKey}
             onLocationChange={location => setForm(prev => ({ ...prev, location }))}
             onCoordinatesChange={setCoordinates}
             compact
@@ -248,8 +308,8 @@ export default function DepartmentTasks() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700">Scheduled Date</label>
-              <input type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+              <label className="text-sm font-medium text-gray-700">Scheduled Date <span className="text-red-500">*</span></label>
+              <input required type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Scheduled Time</label>
@@ -259,20 +319,67 @@ export default function DepartmentTasks() {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700">Estimated Hours</label>
-              <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: Number(e.target.value) })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+              <label className="text-sm font-medium text-gray-700">Estimated Hours <span className="text-red-500">*</span></label>
+              <div className="relative mt-1">
+                <Clock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={form.estimatedHours}
+                  onChange={e => setForm({ ...form, estimatedHours: Number(e.target.value) })}
+                  className="w-full border rounded-lg p-2 pl-9 pr-14 text-sm"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">hours</span>
+              </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700">Urgency</label>
-              <select value={form.urgency} onChange={e => setForm({ ...form, urgency: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
-                {urgencyOptions.map(option => <option key={option} value={option}>{option.charAt(0).toUpperCase() + option.slice(1)}</option>)}
-              </select>
+              <label className="text-sm font-medium text-gray-700">Urgency <span className="text-red-500">*</span></label>
+              <div className="relative mt-1" ref={urgencyRef}>
+                <button
+                  type="button"
+                  onClick={() => setUrgencyOpen(open => !open)}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg border p-2 text-sm text-left"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${urgencyMeta[form.urgency].dot}`} />
+                    {urgencyMeta[form.urgency].label}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${urgencyOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {urgencyOpen && (
+                  <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                    {urgencyOptions.map(option => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => { setForm(prev => ({ ...prev, urgency: option })); setUrgencyOpen(false) }}
+                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      >
+                        <span className={`h-2 w-2 rounded-full ${urgencyMeta[option].dot}`} />
+                        {urgencyMeta[option].label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           <div>
             <label className="text-sm font-medium text-gray-700">Description (optional)</label>
-            <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" rows={2} />
+            <div className="relative mt-1">
+              <textarea
+                value={form.description}
+                onChange={e => setForm({ ...form, description: e.target.value.slice(0, 500) })}
+                maxLength={500}
+                rows={3}
+                placeholder="Add any special instructions or notes for this task..."
+                className="w-full border rounded-lg p-2 pr-14 text-sm"
+              />
+              <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{form.description.length}/500</span>
+            </div>
           </div>
 
           <div>
@@ -304,9 +411,22 @@ export default function DepartmentTasks() {
             )}
           </div>
 
-          <button type="submit" disabled={creating} className="w-auto bg-accent hover:bg-accent-600 text-white py-2 rounded-lg flex items-center justify-center gap-2 transition disabled:opacity-60">
-            <UserCheck className="w-4 h-4" /> {creating ? 'Creating...' : 'Create & Assign Task'}
-          </button>
+          <div className="flex items-center justify-between border-t pt-5">
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            >
+              <Trash2 className="w-4 h-4" /> Clear All
+            </button>
+            <button
+              type="submit"
+              disabled={creating}
+              className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-5 py-2.5 text-sm font-semibold text-white transition disabled:opacity-60"
+            >
+              <UserCheck className="w-4 h-4" /> {creating ? 'Creating...' : 'Create & Assign Task'} <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </form>
       </div>
     </Layout>
