@@ -1,6 +1,7 @@
 import Layout from '../../../components/Layout'
+import BookingMessagesPanel from '../../../components/BookingMessagesPanel'
 import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, FileUp, AlertCircle, ClipboardList, Sparkles, FileText, User, LogIn, LogOut, MessageCircle } from 'lucide-react'
+import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, FileUp, AlertCircle, AlertTriangle, ClipboardList, Sparkles, FileText, User, LogIn, LogOut, MessageCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
 import { getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
@@ -78,6 +79,7 @@ export default function StaffMemberDashboard() {
   const [checkingInTaskId, setCheckingInTaskId] = useState(null)
   const [checkInErrorTaskId, setCheckInErrorTaskId] = useState(null)
   const [checkInError, setCheckInError] = useState('')
+  const [messagesTask, setMessagesTask] = useState(null)
 
   const loadDashboard = async () => {
     if (!user) return
@@ -95,7 +97,7 @@ export default function StaffMemberDashboard() {
 
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,estimated_hours,status,description,notes,customer_id,checked_in_at,checked_out_at,latitude,longitude,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
+      .select('id,created_at,service_type,location,scheduled_date,scheduled_time,estimated_hours,status,description,notes,customer_id,checked_in_at,checked_out_at,latitude,longitude,source,created_by,issue_status,issue_description,issue_reported_at,department_confirmed_at,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),created_by_profile:profiles!bookings_created_by_fkey(full_name),performance_reviews(rating,feedback),task_proofs(file_url,file_name,created_at)')
       .eq('assigned_staff_id', staffProfile.id)
       .neq('status', 'pending')
       .order('created_at', { ascending: false })
@@ -368,15 +370,23 @@ export default function StaffMemberDashboard() {
   // Today's tasks stay visible (and actionable) here even once past due — a job scheduled
   // for today shouldn't disappear from "Today Tasks" just because its time has passed; it
   // still shows an "Overdue" badge and also appears in the dedicated Overdue tab.
-  const todayTasks = myTasks.filter((task) => isTaskAssignedToday(task))
-  const otherActiveTasks = myTasks.filter((task) => !isTaskAssignedToday(task) && !isTaskPastDue(task))
+  //
+  // Reopened tasks (issueStatus === 'open', status flipped back to in_progress after a
+  // department staff reported a problem) are carved out of all three groups below and given
+  // their own section rendered with renderTaskCard (which has the Check-Out button) — their
+  // original scheduled date is virtually always in the past by the time an issue is reported,
+  // so without this they'd fall into overdueTasks and render via the view-only renderTaskListRow,
+  // leaving the assignee with no way to act on them.
+  const reopenedTasks = myTasks.filter((task) => task.isReopened)
+  const todayTasks = myTasks.filter((task) => isTaskAssignedToday(task) && !task.isReopened)
+  const otherActiveTasks = myTasks.filter((task) => !isTaskAssignedToday(task) && !isTaskPastDue(task) && !task.isReopened)
 
   const allTasks = useMemo(() => {
     return [...myTasks, ...completedTasks]
   }, [myTasks, completedTasks])
 
   const overdueTasks = useMemo(() => {
-    return allTasks.filter((task) => isTaskPastDue(task))
+    return allTasks.filter((task) => isTaskPastDue(task) && !task.isReopened)
   }, [allTasks])
 
   const selectedCalendarTasks = useMemo(() => {
@@ -487,6 +497,13 @@ export default function StaffMemberDashboard() {
           </button>
         </div>
 
+        {task.isReopened && (
+          <div className="mt-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span><strong>Reopened for rework.</strong> {task.issueDescription}</span>
+          </div>
+        )}
+
         <button
           type="button"
           onClick={() => setSelectedTask(isExpanded ? null : task)}
@@ -551,6 +568,16 @@ export default function StaffMemberDashboard() {
               <User className="h-4 w-4" />
               Assigned by: <span className="font-semibold text-gray-800">{task.supervisor}</span>{task.customerPhone ? ` · ${task.customerPhone}` : ''}
             </p>
+
+            {task.source === 'department' && (
+              <button
+                type="button"
+                onClick={() => setMessagesTask(task)}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50"
+              >
+                <MessageCircle className="h-4 w-4" /> Messages
+              </button>
+            )}
 
             {checkInErrorTaskId === task.id && checkInError && (
               <div className="mt-4 flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">
@@ -939,7 +966,7 @@ export default function StaffMemberDashboard() {
             onClick={() => setActiveTab('active')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium ${activeTab === 'active' ? 'bg-[#D9FFF0] text-[#004D32] shadow-sm' : 'text-emerald-100'}`}
           >
-            Active Tasks ({todayTasks.length + otherActiveTasks.length})
+            Active Tasks ({myTasks.length})
           </button>
 
           <button
@@ -962,6 +989,16 @@ export default function StaffMemberDashboard() {
             {myTasks.length === 0 && (
               <div className="bg-white rounded-xl border p-8 text-center text-gray-400">
                 No active tasks assigned.
+              </div>
+            )}
+
+            {reopenedTasks.length > 0 && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <h2 className="text-sm font-semibold text-red-800">Reopened — needs rework ({reopenedTasks.length})</h2>
+                </div>
+                <div className="space-y-3">{reopenedTasks.map(renderTaskCard)}</div>
               </div>
             )}
 
@@ -1204,6 +1241,18 @@ export default function StaffMemberDashboard() {
             </button>
           </div>
         </div>
+      )}
+
+      {messagesTask && (
+        <BookingMessagesPanel
+          bookingId={messagesTask.id}
+          currentUserId={user.id}
+          role="staffMember"
+          otherPartyLabel={messagesTask.requestedByName || 'Department staff'}
+          notifyUserId={messagesTask.createdByUserId}
+          notifyContext={messagesTask.title}
+          onClose={() => setMessagesTask(null)}
+        />
       )}
 
     </Layout>

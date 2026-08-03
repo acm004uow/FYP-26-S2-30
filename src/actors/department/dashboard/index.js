@@ -2,8 +2,9 @@ import Layout from '../../../components/Layout'
 import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
 import AttendanceScanner from '../../../components/AttendanceScanner'
+import BookingMessagesPanel from '../../../components/BookingMessagesPanel'
 import { useEffect, useState } from 'react'
-import { Briefcase, Bell, Calendar, ChevronDown, Clock, Filter, GripVertical, History, ListChecks, MapPin, QrCode, Search, Sparkles, Star, UserCheck } from 'lucide-react'
+import { AlertTriangle, Briefcase, Bell, Calendar, CheckCircle2, ChevronDown, Clock, Filter, Flag, GripVertical, History, ListChecks, MapPin, MessageCircle, QrCode, Search, Sparkles, Star, UserCheck } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
@@ -29,6 +30,16 @@ const emptyForm = {
   scheduledDate: '',
   scheduledTime: '',
   estimatedHours: 2,
+  urgency: 'normal',
+}
+
+const urgencyOptions = ['low', 'normal', 'high', 'urgent']
+
+const urgencyColor = {
+  low: 'bg-gray-100 text-gray-600',
+  normal: 'bg-blue-100 text-blue-700',
+  high: 'bg-orange-100 text-orange-700',
+  urgent: 'bg-red-100 text-red-700',
 }
 
 const staffStatusColor = {
@@ -82,6 +93,10 @@ export default function DepartmentDashboard() {
   const [scannerMessage, setScannerMessage] = useState('')
   const [historyBookings, setHistoryBookings] = useState([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [messagesBooking, setMessagesBooking] = useState(null)
+  const [issueBookingId, setIssueBookingId] = useState(null)
+  const [issueText, setIssueText] = useState('')
+  const [issueSubmitting, setIssueSubmitting] = useState(false)
 
   const showNotification = (message) => {
     setNotification(message)
@@ -160,7 +175,7 @@ export default function DepartmentDashboard() {
     setHistoryLoading(true)
     const { data } = await supabase
       .from('bookings')
-      .select('id,service_type,location,scheduled_date,scheduled_time,status,created_at,staff_profiles(staff_name)')
+      .select('id,service_type,location,scheduled_date,scheduled_time,status,created_at,urgency,issue_status,issue_description,issue_reported_at,department_confirmed_at,assigned_staff_id,staff_profiles(staff_name,user_id)')
       .eq('created_by', user?.id)
       .eq('source', 'department')
       .order('created_at', { ascending: false })
@@ -173,6 +188,15 @@ export default function DepartmentDashboard() {
     loadDashboard()
     loadAttendanceToday()
     loadHistory()
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    const channel = supabase
+      .channel(`department-bookings-${user.id}-${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `created_by=eq.${user.id}` }, () => loadHistory())
+      .subscribe()
+    return () => supabase.removeChannel(channel)
   }, [user])
 
   const handleScanResult = ({ status, message }) => {
@@ -261,6 +285,7 @@ export default function DepartmentDashboard() {
       scheduled_date: form.scheduledDate || null,
       scheduled_time: form.scheduledTime || null,
       estimated_hours: form.estimatedHours || 2,
+      urgency: form.urgency,
       assigned_staff_id: staff?.id || null,
       recommendation_reason: matchedRecommendation?.reason || (staff ? 'Manually assigned by department staff' : null),
       status: 'approved',
@@ -301,6 +326,62 @@ export default function DepartmentDashboard() {
     await loadHistory()
   }
 
+  const handleReportIssue = async (booking) => {
+    if (!issueText.trim()) {
+      showNotification('Describe the issue before submitting.')
+      return
+    }
+    setIssueSubmitting(true)
+    const now = new Date().toISOString()
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        status: 'in_progress',
+        issue_status: 'open',
+        issue_description: issueText.trim(),
+        issue_reported_at: now,
+        issue_reported_by: user.id,
+        updated_at: now,
+      })
+      .eq('id', booking.id)
+    setIssueSubmitting(false)
+
+    if (error) {
+      showNotification(error.message)
+      return
+    }
+
+    if (booking.staff_profiles?.user_id) {
+      await supabase.from('notifications').insert({
+        user_id: booking.staff_profiles.user_id,
+        title: 'Issue reported on completed task',
+        message: `${booking.service_type} was reopened: ${issueText.trim()}`,
+      })
+    }
+
+    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'report_booking_issue', details: `Booking ${booking.id}` })
+    setIssueBookingId(null)
+    setIssueText('')
+    showNotification('Issue reported — task reopened for rework.')
+    await loadHistory()
+  }
+
+  const handleConfirmCompletion = async (booking) => {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ department_confirmed_at: new Date().toISOString(), department_confirmed_by: user.id })
+      .eq('id', booking.id)
+
+    if (error) {
+      showNotification(error.message)
+      return
+    }
+
+    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'confirm_booking_completion', details: `Booking ${booking.id}` })
+    showNotification('Completion confirmed.')
+    await loadHistory()
+  }
+
   const visibleStaffRows = staffRows.filter(staff => {
     if (staffSearch.trim() && !staff.name.toLowerCase().includes(staffSearch.trim().toLowerCase())) return false
     if (staffStatusFilter !== 'All' && staff.status !== staffStatusFilter) return false
@@ -311,39 +392,10 @@ export default function DepartmentDashboard() {
     <Layout role="departmentStaff">
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-start gap-3 mb-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
-            <Briefcase className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{departmentName ? `${departmentName} Department` : 'Department Dashboard'}</h1>
-            <p className="text-gray-500 mt-1">Create a task and assign it to available staff — pick someone yourself, or let AI recommend the best match.</p>
-          </div>
+
         </div>
 
         {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
-
-        <div className="mb-6 rounded-xl border bg-white shadow-sm p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-gray-800">
-              {todayAttendance?.clocked_in_at && todayAttendance?.clocked_out_at
-                ? `Completed — worked ${formatDuration(new Date(todayAttendance.clocked_out_at) - new Date(todayAttendance.clocked_in_at))} today.`
-                : todayAttendance?.clocked_in_at
-                  ? `Checked in since ${new Date(todayAttendance.clocked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.`
-                  : "You haven't checked in today."}
-            </p>
-            {scannerMessage && <p className="text-xs text-accent-600 mt-1">{scannerMessage}</p>}
-          </div>
-          {!(todayAttendance?.clocked_in_at && todayAttendance?.clocked_out_at) && (
-            <button
-              onClick={() => { setScannerMessage(''); setShowScanner(true) }}
-              className="flex items-center justify-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2 text-sm font-semibold text-white transition"
-            >
-              <QrCode className="w-4 h-4" /> {todayAttendance?.clocked_in_at ? 'Clock Out' : 'Clock In'}
-            </button>
-          )}
-        </div>
-
-        {showScanner && <AttendanceScanner onClose={() => setShowScanner(false)} onResult={handleScanResult} />}
 
         <div className="mb-6 inline-flex rounded-lg bg-gray-100 p-1">
           <button
@@ -391,9 +443,17 @@ export default function DepartmentDashboard() {
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-700">Estimated Hours</label>
-              <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: Number(e.target.value) })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Estimated Hours</label>
+                <input type="number" min="1" step="0.5" value={form.estimatedHours} onChange={e => setForm({ ...form, estimatedHours: Number(e.target.value) })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Urgency</label>
+                <select value={form.urgency} onChange={e => setForm({ ...form, urgency: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
+                  {urgencyOptions.map(option => <option key={option} value={option}>{option.charAt(0).toUpperCase() + option.slice(1)}</option>)}
+                </select>
+              </div>
             </div>
 
             <div>
@@ -533,10 +593,93 @@ export default function DepartmentDashboard() {
                       <Clock className="w-3.5 h-3.5" /> Created {new Date(booking.created_at).toLocaleString()}
                     </p>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${bookingStatusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
-                    {bookingStatusLabel(booking.status)}
-                  </span>
+                  <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${bookingStatusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
+                      {bookingStatusLabel(booking.status)}
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${urgencyColor[booking.urgency] || urgencyColor.normal}`}>
+                      {(booking.urgency || 'normal').charAt(0).toUpperCase() + (booking.urgency || 'normal').slice(1)}
+                    </span>
+                    {booking.assigned_staff_id && booking.staff_profiles?.user_id && (
+                      <button
+                        type="button"
+                        onClick={() => setMessagesBooking({ id: booking.id, serviceType: booking.service_type, staffUserId: booking.staff_profiles.user_id })}
+                        className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" /> Messages
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {booking.status === 'completed' && (
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    {booking.issue_status === 'open' ? (
+                      <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span>
+                          <strong>Issue reported</strong> — awaiting resolution: {booking.issue_description}
+                          {booking.issue_reported_at && <span className="block text-xs text-amber-600 mt-0.5">Reported {new Date(booking.issue_reported_at).toLocaleString()}</span>}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {issueBookingId === booking.id ? (
+                          <div className="w-full space-y-2">
+                            <textarea
+                              value={issueText}
+                              onChange={e => setIssueText(e.target.value)}
+                              rows={2}
+                              placeholder="Describe what wasn't done properly or what still needs work..."
+                              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleReportIssue(booking)}
+                                disabled={issueSubmitting}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 hover:bg-red-700 px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-60"
+                              >
+                                <Flag className="w-3.5 h-3.5" /> {issueSubmitting ? 'Submitting...' : 'Submit issue'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setIssueBookingId(null); setIssueText('') }}
+                                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => { setIssueBookingId(booking.id); setIssueText('') }}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                          >
+                            <Flag className="w-3.5 h-3.5" /> Report an issue
+                          </button>
+                        )}
+
+                        {booking.department_confirmed_at ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Confirmed {new Date(booking.department_confirmed_at).toLocaleDateString()}
+                          </span>
+                        ) : (
+                          issueBookingId !== booking.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmCompletion(booking)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-green-200 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Confirm completion
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {!historyLoading && historyBookings.length === 0 && (
@@ -547,6 +690,18 @@ export default function DepartmentDashboard() {
         </div>
         )}
       </div>
+
+      {messagesBooking && (
+        <BookingMessagesPanel
+          bookingId={messagesBooking.id}
+          currentUserId={user.id}
+          role="departmentStaff"
+          otherPartyLabel="Assigned staff"
+          notifyUserId={messagesBooking.staffUserId}
+          notifyContext={messagesBooking.serviceType}
+          onClose={() => setMessagesBooking(null)}
+        />
+      )}
     </Layout>
   )
 }

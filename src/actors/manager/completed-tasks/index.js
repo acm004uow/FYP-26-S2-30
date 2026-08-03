@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
-import { useEffect, useState } from 'react'
-import { Calendar, CheckCircle2, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
+import { Fragment, useEffect, useState } from 'react'
+import { AlertTriangle, Calendar, CheckCircle2, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
 
@@ -43,6 +43,7 @@ export default function ManagerCompletedTasks() {
   const [savingReviewId, setSavingReviewId] = useState(null)
   const [activeTaskId, setActiveTaskId] = useState(null)
   const [hoverRating, setHoverRating] = useState(0)
+  const [resolvingId, setResolvingId] = useState(null)
 
   const loadCompletedTasks = async () => {
     if (!user) return
@@ -54,9 +55,9 @@ export default function ManagerCompletedTasks() {
 
     const { data: tasks, error } = await supabase
       .from('bookings')
-      .select('id,service_type,location,updated_at,assigned_staff_id,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id),booking_feedback(rating,comment,image_url)')
+      .select('id,service_type,location,status,updated_at,assigned_staff_id,issue_status,issue_description,issue_reported_at,issue_reported_by,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id),booking_feedback(rating,comment,image_url)')
       .eq('host_admin_id', managerProfile?.host_admin_id)
-      .eq('status', 'completed')
+      .or('status.eq.completed,issue_status.eq.open')
       .order('updated_at', { ascending: false })
 
     if (error) {
@@ -134,6 +135,33 @@ export default function ManagerCompletedTasks() {
     setTimeout(() => setReviewMessage(''), 3000)
   }
 
+  const handleResolveIssue = async (task) => {
+    setResolvingId(task.id)
+    const { error } = await supabase
+      .from('bookings')
+      .update({ issue_status: 'resolved', issue_resolved_at: new Date().toISOString(), issue_resolved_by: user.id })
+      .eq('id', task.id)
+    setResolvingId(null)
+
+    if (error) {
+      setReviewMessage(error.message)
+      return
+    }
+
+    if (task.issue_reported_by) {
+      await supabase.from('notifications').insert({
+        user_id: task.issue_reported_by,
+        title: 'Issue resolved',
+        message: `Your reported issue on ${task.service_type} has been marked resolved.`,
+      })
+    }
+
+    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'resolve_booking_issue', details: `Booking ${task.id}` })
+    setReviewMessage('Issue marked resolved.')
+    await loadCompletedTasks()
+    setTimeout(() => setReviewMessage(''), 3000)
+  }
+
   const activeTask = completedTasks.find(task => task.id === activeTaskId) || null
   const activeDraft = activeTask ? (reviewDrafts[activeTask.id] || { rating: '', feedback: '' }) : null
 
@@ -164,14 +192,19 @@ export default function ManagerCompletedTasks() {
                   const proof = task.task_proofs?.[0]
                   const review = task.performance_reviews?.[0]
                   const theme = review?.rating ? ratingTheme(Number(review.rating)) : null
+                  const hasOpenIssue = task.issue_status === 'open'
                   return (
-                    <tr key={task.id} className="hover:bg-gray-50/60">
+                    <Fragment key={task.id}>
+                    <tr className="hover:bg-gray-50/60">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2.5">
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent-100 text-accent-600">
                             <CheckCircle2 className="h-4 w-4" />
                           </span>
                           <span className="font-semibold text-gray-900">{task.service_type}</span>
+                          {task.status !== 'completed' && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">Reopened for rework</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-4">
@@ -218,6 +251,30 @@ export default function ManagerCompletedTasks() {
                         </button>
                       </td>
                     </tr>
+                    {hasOpenIssue && (
+                      <tr>
+                        <td colSpan={6} className="px-5 pb-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                            <div className="flex items-start gap-2 text-sm text-amber-800">
+                              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                              <span>
+                                <strong>Issue reported:</strong> {task.issue_description}
+                                {task.issue_reported_at && <span className="block text-xs text-amber-600 mt-0.5">Reported {new Date(task.issue_reported_at).toLocaleString()}</span>}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleResolveIssue(task)}
+                              disabled={resolvingId === task.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-60"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" /> {resolvingId === task.id ? 'Resolving...' : 'Mark resolved'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   )
                 })}
               </tbody>
@@ -278,6 +335,29 @@ export default function ManagerCompletedTasks() {
                   </div>
                 )}
               </div>
+
+              {activeTask.issue_status === 'open' && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Reported issue</p>
+                  <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                    <div className="flex items-start gap-2 text-sm text-amber-800">
+                      <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <span>
+                        {activeTask.issue_description}
+                        {activeTask.issue_reported_at && <span className="block text-xs text-amber-600 mt-0.5">Reported {new Date(activeTask.issue_reported_at).toLocaleString()}</span>}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleResolveIssue(activeTask)}
+                      disabled={resolvingId === activeTask.id}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white transition disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {resolvingId === activeTask.id ? 'Resolving...' : 'Mark resolved'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {activeTask.booking_feedback?.[0] && (
                 <div>

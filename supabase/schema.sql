@@ -627,3 +627,34 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
 after insert on auth.users
 for each row execute function public.handle_new_auth_user();
+
+-- Department-staff request lifecycle: urgency at request time, a lightweight "confirm
+-- completion" step for the requester, and an issue-report/reopen workflow. Reopening reuses
+-- the existing booking_status enum value 'in_progress' — no new enum value added.
+alter table bookings add column if not exists urgency text not null default 'normal'
+  check (urgency in ('low', 'normal', 'high', 'urgent'));
+alter table bookings add column if not exists department_confirmed_at timestamptz;
+alter table bookings add column if not exists department_confirmed_by uuid references profiles(id) on delete set null;
+alter table bookings add column if not exists issue_status text check (issue_status is null or issue_status in ('open', 'resolved'));
+alter table bookings add column if not exists issue_description text;
+alter table bookings add column if not exists issue_reported_at timestamptz;
+alter table bookings add column if not exists issue_reported_by uuid references profiles(id) on delete set null;
+alter table bookings add column if not exists issue_resolved_at timestamptz;
+alter table bookings add column if not exists issue_resolved_by uuid references profiles(id) on delete set null;
+
+-- Two-way chat thread scoped to one booking, read/written by the requester (bookings.created_by)
+-- and the assigned staff member (staff_profiles.user_id via bookings.assigned_staff_id).
+create table if not exists booking_messages (
+  id uuid primary key default gen_random_uuid(),
+  booking_id uuid references bookings(id) on delete cascade,
+  sender_id uuid references profiles(id) on delete set null,
+  message text not null,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_booking_messages_booking_created on booking_messages(booking_id, created_at);
+
+alter table booking_messages enable row level security;
+do $$ begin
+  create policy "authenticated all booking messages" on booking_messages for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;

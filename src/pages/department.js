@@ -1,1 +1,1 @@
-export { default } from '../actors/department/dashboard'
+export { default } from '../actors/department/tasks'
