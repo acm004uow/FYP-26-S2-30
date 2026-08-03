@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useMemo, useState } from 'react'
-import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, FileUp, AlertCircle, ClipboardList, Sparkles, FileText, User } from 'lucide-react'
+import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, FileUp, AlertCircle, ClipboardList, Sparkles, FileText, User, LogIn, LogOut, MessageCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
 import { getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
@@ -15,14 +15,20 @@ const getTaskDisplayStatus = (task) => {
   return task.status
 }
 
+const getDateTimeParts = (iso) => {
+  if (!iso) return null
+
+  const date = new Date(iso)
+
+  return {
+    datePart: date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }),
+    timePart: date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+  }
+}
+
 const formatTaskDateTime = (task) => {
-  if (!task.scheduledStartRaw) return 'Not scheduled'
-
-  const date = new Date(task.scheduledStartRaw)
-  const datePart = date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
-  const timePart = date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-
-  return `${datePart} • ${timePart}`
+  const parts = getDateTimeParts(task.scheduledStartRaw)
+  return parts ? `${parts.datePart} • ${parts.timePart}` : 'Not scheduled'
 }
 
 const availabilityOptions = [
@@ -588,26 +594,46 @@ export default function StaffMemberDashboard() {
 
   const renderTaskListRow = (task, { icon: Icon, iconBg, iconColor, detail }) => {
     const isExpanded = selectedTask?.id === task.id
+    const scheduledParts = getDateTimeParts(task.scheduledStartRaw)
 
     return (
-      <div key={task.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-4">
-          <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${iconBg} ${iconColor}`}>
-            <Icon className="h-5 w-5" />
+      <div key={task.id} className={`rounded-xl border border-gray-100 bg-white shadow-sm transition ${isExpanded ? 'p-4' : 'px-3 py-2'} `}>
+        <div className="flex items-start gap-4">
+          <span className={`flex shrink-0 items-center justify-center rounded-full transition-all ${iconBg} ${iconColor} ${isExpanded ? 'h-20 w-20' : 'h-12 w-12'}`}>
+            <Icon className={isExpanded ? 'h-9 w-9' : 'h-5 w-5'} />
           </span>
 
           <div className="min-w-0 flex-1">
-            <p className="font-bold text-gray-900">{task.title}</p>
+            <p className={`font-bold text-gray-900 ${isExpanded ? 'text-2xl' : ''}`}>{task.title}</p>
 
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-              <span className="truncate">{task.location}</span>
+            <p className={`mt-1 flex items-center gap-1.5 text-gray-500 ${isExpanded ? 'text-base' : 'text-sm'}`}>
+              <MapPin className={`shrink-0 text-emerald-600 ${isExpanded ? 'h-4 w-4' : 'h-3.5 w-3.5'}`} />
+              <span className={isExpanded ? '' : 'truncate'}>{task.location}</span>
             </p>
 
-            <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
-              <Calendar className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
-              {formatTaskDateTime(task)}
-            </p>
+            {isExpanded ? (
+              <p className="mt-2 flex flex-wrap items-center gap-3 text-base text-gray-600">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-emerald-600" />
+                  {scheduledParts ? scheduledParts.datePart : 'Not scheduled'}
+                </span>
+
+                {scheduledParts && (
+                  <>
+                    <span className="text-gray-300">|</span>
+                    <span className="flex items-center gap-1.5">
+                      <Clock className="h-4 w-4 text-emerald-600" />
+                      {scheduledParts.timePart}
+                    </span>
+                  </>
+                )}
+              </p>
+            ) : (
+              <p className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
+                <Calendar className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                {formatTaskDateTime(task)}
+              </p>
+            )}
           </div>
 
           <button
@@ -621,7 +647,7 @@ export default function StaffMemberDashboard() {
         </div>
 
         {isExpanded && (
-          <div className="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-600">
+          <div className="mt-5 border-t border-gray-100 pt-5 text-sm text-gray-600">
             {detail}
           </div>
         )}
@@ -986,18 +1012,41 @@ export default function StaffMemberDashboard() {
               iconColor: 'text-red-500',
               detail: (
                 <>
-                  <p>
-                    <span className="font-medium text-gray-800">Assigned day:</span>{' '}
-                    {task.assignedDate}
-                  </p>
-                  <p className="mt-1">
-                    <span className="font-medium text-gray-800">Status:</span>{' '}
-                    {getTaskDisplayStatus(task)}
-                  </p>
-                  <p className="mt-1">
-                    <span className="font-medium text-gray-800">Instructions:</span>{' '}
-                    {task.instructions}
-                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl bg-gray-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                          <Calendar className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Assigned day</p>
+                          <p className="mt-1 text-sm text-gray-600">{task.assignedDate}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl bg-gray-50 p-4">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500">
+                          <AlertCircle className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">Status</p>
+                          <p className="mt-1 text-sm text-gray-600">{getTaskDisplayStatus(task)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 rounded-xl border border-gray-100 p-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                      <FileText className="h-4 w-4 text-emerald-600" />
+                      Instructions
+                    </div>
+                    <div className="mt-2 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">
+                      {task.instructions}
+                    </div>
+                  </div>
                 </>
               ),
             }))}
@@ -1012,50 +1061,105 @@ export default function StaffMemberDashboard() {
               </div>
             )}
 
-            {completedTasks.map(task => renderTaskListRow(task, {
-              icon: CheckCircle,
-              iconBg: 'bg-emerald-100',
-              iconColor: 'text-emerald-600',
-              detail: (
-                <>
-                  {task.checkedInAt && (
-                    <p>
-                      <span className="font-medium text-gray-800">Checked in:</span>{' '}
-                      {task.checkedInAt}
-                    </p>
-                  )}
+            {completedTasks.map(task => {
+              const checkedInParts = getDateTimeParts(task.checkedInAtRaw)
+              const checkedOutParts = getDateTimeParts(task.checkedOutAtRaw)
 
-                  {task.checkedOutAt && (
-                    <p className="mt-1">
-                      <span className="font-medium text-gray-800">Checked out:</span>{' '}
-                      {task.checkedOutAt}
-                    </p>
-                  )}
-
-                  <p className="mt-1">
-                    <span className="font-medium text-gray-800">Rating:</span>{' '}
-                    {task.rating || 'Not graded yet'}/5
+              const renderDateTimeLine = (parts) => (
+                parts ? (
+                  <p className="mt-1 flex items-center gap-2 text-sm text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5 text-emerald-600" />
+                      {parts.datePart}
+                    </span>
+                    <span className="text-gray-300">|</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                      {parts.timePart}
+                    </span>
                   </p>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-400">Not recorded</p>
+                )
+              )
 
-                  <p className="mt-1">
-                    <span className="font-medium text-gray-800">Feedback:</span>{' '}
-                    {task.feedback}
-                  </p>
+              return renderTaskListRow(task, {
+                icon: CheckCircle,
+                iconBg: 'bg-emerald-100',
+                iconColor: 'text-emerald-600',
+                detail: (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl bg-gray-50 p-1">
+                        <div className="flex items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                            <LogIn className="h-5 w-5" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Checked in</p>
+                            {renderDateTimeLine(checkedInParts)}
+                          </div>
+                        </div>
+                      </div>
 
-                  {task.proof?.file_url && (
-                    <a
-                      href={task.proof.file_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:underline"
-                    >
-                      <FileUp className="h-3.5 w-3.5" />
-                      View submitted proof
-                    </a>
-                  )}
-                </>
-              ),
-            }))}
+                      <div className="rounded-xl bg-gray-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                            <LogOut className="h-5 w-5" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Checked out</p>
+                            {renderDateTimeLine(checkedOutParts)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-gray-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-500">
+                            <Star className="h-5 w-5" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Rating</p>
+                            <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-700">
+                              <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                              {task.rating ? `${task.rating}/5` : 'Not graded yet / 5'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl bg-gray-50 p-4">
+                        <div className="flex items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-500">
+                            <MessageCircle className="h-5 w-5" />
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">Feedback</p>
+                            <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              {task.feedback}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {task.proof?.file_url && (
+                      <a
+                        href={task.proof.file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:underline"
+                      >
+                        <FileUp className="h-3.5 w-3.5" />
+                        View submitted proof
+                      </a>
+                    )}
+                  </>
+                ),
+              })
+            })}
           </div>
         )}
       </div>

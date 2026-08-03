@@ -12,18 +12,37 @@ const CHATBOT_ROLE_THEME = {
   manager: {
     main: 'bg-blue-600',
     hover: 'hover:bg-blue-700',
+    text: 'text-blue-600',
+    lightBg: 'hover:bg-blue-50',
+    border: 'hover:border-blue-300',
+    ring: 'focus:ring-blue-300',
   },
+
   staffMember: {
     main: 'bg-emerald-700',
     hover: 'hover:bg-emerald-800',
+    text: 'text-emerald-700',
+    lightBg: 'hover:bg-emerald-50',
+    border: 'hover:border-emerald-300',
+    ring: 'focus:ring-emerald-300',
   },
+
   admin: {
     main: 'bg-purple-600',
     hover: 'hover:bg-purple-700',
+    text: 'text-purple-600',
+    lightBg: 'hover:bg-purple-50',
+    border: 'hover:border-purple-300',
+    ring: 'focus:ring-purple-300',
   },
+
   customer: {
     main: 'bg-sky-600',
     hover: 'hover:bg-sky-700',
+    text: 'text-sky-600',
+    lightBg: 'hover:bg-sky-50',
+    border: 'hover:border-sky-300',
+    ring: 'focus:ring-sky-300',
   },
 }
 
@@ -151,9 +170,13 @@ export default function Chatbot({ role, addNotification }) {
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role === 'bot' && <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center"><Bot className="w-4 h-4 text-white" /></div>}
+                {msg.role === 'bot' && (
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${chatbotTheme.main}`}>
+                    <Bot className="w-4 h-4 text-white" />
+                  </div>
+                )}
                 <div>
-                  <div className={`px-4 py-2 rounded-2xl max-w-xs text-sm whitespace-pre-line leading-relaxed ${msg.role === 'user' ? 'bg-accent text-white' : 'bg-gray-100 text-gray-800'}`}>{formatChatText(msg.content)}</div>
+                  <div className={`px-4 py-2 rounded-2xl max-w-xs text-sm whitespace-pre-line leading-relaxed ${msg.role === 'user' ? `${chatbotTheme.main} text-white` : 'bg-gray-100 text-gray-800'}`}>{formatChatText(msg.content)}</div>
                   <p className={`mt-1 text-[10px] text-gray-400 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>{msg.time}</p>
                 </div>
                 {msg.role === 'user' && <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center"><User className="w-4 h-4 text-gray-600" /></div>}
@@ -161,7 +184,7 @@ export default function Chatbot({ role, addNotification }) {
             ))}
             {isSending && (
               <div className="flex gap-2 justify-start">
-                <div className="w-8 h-8 bg-accent rounded-full flex items-center justify-center"><Bot className="w-4 h-4 text-white" /></div>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${chatbotTheme.main}`}><Bot className="w-4 h-4 text-white" /></div>
                 <div className="px-4 py-2 rounded-2xl max-w-xs text-sm bg-gray-100 text-gray-500">Thinking...</div>
               </div>
             )}
@@ -169,13 +192,13 @@ export default function Chatbot({ role, addNotification }) {
           </div>
           <div className="px-4 pb-3">
             <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              <Sparkles className="h-4 w-4 shrink-0 text-accent" />
+              <Sparkles className={`h-4 w-4 shrink-0 ${chatbotTheme.text}`} />
               {(assistantSuggestions[normalizedRole] || assistantSuggestions.manager).map(suggestion => (
                 <button
                   key={suggestion}
                   type="button"
                   onClick={() => sendMessage(suggestion)}
-                  className="shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600 hover:border-accent-300 hover:bg-accent-100 hover:text-accent-600 transition"
+                  className={`shrink-0 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs transition ${chatbotTheme.border} ${chatbotTheme.lightBg} ${chatbotTheme.text}`}
                 >
                   {suggestion}
                 </button>
@@ -185,7 +208,12 @@ export default function Chatbot({ role, addNotification }) {
           <div className="p-4 border-t">
             <form className="flex gap-2" onSubmit={handleSubmit}>
               <input value={input} onChange={e => setInput(e.target.value)} placeholder="Ask the assistant..." className="flex-1 px-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-300" disabled={isSending} />
-              <button type="submit" className="bg-accent hover:bg-accent-600 text-white p-2 rounded-lg transition disabled:opacity-60" aria-label="Send message" disabled={isSending}><Send className="w-5 h-5" /></button>
+              <button
+                type="submit"
+                className={`text-white p-2 rounded-lg transition disabled:opacity-60 ${chatbotTheme.main} ${chatbotTheme.hover}`}
+                aria-label="Send message"
+                disabled={isSending}
+              ></button>
             </form>
           </div>
         </section>
