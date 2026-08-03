@@ -36,6 +36,41 @@ const NAV_ICON_THEME = {
 }
 const DEFAULT_NAV_ICON_THEME = { bg: 'bg-gray-100', icon: 'text-gray-500' }
 
+const SIDEBAR_ROLE_COLORS = {
+  manager: '#003152',
+  staffMember: '#07191E',
+  departmentStaff: '#F59E0B',
+  admin: '#7C3AED',
+  userAdmin: '#EA580C',
+}
+
+const NAV_LINK_ROLE_THEME = {
+  manager: {
+    active: 'bg-[#e6edf7] text-[#0b1f3a]',
+    inactive: 'text-slate-200 hover:bg-white/10 hover:text-white',
+  },
+
+  staffMember: {
+    active: 'bg-[#D9FFF0] text-[#004D32]',
+    inactive: 'text-emerald-100 hover:bg-white/10 hover:text-white',
+  },
+
+  departmentStaff: {
+    active: 'bg-[#FEF3C7] text-[#92400E]',
+    inactive: 'text-amber-100 hover:bg-white/10 hover:text-white',
+  },
+
+  admin: {
+    active: 'bg-[#EDE9FE] text-[#5B21B6]',
+    inactive: 'text-purple-100 hover:bg-white/10 hover:text-white',
+  },
+
+  userAdmin: {
+    active: 'bg-[#FEE2E2] text-[#991B1B]',
+    inactive: 'text-red-100 hover:bg-white/10 hover:text-white',
+  },
+}
+
 const profileRoleDisplayMap = {
   manager: 'Manager',
   department_staff: 'Department Staff',
@@ -249,10 +284,11 @@ export default function Layout({ children, role = 'manager' }) {
       : router.pathname === itemPath && !(itemPath === '/admin' && router.asPath.includes('section='))
     const badgeCount = itemPath === '/manager-bookings' ? pendingBookingsCount : 0
     const theme = NAV_ICON_THEME[itemPath] || DEFAULT_NAV_ICON_THEME
+    const roleLinkTheme = NAV_LINK_ROLE_THEME[role] || NAV_LINK_ROLE_THEME.manager
     return (
       <Link key={item.path} href={item.path}
         onClick={options.onClick}
-        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${isActive ? 'bg-[#e6edf7] text-[#0b1f3a]' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}>
+        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${isActive ? roleLinkTheme.active : roleLinkTheme.inactive}`}>
         <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${theme.bg}`}>
           <item.icon className={`h-4 w-4 ${theme.icon}`} />
         </span>
@@ -268,7 +304,11 @@ export default function Layout({ children, role = 'manager' }) {
 
   return (
     <div className={`min-h-screen ${
-      isCustomerNav ? 'bg-[#d8e2f0]' : 'bg-gray-100'
+      isCustomerNav
+        ? 'bg-[#d8e2f0]'
+        : role === 'staffMember'
+          ? 'bg-[#E8FFF7]'
+          : 'bg-gray-100'
     }`}>
       <nav className="sticky top-0 z-40 border-b-2 border-divider bg-white">
         <div className="px-4 sm:px-6 lg:px-8">
@@ -429,7 +469,7 @@ export default function Layout({ children, role = 'manager' }) {
       {!isCustomerNav && (
         <aside className="fixed left-0 top-16 z-30 hidden h-[calc(100vh-4rem)] w-64 border-r-2 border-divider bg-gray-50 lg:block">
           <div className="flex h-full flex-col p-3">
-            <div className="flex-1 space-y-0.5 overflow-y-auto rounded-2xl border border-gray-100 bg-[#003152] p-2 shadow-sm">
+            <div className="flex-1 space-y-0.5 overflow-y-auto rounded-2xl border border-gray-100 p-2 shadow-sm" style={{ backgroundColor: SIDEBAR_ROLE_COLORS[role] || '#003152' }}>
               {nav.map(item => renderNavLink(item))}
             </div>
             {isOwnerNav && (

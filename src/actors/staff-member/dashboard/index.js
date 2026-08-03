@@ -540,58 +540,47 @@ export default function StaffMemberDashboard() {
           </div>
         )}
 
-        <div className="bg-accent rounded-xl p-6 text-white mb-6">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-accent-100 text-sm">Good Morning,</p>
-              <h1 className="text-2xl font-bold">
-                {profile?.staff_name || 'Staff Member'}
-              </h1>
-              <p className="text-accent-100 text-sm mt-1">
-                {profile?.skills?.[0] || 'Staff'} - {profile?.assigned_region || 'No region'}
-              </p>
-            </div>
+        <div className="mb-6 rounded-xl p-6 text-slate-900">
+          {/* Large name */}
+          <h1 className="text-5xl font-normal leading-tight">
+            {profile?.staff_name || 'Staff Member'}
+          </h1>
 
-            <div className="text-right">
-              <div className="flex items-center gap-2 mb-2">
-                <div className={`w-2 h-2 rounded-full ${availabilityDot[availability] || 'bg-gray-300'}`} />
-                <span className="text-sm font-medium">
-                  {availabilityLabels[availability] || availability}
-                </span>
-              </div>
+          {/* Location */}
+          <div className="mt-3 flex items-center gap-2 text-xl text-slate-700">
+            <MapPin className="h-5 w-5 text-emerald-600" />
 
-              <select
-                value={availability}
-                onChange={event => updateAvailability(event.target.value)}
-                className="rounded-full border border-white/20 bg-white/20 px-3 py-1.5 text-xs text-white outline-none transition hover:bg-white/30"
-              >
-                {availabilityOptions.map(option => (
-                  <option key={option.value} value={option.value} className="text-gray-800">
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <span>
+              {profile?.assigned_region || 'No location added'}
+            </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-white/20">
-            <div className="text-center">
-              <p className="text-2xl font-bold">{myTasks.length}</p>
-              <p className="text-accent-100 text-xs">Active Tasks</p>
-            </div>
+          {/* Clickable statistics */}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-base">
+            <button
+              type="button"
+              onClick={() => setActiveTab('active')}
+              className="transition hover:text-blue-600 hover:underline"
+            >
+              Active ({myTasks.length})
+            </button>
 
-            <div className="text-center">
-              <p className="text-2xl font-bold">{completedTasks.length}</p>
-              <p className="text-accent-100 text-xs">Completed</p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('completed')}
+              className="transition hover:text-blue-600 hover:underline"
+            >
+              Completed ({completedTasks.length})
+            </button>
 
-            <div className="text-center">
-              <p className="text-2xl font-bold">{avgRating}</p>
-              <p className="text-accent-100 text-xs flex items-center justify-center gap-1">
-                <Star className="w-3 h-3 fill-yellow-300 text-yellow-300" />
-                Rating
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('completed')}
+              className="flex items-center gap-1 transition hover:text-blue-600 hover:underline"
+            >
+              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              Rating ({avgRating})
+            </button>
           </div>
         </div>
 
