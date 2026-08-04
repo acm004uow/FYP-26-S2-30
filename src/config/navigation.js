@@ -3,10 +3,9 @@ import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2
 export const navMap = {
   manager: [
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
-    { name: 'Crew', path: '/manager-user-accounts', icon: UserCog },
+    { name: 'Staff', path: '/manager-staff', icon: Users },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'Schedule', path: '/manager-schedule', icon: Calendar },
-    { name: 'Availability', path: '/manager-availability', icon: Activity },
     { name: 'Time Off', path: '/manager-time-off', icon: CalendarOff },
     { name: 'My Attendance', path: '/manager-my-attendance', icon: Clock },
     { name: 'Tracking', path: '/manager-tracking', icon: UserCheck },
@@ -43,6 +42,7 @@ export const navMap = {
     { name: 'Pay Rates', path: '/admin?section=payrates', icon: DollarSign },
     { name: 'Time Off', path: '/admin?section=timeoff', icon: CalendarClock },
     { name: 'Departments', path: '/admin?section=departments', icon: Briefcase },
+    { name: 'Staff', path: '/admin?section=staff', icon: Users },
   ],
   userAdmin: [
     { name: 'Overview', path: '/user-admin', icon: Globe },

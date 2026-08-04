@@ -22,7 +22,6 @@ const roleDisplayMap = {
 // state) so the nav reads as part of the same color system rather than a separate palette.
 const NAV_ICON_THEME = {
   '/manager': { bg: 'bg-accent-100', icon: 'text-accent-600' },
-  '/manager-user-accounts': { bg: 'bg-purple-100', icon: 'text-purple-600' },
   '/manager-customers': { bg: 'bg-teal-100', icon: 'text-teal-600' },
   '/manager-bookings': { bg: 'bg-sky-100', icon: 'text-sky-600' },
   '/manager-schedule': { bg: 'bg-indigo-100', icon: 'text-indigo-600' },
@@ -37,11 +36,11 @@ const NAV_ICON_THEME = {
 const DEFAULT_NAV_ICON_THEME = { bg: 'bg-gray-100', icon: 'text-gray-500' }
 
 const SIDEBAR_ROLE_COLORS = {
-  manager: '#003152',
+  manager: 'rgb(6, 57, 31)',
   staffMember: '#07191E',
   departmentStaff: '#003333',
-  admin: '#7C3AED',
-  userAdmin: '#EA580C',
+  admin: '#003152',
+  userAdmin: '#003152',
 }
 
 const NAV_LINK_ROLE_THEME = {
@@ -61,8 +60,8 @@ const NAV_LINK_ROLE_THEME = {
   },
 
   admin: {
-    active: 'bg-[#EDE9FE] text-[#5B21B6]',
-    inactive: 'text-purple-100 hover:bg-white/10 hover:text-white',
+    active: 'bg-[#E6F0F7] text-[#003152]',
+    inactive: 'text-slate-200 hover:bg-white/10 hover:text-white',
   },
 
   userAdmin: {
@@ -520,7 +519,10 @@ export default function Layout({ children, role = 'manager' }) {
             aria-label="Close navigation menu"
           />
           <aside className="relative h-full w-72 max-w-[85vw] overflow-y-auto bg-gray-50 p-3 shadow-xl">
-            <div className="space-y-0.5 rounded-2xl border border-gray-100 bg-white p-2 shadow-sm">
+            <div
+              className="space-y-0.5 rounded-2xl border border-gray-100 p-2 shadow-sm"
+              style={{ backgroundColor: SIDEBAR_ROLE_COLORS[role] || '#003152' }}
+            >
               {nav.map(item => renderNavLink(item, { onClick: () => setMobileOpen(false) }))}
             </div>
             {isOwnerNav && (

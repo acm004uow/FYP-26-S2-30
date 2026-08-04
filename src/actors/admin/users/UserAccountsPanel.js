@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { Briefcase, KeyRound, Pencil, Plus, Shield, ShieldCheck, UserCheck, UserMinus, UserRound, Users, X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Briefcase, ChevronDown, Eye, Filter, KeyRound, Pencil, Plus, Search, ShieldCheck, Star, UserCheck, UserMinus, UserRound, Users, X } from 'lucide-react'
 
 export const roleOptions = [
   {
@@ -43,17 +43,20 @@ const ROLE_META = {
   other: { label: 'Other', icon: UserRound, ring: 'border-gray-200', avatarBg: 'bg-gray-50', avatarText: 'text-gray-600', select: 'border-gray-200 focus:border-gray-400 focus:ring-gray-100' },
 }
 
-const groupUsersByRole = (users) => {
-  const groups = ROLE_ORDER
-    .map(role => [role, users.filter(user => user.role === role)])
-    .filter(([, group]) => group.length > 0)
-  const other = users.filter(user => !ROLE_ORDER.includes(user.role))
-  if (other.length > 0) groups.push(['other', other])
-  return groups
-}
+const STATUS_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'suspended', label: 'Suspended' },
+]
+
+const PAGE_SIZE = 8
+
+const avatarInitials = (name) => (name || '?').split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()
+
+const metaFor = (role) => ROLE_META[ROLE_ORDER.includes(role) ? role : 'other']
 
 function UserManageModal({ user, staffProfile, managers, currentUserId, onClose, onChangeRole, onToggleStatus, onResetUser, onSetManager, isEditingSalary, onEnableSalaryEdit, onSalaryBlur, onSalaryKeyDown, roleOptions: availableRoleOptions, canResetPassword }) {
-  const meta = ROLE_META[ROLE_ORDER.includes(user.role) ? user.role : 'other']
+  const meta = metaFor(user.role)
 
   useEffect(() => {
     const onKeyDown = event => { if (event.key === 'Escape') onClose() }
@@ -171,7 +174,22 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
 export default function UserAccountsPanel({ users, staffProfiles = [], managers = [], onAddUser, onResetUser, onChangeRole, onToggleStatus, onSetManager, onSetBasicSalary, currentUserId, roleOptions: availableRoleOptions = roleOptions, canResetPassword = true }) {
   const [editingSalary, setEditingSalary] = useState({})
   const [managingUserId, setManagingUserId] = useState(null)
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const salaryRefs = useRef({})
+
+  const staffProfilesByUserId = useMemo(() => {
+    const map = {}
+    staffProfiles.forEach(profile => { map[profile.user_id] = profile })
+    return map
+  }, [staffProfiles])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [search, statusFilter, roleFilter])
 
   const enableSalaryEdit = userId => {
     setEditingSalary(prev => ({ ...prev, [userId]: true }))
@@ -194,57 +212,195 @@ export default function UserAccountsPanel({ users, staffProfiles = [], managers 
   }
 
   const managingUser = users.find(u => u.id === managingUserId) || null
-  const managingStaffProfile = managingUser ? staffProfiles.find(sp => sp.user_id === managingUser.id) : null
+  const managingStaffProfile = managingUser ? staffProfilesByUserId[managingUser.id] : null
+
+  const roleFilterOptions = useMemo(
+    () => [{ value: 'all', label: 'All roles' }, ...availableRoleOptions.map(option => ({ value: option.value, label: option.label }))],
+    [availableRoleOptions]
+  )
+
+  const filteredUsers = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return users.filter(user => {
+      if (roleFilter !== 'all' && user.role !== roleFilter) return false
+      if (statusFilter === 'active' && user.status !== 'active') return false
+      if (statusFilter === 'suspended' && user.status === 'active') return false
+      if (!term) return true
+      const staffProfile = staffProfilesByUserId[user.id]
+      return [user.full_name, user.email, roleLabel(user.role), staffProfile?.assigned_region, staffProfile?.departments?.name]
+        .some(value => String(value || '').toLowerCase().includes(term))
+    })
+  }, [users, staffProfilesByUserId, search, statusFilter, roleFilter])
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const pageUsers = filteredUsers.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border p-6">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Owner / Employees</p>
+      <div className="mt-1 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2"><Shield className="w-5 h-5 text-accent" /> User Account Access</h2>
-          <p className="mt-1 text-xs text-gray-500">Deactivate inactive or departed staff so they can no longer access the system.</p>
+          <h1 className="text-4xl font-bold text-gray-900">Employees</h1>
+          <p className="text-gray-500 text-sm mt-1">{filteredUsers.length} of {users.length} employees</p>
         </div>
-        <button onClick={onAddUser} className="bg-accent hover:bg-accent-600 text-white px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 transition"><Plus className="w-3 h-3" /> Add User</button>
+        <button
+          onClick={onAddUser}
+          className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2.5 text-sm font-semibold text-white transition"
+        >
+          <Plus className="w-4 h-4" /> Add employee
+        </button>
       </div>
 
-      <div className="space-y-8">
-        {groupUsersByRole(users).map(([role, group]) => {
-          const meta = ROLE_META[role]
-          return (
-            <div key={role}>
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                <meta.icon className={`h-4 w-4 ${meta.avatarText}`} /> {meta.label}s
-                <span className="text-xs font-normal text-gray-400">({group.length})</span>
-              </h3>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-                {group.map(user => (
-                  <button
-                    key={user.id}
-                    type="button"
-                    onClick={() => setManagingUserId(user.id)}
-                    className={`flex flex-col items-center gap-2 rounded-xl border ${meta.ring} bg-white px-4 py-5 text-center shadow-sm transition hover:-translate-y-0.5 hover:shadow-md`}
-                  >
-                    <div className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {user.status === 'active' ? 'active' : 'inactive'}
-                    </div>
-
-                    <div className={`flex h-14 w-14 items-center justify-center rounded-full ${meta.avatarBg} ${meta.avatarText}`}>
-                      <meta.icon className="h-7 w-7" />
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center justify-center gap-1.5">
-                        <p className="max-w-[160px] truncate text-sm font-bold text-gray-900">{user.full_name}</p>
-                        {user.id === currentUserId && <span className="shrink-0 rounded-full bg-accent-100 px-1.5 py-0.5 text-[10px] font-medium text-accent-800">You</span>}
-                      </div>
-                      <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.avatarBg} ${meta.avatarText}`}>{roleLabel(user.role)}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="relative w-full sm:w-72">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by name or role..."
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-200"
+          />
+        </div>
+        <div className="inline-flex overflow-hidden rounded-lg border border-gray-200">
+          {STATUS_FILTERS.map(option => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setStatusFilter(option.value)}
+              className={`px-3.5 py-2 text-sm font-medium transition ${statusFilter === option.value ? 'bg-accent text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative sm:ml-auto">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen(open => !open)}
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+          >
+            <Filter className="w-4 h-4" /> Filters <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          </button>
+          {filtersOpen && (
+            <div className="absolute right-0 mt-1 w-48 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
+              <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Role</p>
+              {roleFilterOptions.map(option => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => { setRoleFilter(option.value); setFiltersOpen(false) }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${roleFilter === option.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
-          )
-        })}
-        {users.length === 0 && <p className="text-sm text-gray-400">No users found.</p>}
+          )}
+        </div>
+      </div>
+
+      <div className="mt-6 bg-white rounded-xl shadow-sm border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full table-fixed text-sm">
+            <colgroup>
+              <col className="w-[24%]" />
+              <col className="w-[20%]" />
+              <col className="w-[24%]" />
+              <col className="w-[16%]" />
+              <col className="w-[16%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <th className="px-3 py-2.5">Name</th>
+                <th className="px-3 py-2.5">Role</th>
+                <th className="px-3 py-2.5">Region</th>
+                <th className="px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {pageUsers.map(user => {
+                const staffProfile = staffProfilesByUserId[user.id]
+                const meta = metaFor(user.role)
+                const suspended = user.status !== 'active'
+                return (
+                  <tr key={user.id} className="transition hover:bg-gray-50">
+                    <td className="px-3 py-2.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${meta.avatarBg} ${meta.avatarText}`}>
+                          {avatarInitials(user.full_name)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-gray-900">
+                            {user.full_name}{user.id === currentUserId && <span className="ml-1.5 text-[10px] font-medium text-accent-600">You</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${meta.avatarBg} ${meta.avatarText}`}>{roleLabel(user.role)}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{staffProfile?.assigned_region || '—'}</span></td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${suspended ? 'bg-gray-100 text-gray-600' : 'border border-accent-500 text-accent-600'}`}>
+                        {suspended ? 'Suspended' : 'Active'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setManagingUserId(user.id)}
+                          aria-label={`View ${user.full_name}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-50"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setManagingUserId(user.id)}
+                          aria-label={`Edit ${user.full_name}`}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-50"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        {filteredUsers.length === 0 && (
+          <div className="p-8 text-center text-gray-400">
+            {users.length === 0 ? 'No employees found.' : 'No employees match these filters.'}
+          </div>
+        )}
+        {filteredUsers.length > 0 && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <span className="text-xs text-gray-500">Page {safePage} of {totalPages}</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {managingUser && (

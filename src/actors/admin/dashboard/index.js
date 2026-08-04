@@ -16,6 +16,7 @@ import PayRatesPanel from '../pay-rates/PayRatesPanel'
 import TimeOffRequestsPanel from '../timeoff/TimeOffRequestsPanel'
 import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 import DepartmentsPanel from '../departments/DepartmentsPanel'
+import StaffPanel from '../staff/StaffPanel'
 
 export default function AdminPanel() {
   const router = useRouter()
@@ -80,7 +81,7 @@ export default function AdminPanel() {
     const [profileResults, { data: systemParams }, { data: staff }, { data: departmentRows }] = await Promise.all([
       Promise.all(profileRequests),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
-      hostAdminId ? supabase.from('staff_profiles').select('id,user_id,manager_id,basic_salary').eq('host_admin_id', hostAdminId) : Promise.resolve({ data: [] }),
+      hostAdminId ? supabase.from('staff_profiles').select('id,user_id,manager_id,basic_salary,assigned_region,current_workload,performance_rating,department_id,departments(name)').eq('host_admin_id', hostAdminId) : Promise.resolve({ data: [] }),
       hostAdminId ? supabase.from('departments').select('id,name').eq('host_admin_id', hostAdminId).order('name') : Promise.resolve({ data: [] }),
     ])
 
@@ -141,7 +142,7 @@ export default function AdminPanel() {
   }, [user])
 
   useEffect(() => {
-    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'parameters', 'closures', 'reports', 'payrates', 'timeoff', 'departments']
+    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'parameters', 'closures', 'reports', 'payrates', 'timeoff', 'departments', 'staff']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
@@ -297,6 +298,7 @@ export default function AdminPanel() {
           {activeSection === 'payrates' && <PayRatesPanel />}
           {activeSection === 'timeoff' && <TimeOffRequestsPanel />}
           {activeSection === 'departments' && <DepartmentsPanel onChange={loadAdminData} />}
+          {activeSection === 'staff' && <StaffPanel />}
           {activeSection === 'closures' && (
             <>
               <SchedulingCutoffPanel />
