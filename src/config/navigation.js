@@ -1,10 +1,11 @@
-import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, Clock, DollarSign, FileText, Globe, History, LayoutDashboard, ListChecks, Megaphone, Settings, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
+import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, ClipboardPlus, Clock, DollarSign, FileText, Globe, History, LayoutDashboard, ListChecks, Megaphone, Settings, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
     { name: 'Staff', path: '/manager-staff', icon: Users },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
+    { name: 'New Task', path: '/manager-new-task', icon: ClipboardPlus },
     { name: 'Schedule', path: '/manager-schedule', icon: Calendar },
     { name: 'Time Off', path: '/manager-time-off', icon: CalendarOff },
     { name: 'My Attendance', path: '/manager-my-attendance', icon: Clock },

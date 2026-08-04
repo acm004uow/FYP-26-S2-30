@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, MapPin, UserCheck, Calendar, Sparkles, RefreshCw, Plus, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, Trash2, Eye } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, MapPin, UserCheck, Calendar, Sparkles, RefreshCw, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, Trash2, Eye } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
-import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
-import AddressFields from '../../../components/AddressFields'
-import TimeInput from '../../../components/TimeInput'
 
 const BOOKINGS_PAGE_SIZE = 8
 
@@ -59,11 +56,6 @@ function avatarColor(name) {
   let hash = 0
   for (let i = 0; i < (name || '').length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length]
-}
-
-const emptyNewBooking = {
-  customerEmail: '', guestName: '', serviceType: SERVICE_TYPES[0], location: '',
-  description: '', notes: '', scheduledDate: '', scheduledTime: '', estimatedHours: 2,
 }
 
 const statusColor = {
@@ -141,17 +133,6 @@ export default function BookingsReviewPanel() {
   const [rerunningId, setRerunningId] = useState(null)
   const [timeFilter, setTimeFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
-  const [showNewBooking, setShowNewBooking] = useState(false)
-  const [newBookingForm, setNewBookingForm] = useState(emptyNewBooking)
-  const [creatingBooking, setCreatingBooking] = useState(false)
-  const [generatingTask, setGeneratingTask] = useState(false)
-  const [generateError, setGenerateError] = useState('')
-  const [newBookingCoordinates, setNewBookingCoordinates] = useState(null)
-  const [recommendationPool, setRecommendationPool] = useState([])
-  const [recommendationParams, setRecommendationParams] = useState({})
-  const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
-  const [newBookingRecommendations, setNewBookingRecommendations] = useState([])
-  const [selectedNewBookingStaffId, setSelectedNewBookingStaffId] = useState('')
   const [hostAdminId, setHostAdminId] = useState(null)
   const [recurringBookings, setRecurringBookings] = useState([])
   const [recurringActionId, setRecurringActionId] = useState(null)
@@ -277,35 +258,6 @@ export default function BookingsReviewPanel() {
       if (timeOffChannel) supabase.removeChannel(timeOffChannel)
     }
   }, [])
-
-  useEffect(() => {
-    if (!showNewBooking || !newBookingForm.location) {
-      setNewBookingRecommendations([])
-      return
-    }
-    const excludedStaffIds = newBookingForm.scheduledDate
-      ? getExcludedStaffIdsForDate(newBookingForm.scheduledDate, approvedTimeOff)
-      : new Set()
-    const recommendations = generateRecommendations(
-      recommendationPool,
-      {
-        location: newBookingForm.location,
-        latitude: newBookingCoordinates?.latitude ?? null,
-        longitude: newBookingCoordinates?.longitude ?? null,
-        estimated_hours: newBookingForm.estimatedHours,
-        requested_text: `${newBookingForm.description || ''} ${newBookingForm.notes || ''}`,
-      },
-      recommendationParams,
-      excludedStaffIds
-    )
-    setNewBookingRecommendations(recommendations)
-  }, [showNewBooking, newBookingForm.location, newBookingCoordinates, newBookingForm.estimatedHours, newBookingForm.description, newBookingForm.notes, newBookingForm.scheduledDate, recommendationPool, recommendationParams, approvedTimeOff])
-
-  useEffect(() => {
-    if (!newBookingRecommendations.length) return
-    setSelectedNewBookingStaffId(prev => (prev && recommendationPool.some(staff => staff.id === prev) ? prev : newBookingRecommendations[0].staff_id))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newBookingRecommendations])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -544,178 +496,6 @@ export default function BookingsReviewPanel() {
     await loadBookings()
   }
 
-  const openNewTaskModal = async () => {
-    setShowNewBooking(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: managerProfile } = await supabase
-      .from('profiles')
-      .select('host_admin_id')
-      .eq('id', user?.id)
-      .single()
-    const hostAdminId = managerProfile?.host_admin_id
-    if (!hostAdminId) return
-
-    const [{ data: pool }, { data: params }, types] = await Promise.all([
-      supabase
-        .from('staff_profiles')
-        .select('id,staff_name,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
-        .eq('host_admin_id', hostAdminId)
-        .eq('is_suspended', false)
-        .eq('status', 'active'),
-      supabase.from('system_parameters').select('*').eq('id', 1).single(),
-      loadServiceTypes(supabase, hostAdminId),
-    ])
-    setRecommendationPool(pool || [])
-    setRecommendationParams(params || {})
-    setServiceTypes(types)
-    setNewBookingForm(prev => ({ ...prev, serviceType: types.includes(prev.serviceType) ? prev.serviceType : types[0] }))
-  }
-
-  const closeNewBookingModal = () => {
-    setShowNewBooking(false)
-    setNewBookingForm(emptyNewBooking)
-    setNewBookingCoordinates(null)
-    setGenerateError('')
-    setRecommendationPool([])
-    setRecommendationParams({})
-    setNewBookingRecommendations([])
-    setSelectedNewBookingStaffId('')
-  }
-
-  const handleGenerateDescription = async () => {
-    setGenerateError('')
-    if (!newBookingForm.guestName || !newBookingForm.location) {
-      setGenerateError('Please enter a customer name and location first, so the AI has something to work with.')
-      return
-    }
-
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session?.access_token) {
-      setGenerateError('Your session has expired. Please log in again.')
-      return
-    }
-
-    setGeneratingTask(true)
-    let response
-    let result
-    try {
-      response = await fetch('/api/agent/generate-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({
-          customerName: newBookingForm.guestName,
-          customerEmail: newBookingForm.customerEmail,
-          serviceType: newBookingForm.serviceType,
-          location: newBookingForm.location,
-          scheduledDate: newBookingForm.scheduledDate,
-          scheduledTime: newBookingForm.scheduledTime,
-          estimatedHours: newBookingForm.estimatedHours,
-        }),
-      })
-      result = await response.json()
-    } catch {
-      setGeneratingTask(false)
-      setGenerateError('Could not reach the server. Check your connection and try again.')
-      return
-    }
-    setGeneratingTask(false)
-
-    if (!response.ok) {
-      setGenerateError(result.error || 'Could not generate a description.')
-      return
-    }
-
-    setNewBookingForm(prev => ({ ...prev, description: result.description, notes: result.notes }))
-  }
-
-  const handleCreateBooking = async (event) => {
-    event.preventDefault()
-    if (!newBookingForm.guestName || !newBookingForm.location) {
-      showNotification('Please enter a customer name and location.')
-      return
-    }
-
-    const user = await getActiveManager()
-    if (!user) return
-
-    const { data: managerProfile } = await supabase
-      .from('profiles')
-      .select('host_admin_id')
-      .eq('id', user.id)
-      .single()
-    const hostAdminId = managerProfile?.host_admin_id
-    if (!hostAdminId) {
-      showNotification('Could not resolve your company.')
-      return
-    }
-
-    let customerId = null
-    if (newBookingForm.customerEmail) {
-      const { data: matchedCustomer } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('role', 'customer')
-        .eq('email', newBookingForm.customerEmail.trim().toLowerCase())
-        .maybeSingle()
-      customerId = matchedCustomer?.id || null
-    }
-
-    const assignedStaffId = selectedNewBookingStaffId || null
-
-    setCreatingBooking(true)
-    const { data: createdBooking, error } = await supabase.from('bookings').insert({
-      host_admin_id: hostAdminId,
-      customer_id: customerId,
-      guest_name: newBookingForm.guestName,
-      guest_contact: newBookingForm.customerEmail || null,
-      service_type: newBookingForm.serviceType,
-      location: newBookingForm.location,
-      latitude: newBookingCoordinates?.latitude ?? null,
-      longitude: newBookingCoordinates?.longitude ?? null,
-      description: newBookingForm.description,
-      notes: newBookingForm.notes,
-      scheduled_date: newBookingForm.scheduledDate || null,
-      scheduled_time: newBookingForm.scheduledTime || null,
-      estimated_hours: newBookingForm.estimatedHours || 2,
-      assigned_staff_id: assignedStaffId,
-      recommendation_reason: newBookingRecommendations.find(rec => rec.staff_id === assignedStaffId)?.reason || null,
-      // Manager/owner-created tasks are self-authorized — no separate approval step needed.
-      status: 'approved',
-      reviewed_by: user.id,
-      source: 'manager',
-      created_by: user.id,
-    }).select('id').single()
-    setCreatingBooking(false)
-
-    if (error) {
-      showNotification(error.message)
-      return
-    }
-
-    if (assignedStaffId) {
-      const staff = staffRows.find(item => item.id === assignedStaffId)
-      if (staff) {
-        await supabase
-          .from('staff_profiles')
-          .update({ current_workload: Number(staff.tasks || 0) + 1, updated_at: new Date().toISOString() })
-          .eq('id', staff.id)
-
-        if (staff.userId) {
-          await supabase.from('notifications').insert({
-            user_id: staff.userId,
-            title: 'New task assignment',
-            message: `${newBookingForm.serviceType} has been assigned to you.`,
-          })
-        }
-      }
-    }
-
-    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'manager_create_booking', details: `${newBookingForm.serviceType} (${createdBooking?.id || ''})` })
-    showNotification('Task created and approved.')
-    closeNewBookingModal()
-    await loadBookings()
-  }
-
   const statusLabel = (status) => status.replace('_', ' ').replace(/^\w/, c => c.toUpperCase())
 
   const isAiRecommended = (booking) => booking.status === 'pending' && !!booking.assigned_staff_id
@@ -776,13 +556,6 @@ export default function BookingsReviewPanel() {
             <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={openNewTaskModal}
-          className="flex items-center gap-1.5 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2 text-sm font-semibold text-white transition"
-        >
-          <Plus className="w-4 h-4" /> New Task
-        </button>
       </div>
       <div className="mt-4 mb-6 flex flex-wrap items-center gap-3">
         <div className="relative w-full sm:w-72">
@@ -1233,107 +1006,6 @@ export default function BookingsReviewPanel() {
           </>
         )
       })()}
-
-      {showNewBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <form onSubmit={handleCreateBooking} className="w-full max-w-lg rounded-xl bg-white p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">New Task</h3>
-              <button type="button" onClick={closeNewBookingModal} aria-label="Close"><X className="w-5 h-5 text-gray-400" /></button>
-            </div>
-            <p className="text-sm text-gray-500 mt-1">For walk-in or phone bookings. This still goes through the normal approve &amp; assign flow.</p>
-
-            <div className="space-y-3 mt-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700">Customer Name</label>
-                <input value={newBookingForm.guestName} onChange={e => setNewBookingForm({ ...newBookingForm, guestName: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Full name" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Customer Email (optional)</label>
-                <input type="email" value={newBookingForm.customerEmail} onChange={e => setNewBookingForm({ ...newBookingForm, customerEmail: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" placeholder="Links to an existing customer account, if any" />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Service Type</label>
-                <select value={newBookingForm.serviceType} onChange={e => setNewBookingForm({ ...newBookingForm, serviceType: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
-                  {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                </select>
-              </div>
-              <AddressFields
-                onLocationChange={location => setNewBookingForm(prev => ({ ...prev, location }))}
-                onCoordinatesChange={setNewBookingCoordinates}
-                compact
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Scheduled Date</label>
-                  <input type="date" value={newBookingForm.scheduledDate} onChange={e => setNewBookingForm({ ...newBookingForm, scheduledDate: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Scheduled Time</label>
-                  <TimeInput className="mt-1" value={newBookingForm.scheduledTime} onChange={value => setNewBookingForm({ ...newBookingForm, scheduledTime: value })} />
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Estimated Hours</label>
-                <input type="number" min="1" step="0.5" value={newBookingForm.estimatedHours} onChange={e => setNewBookingForm({ ...newBookingForm, estimatedHours: Number(e.target.value) })} className="mt-1 w-full border rounded-lg p-2 text-sm" />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Assign Staff
-                </label>
-                {newBookingForm.location ? (
-                  newBookingRecommendations.length > 0 ? (
-                    <>
-                      <select
-                        value={selectedNewBookingStaffId}
-                        onChange={e => setSelectedNewBookingStaffId(e.target.value)}
-                        className="mt-1 w-full border rounded-lg p-2 text-sm"
-                      >
-                        <option value="">— Unassigned (assign later) —</option>
-                        {newBookingRecommendations.map(rec => (
-                          <option key={rec.staff_id} value={rec.staff_id}>{rec.staff_name} — {rec.reason}</option>
-                        ))}
-                      </select>
-                      {selectedNewBookingStaffId && newBookingRecommendations[0]?.staff_id === selectedNewBookingStaffId && (
-                        <p className="mt-1 text-xs text-indigo-600 flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI-recommended top match</p>
-                      )}
-                    </>
-                  ) : (
-                    <p className="mt-1 text-xs text-gray-400">No strong staff match found yet — the task will be created unassigned.</p>
-                  )
-                ) : (
-                  <p className="mt-1 text-xs text-gray-400">Enter a location to see AI-recommended staff.</p>
-                )}
-              </div>
-
-              {generateError && <div className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{generateError}</div>}
-
-              <div>
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium text-gray-700">Description</label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateDescription}
-                    disabled={generatingTask}
-                    className="flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-600 hover:bg-purple-100 disabled:opacity-60"
-                  >
-                    <Sparkles className="w-3 h-3" /> {generatingTask ? 'Generating...' : 'Generate with AI'}
-                  </button>
-                </div>
-                <textarea value={newBookingForm.description} onChange={e => setNewBookingForm({ ...newBookingForm, description: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" rows={2} />
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-700">Notes</label>
-                <textarea value={newBookingForm.notes} onChange={e => setNewBookingForm({ ...newBookingForm, notes: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm" rows={2} />
-              </div>
-              <button type="submit" disabled={creatingBooking} className="w-full bg-accent hover:bg-accent-600 text-white py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition disabled:opacity-60">
-                <Plus className="w-4 h-4" /> {creatingBooking ? 'Creating...' : 'Create Task'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   )
 }

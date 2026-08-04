@@ -324,7 +324,7 @@ export default function StaffPanel() {
                 <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${pageSizeOpen ? 'rotate-180' : ''}`} />
               </button>
               {pageSizeOpen && (
-                <div className="absolute right-0 z-10 mt-1 w-28 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                <div className="absolute right-0 bottom-full z-20 mb-1 w-28 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
                   {PAGE_SIZE_OPTIONS.map(option => (
                     <button
                       key={option}

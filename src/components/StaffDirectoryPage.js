@@ -47,12 +47,12 @@ const staffDirectoryTheme = {
     pageActive: 'border-[#003333] bg-[#003333] text-white',
   },
   manager: {
-    iconSolid: 'bg-accent text-white',
-    soft: 'bg-accent-100 text-accent-600',
-    text: 'text-accent-600',
-    hoverBg: 'hover:bg-accent-100',
-    ring: 'focus:ring-accent-500',
-    pageActive: 'border-accent bg-accent text-white',
+    iconSolid: 'bg-[#003152] text-white',
+    soft: 'bg-[#E6F0F7] text-[#003152]',
+    text: 'text-[#003152]',
+    hoverBg: 'hover:bg-[#E6F0F7]',
+    ring: 'focus:ring-[#003152]',
+    pageActive: 'border-[#003152] bg-[#003152] text-white',
   },
 }
 
@@ -362,7 +362,7 @@ export default function StaffDirectoryPage({ role, breadcrumbLabel }) {
                   <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${pageSizeOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {pageSizeOpen && (
-                  <div className="absolute right-0 z-10 mt-1 w-28 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                  <div className="absolute right-0 bottom-full z-20 mb-1 w-28 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
                     {PAGE_SIZE_OPTIONS.map(option => (
                       <button
                         key={option}

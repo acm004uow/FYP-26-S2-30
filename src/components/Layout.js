@@ -36,7 +36,7 @@ const NAV_ICON_THEME = {
 const DEFAULT_NAV_ICON_THEME = { bg: 'bg-gray-100', icon: 'text-gray-500' }
 
 const SIDEBAR_ROLE_COLORS = {
-  manager: 'rgb(6, 57, 31)',
+  manager: '#003152',
   staffMember: '#07191E',
   departmentStaff: '#003333',
   admin: '#003152',
@@ -72,7 +72,7 @@ const NAV_LINK_ROLE_THEME = {
 
 const HEADER_ROLE_THEME = {
   manager: {
-    logo: 'bg-blue-600',
+    logo: 'bg-blue-900',
     profile: 'bg-blue-900',
   },
   staffMember: {
