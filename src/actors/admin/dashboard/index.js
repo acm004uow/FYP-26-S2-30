@@ -170,7 +170,7 @@ export default function AdminPanel() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ full_name, email, role, business_name: currentBusinessName || undefined, department_id: role === 'department_staff' ? department_id : undefined }),
+      body: JSON.stringify({ full_name, email, role, business_name: currentBusinessName || undefined, department_id: ['department_staff', 'staff_member'].includes(role) ? department_id : undefined }),
     })
     const result = await response.json()
     if (!response.ok) {
@@ -367,11 +367,13 @@ export default function AdminPanel() {
                   {roleOptions.filter(option => option.value !== 'system_admin').map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
-              {createForm.role === 'department_staff' && (
+              {['department_staff', 'staff_member'].includes(createForm.role) && (
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Department</label>
+                  <label className="text-sm font-medium text-gray-700">
+                    Department{createForm.role === 'staff_member' ? ' (optional)' : ''}
+                  </label>
                   <select value={createForm.department_id} onChange={e => setCreateForm({ ...createForm, department_id: e.target.value })} className="mt-1 w-full border rounded-lg p-2 text-sm">
-                    <option value="">Select a department...</option>
+                    <option value="">{createForm.role === 'staff_member' ? 'Unassigned' : 'Select a department...'}</option>
                     {departments.map(department => <option key={department.id} value={department.id}>{department.name}</option>)}
                   </select>
                   {departments.length === 0 && (

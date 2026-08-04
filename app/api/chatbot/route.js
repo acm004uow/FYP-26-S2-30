@@ -38,7 +38,6 @@ const compactTask = (task) => ({
 const compactStaff = (staff) => ({
   name: staff.staff_name,
   email: staff.email,
-  skills: staff.skills || [],
   region: staff.assigned_region,
   availability: staff.availability,
   workload: staff.current_workload || 0,
@@ -124,7 +123,7 @@ async function buildLiveContext(role, userId) {
       limit: '50',
     }),
     fetchSupabaseRows('staff_profiles', {
-      select: 'staff_name,email,skills,assigned_region,availability,current_workload,status,is_suspended,performance_rating',
+      select: 'staff_name,email,assigned_region,availability,current_workload,status,is_suspended,performance_rating',
       order: 'staff_name.asc',
       limit: '50',
     }),

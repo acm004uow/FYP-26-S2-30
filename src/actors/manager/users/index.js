@@ -79,7 +79,7 @@ export default function ManagerUserAccounts() {
     const [results, staffProfileResult] = await Promise.all([
       Promise.all(profileRequests),
       hostAdminId
-        ? supabase.from('staff_profiles').select('id,user_id,skills,assigned_region,current_workload,performance_rating').eq('host_admin_id', hostAdminId)
+        ? supabase.from('staff_profiles').select('id,user_id,assigned_region,current_workload,performance_rating,department_id,departments(name)').eq('host_admin_id', hostAdminId)
         : Promise.resolve({ data: [] }),
     ])
     const error = results.find(result => result.error)?.error
@@ -162,7 +162,7 @@ export default function ManagerUserAccounts() {
       if (statusFilter === 'suspended' && user.status === 'active') return false
       if (!term) return true
       const staffProfile = staffProfilesByUserId[user.id]
-      return [user.full_name, user.email, staffProfile?.assigned_region, ...(staffProfile?.skills || [])]
+      return [user.full_name, user.email, staffProfile?.assigned_region, staffProfile?.departments?.name]
         .some(value => String(value || '').toLowerCase().includes(term))
     })
   }, [users, staffProfilesByUserId, search, statusFilter, roleFilter])
@@ -279,7 +279,7 @@ export default function ManagerUserAccounts() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{staffProfile?.skills?.[0] || roleLabel(user.role)}</span></td>
+                      <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{staffProfile?.departments?.name || roleLabel(user.role)}</span></td>
                       <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{staffProfile?.assigned_region || '—'}</span></td>
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">{staffProfile ? `${staffProfile.current_workload || 0} tasks` : '—'}</td>
                       <td className="px-3 py-2.5 text-gray-600 whitespace-nowrap">

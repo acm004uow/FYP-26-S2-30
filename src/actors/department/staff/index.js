@@ -1,6 +1,6 @@
 import Layout from '../../../components/Layout'
 import { useEffect, useRef, useState } from 'react'
-import { Briefcase, ChevronDown, ChevronLeft, ChevronRight, Home, Layers, MoreVertical, Search, Sparkles, Star, Truck, Users } from 'lucide-react'
+import { Building2, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Search, Star, Users } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
 
@@ -12,16 +12,6 @@ const staffStatusMeta = {
 }
 
 const STATUS_FILTERS = ['All', 'Available', 'Busy', 'Time Off', 'On Leave']
-
-const DEPARTMENT_ICONS = {
-  'Home Cleaning': Home,
-  'Office Cleaning': Briefcase,
-  'Deep Cleaning': Sparkles,
-  'Move-Out Cleaning': Truck,
-  'Carpet Cleaning': Layers,
-}
-
-const departmentIcon = (name) => DEPARTMENT_ICONS[name] || Sparkles
 
 const PAGE_SIZE_OPTIONS = [5, 10, 25, 50]
 
@@ -79,7 +69,7 @@ export default function DepartmentStaff() {
 
     const { data: staff } = await supabase
       .from('staff_profiles')
-      .select('id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended,weekly_working_hours,max_weekly_hours')
+      .select('id,staff_name,availability,current_workload,performance_rating,status,is_suspended,weekly_working_hours,max_weekly_hours,department_id,departments(name)')
       .eq('host_admin_id', resolvedHostAdminId)
       .eq('status', 'active')
       .order('staff_name')
@@ -97,7 +87,7 @@ export default function DepartmentStaff() {
     setStaffRows((staff || []).map(row => ({
       id: row.id,
       name: row.staff_name,
-      department: row.skills?.[0] || 'General Cleaning',
+      department: row.departments?.name || 'Unassigned',
       status: row.is_suspended
         ? 'On Leave'
         : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
@@ -240,7 +230,6 @@ export default function DepartmentStaff() {
               <tbody className="divide-y divide-gray-50">
                 {pagedStaffRows.map(staff => {
                   const meta = staffStatusMeta[staff.status] || staffStatusMeta['On Leave']
-                  const DeptIcon = departmentIcon(staff.department)
                   return (
                     <tr key={staff.id} className="hover:bg-gray-50/60">
                       <td className="px-5 py-4">
@@ -257,7 +246,7 @@ export default function DepartmentStaff() {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2 text-gray-600">
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E6F2F2] text-[#005252]">
-                            <DeptIcon className="h-3.5 w-3.5" />
+                            <Building2 className="h-3.5 w-3.5" />
                           </span>
                           {staff.department}
                         </div>

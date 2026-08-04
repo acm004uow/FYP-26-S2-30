@@ -97,7 +97,7 @@ export async function POST(request) {
         .maybeSingle();
 
       if (!existingStaffProfile) {
-        await supabase.from("staff_profiles").insert({ user_id: user.id, host_admin_id: resolvedHostAdminId, staff_name: full_name, email, skills: [], status: "active" });
+        await supabase.from("staff_profiles").insert({ user_id: user.id, host_admin_id: resolvedHostAdminId, staff_name: full_name, email, department_id: department_id || null, status: "active" });
       }
     }
     await supabase.from("audit_logs").insert({ user_id: user.id, action: "invite_user_account", details: `${email} as ${role}` });

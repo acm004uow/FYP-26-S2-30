@@ -75,7 +75,7 @@ export default function ManagerDashboard() {
     const hostAdminId = managerProfile?.host_admin_id
 
     const [{ data: staff }, { data: tasks }] = await Promise.all([
-      supabase.from('staff_profiles').select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,assigned_region,status,is_suspended').eq('host_admin_id', hostAdminId).limit(8),
+      supabase.from('staff_profiles').select('id,user_id,staff_name,availability,current_workload,performance_rating,assigned_region,status,is_suspended').eq('host_admin_id', hostAdminId).limit(8),
       supabase.from('bookings').select('id,service_type,location,status,created_at,assigned_staff_id,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).order('created_at', { ascending: false }).limit(30),
     ])
 
@@ -114,7 +114,7 @@ export default function ManagerDashboard() {
         id: s.id,
         userId: s.user_id,
         name: s.staff_name,
-        role: s.skills?.[0] || 'Staff Member',
+        role: 'Staff Member',
         status: s.is_suspended ? 'On Leave' : s.availability === 'available' ? 'Available' : 'Busy',
         tasks: s.current_workload || 0,
         rating: s.performance_rating || 0,

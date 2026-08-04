@@ -76,7 +76,6 @@ create table if not exists staff_profiles (
   staff_name text not null,
   email text,
   phone text,
-  skills text[] default '{}',
   assigned_region text,
   availability availability_status default 'available',
   current_workload integer default 0,
@@ -100,6 +99,7 @@ alter table staff_profiles add column if not exists longitude double precision;
 -- allowance for completed tasks (hours x the task's service_type rate — see service_pay_rates
 -- below); both are surfaced together in the owner's Business Reports (Staff Pay Summary).
 alter table staff_profiles add column if not exists basic_salary numeric not null default 0;
+alter table staff_profiles add column if not exists department_id uuid references departments(id) on delete set null;
 
 -- Owner-configured hourly pay rate per service type, used to compute the allowance staff earn
 -- for completed tasks in that category (lib usage: src/actors/admin/reports/ReportsPanel.js).
@@ -614,8 +614,8 @@ begin
   on conflict (id) do nothing;
 
   if requested_role = 'staff_member' then
-    insert into public.staff_profiles (user_id, host_admin_id, staff_name, email, skills, status)
-    values (new.id, requested_host_admin_id, requested_name, new.email, '{}', 'active')
+    insert into public.staff_profiles (user_id, host_admin_id, staff_name, email, status)
+    values (new.id, requested_host_admin_id, requested_name, new.email, 'active')
     on conflict do nothing;
   end if;
 

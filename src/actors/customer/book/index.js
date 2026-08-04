@@ -256,7 +256,7 @@ export default function CustomerBooking() {
       const [{ data: staffRows }, { data: systemParams }] = await Promise.all([
         supabase
           .from('staff_profiles')
-          .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
+          .select('id,staff_name,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
           .eq('host_admin_id', form.companyId)
           .eq('is_suspended', false)
           .eq('status', 'active'),

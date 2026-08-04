@@ -92,7 +92,6 @@ export async function POST(request) {
             user_id,
             staff_name: targetProfile.full_name,
             email: targetProfile.email,
-            skills: [],
             status: "active",
           });
         }

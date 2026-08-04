@@ -119,13 +119,13 @@ export default function DepartmentTasks() {
         : Promise.resolve({ data: null }),
       supabase
         .from('staff_profiles')
-        .select('id,user_id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended')
+        .select('id,user_id,staff_name,availability,current_workload,performance_rating,status,is_suspended')
         .eq('host_admin_id', resolvedHostAdminId)
         .eq('status', 'active')
         .order('staff_name'),
       supabase
         .from('staff_profiles')
-        .select('id,staff_name,skills,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
+        .select('id,staff_name,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
         .eq('host_admin_id', resolvedHostAdminId)
         .eq('is_suspended', false)
         .eq('status', 'active'),
@@ -139,7 +139,6 @@ export default function DepartmentTasks() {
       id: row.id,
       userId: row.user_id,
       name: row.staff_name,
-      role: row.skills?.[0] || 'Staff Member',
       status: row.is_suspended
         ? 'On Leave'
         : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
