@@ -1,17 +1,29 @@
 import Layout from '../../../components/Layout'
-import { useEffect, useState } from 'react'
-import { ChevronDown, Filter, Search, Star, Users } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Briefcase, ChevronDown, ChevronLeft, ChevronRight, Home, Layers, MoreVertical, Search, Sparkles, Star, Truck, Users } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
 
-const staffStatusColor = {
-  Available: 'bg-green-100 text-green-700',
-  Busy: 'bg-blue-100 text-blue-700',
-  'Time Off': 'bg-amber-100 text-amber-700',
-  'On Leave': 'bg-gray-100 text-gray-600',
+const staffStatusMeta = {
+  Available: { dot: 'bg-green-500', pill: 'bg-green-100 text-green-700', bar: 'bg-green-500' },
+  Busy: { dot: 'bg-blue-500', pill: 'bg-blue-100 text-blue-700', bar: 'bg-blue-500' },
+  'Time Off': { dot: 'bg-purple-500', pill: 'bg-purple-100 text-purple-700', bar: 'bg-purple-500' },
+  'On Leave': { dot: 'bg-gray-400', pill: 'bg-gray-100 text-gray-600', bar: 'bg-gray-400' },
 }
 
-const STAFF_STATUS_FILTERS = ['All', 'Available', 'Busy', 'Time Off', 'On Leave']
+const STATUS_FILTERS = ['All', 'Available', 'Busy', 'Time Off', 'On Leave']
+
+const DEPARTMENT_ICONS = {
+  'Home Cleaning': Home,
+  'Office Cleaning': Briefcase,
+  'Deep Cleaning': Sparkles,
+  'Move-Out Cleaning': Truck,
+  'Carpet Cleaning': Layers,
+}
+
+const departmentIcon = (name) => DEPARTMENT_ICONS[name] || Sparkles
+
+const PAGE_SIZE_OPTIONS = [5, 10, 25, 50]
 
 // Deterministic per-name color so the same staff member always gets the same avatar color.
 const AVATAR_PALETTE = [
@@ -30,15 +42,29 @@ function avatarColor(name) {
   return AVATAR_PALETTE[hash % AVATAR_PALETTE.length]
 }
 
+function staffInitials(name) {
+  return (name || '?').split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()
+}
+
 export default function DepartmentStaff() {
   const { user } = useAuthUser()
   const [staffRows, setStaffRows] = useState([])
+  const [loading, setLoading] = useState(true)
   const [staffSearch, setStaffSearch] = useState('')
-  const [staffStatusFilter, setStaffStatusFilter] = useState('All')
-  const [staffFiltersOpen, setStaffFiltersOpen] = useState(false)
+  const [departmentFilter, setDepartmentFilter] = useState('All')
+  const [statusFilter, setStatusFilter] = useState('All')
+  const [departmentFilterOpen, setDepartmentFilterOpen] = useState(false)
+  const [statusFilterOpen, setStatusFilterOpen] = useState(false)
+  const [pageSize, setPageSize] = useState(5)
+  const [pageSizeOpen, setPageSizeOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const departmentFilterRef = useRef(null)
+  const statusFilterRef = useRef(null)
+  const pageSizeRef = useRef(null)
 
   const loadStaff = async () => {
     if (!user) return
+    setLoading(true)
     const { data: myProfile } = await supabase
       .from('profiles')
       .select('host_admin_id')
@@ -46,112 +72,293 @@ export default function DepartmentStaff() {
       .single()
 
     const resolvedHostAdminId = myProfile?.host_admin_id
-    if (!resolvedHostAdminId) return
+    if (!resolvedHostAdminId) {
+      setLoading(false)
+      return
+    }
 
     const { data: staff } = await supabase
       .from('staff_profiles')
-      .select('id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended')
+      .select('id,staff_name,skills,availability,current_workload,performance_rating,status,is_suspended,weekly_working_hours,max_weekly_hours')
       .eq('host_admin_id', resolvedHostAdminId)
       .eq('status', 'active')
       .order('staff_name')
 
+    const staffIds = (staff || []).map(row => row.id)
+    let reviewCounts = {}
+    if (staffIds.length) {
+      const { data: reviews } = await supabase.from('performance_reviews').select('staff_id').in('staff_id', staffIds)
+      reviewCounts = (reviews || []).reduce((acc, review) => {
+        acc[review.staff_id] = (acc[review.staff_id] || 0) + 1
+        return acc
+      }, {})
+    }
+
     setStaffRows((staff || []).map(row => ({
       id: row.id,
       name: row.staff_name,
-      role: row.skills?.[0] || 'Staff Member',
+      department: row.skills?.[0] || 'General Cleaning',
       status: row.is_suspended
         ? 'On Leave'
         : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
       tasks: row.current_workload || 0,
       rating: row.performance_rating || 0,
+      reviewCount: reviewCounts[row.id] || 0,
+      workloadPercent: Math.min(100, Math.round(((row.weekly_working_hours || 0) / (row.max_weekly_hours || 40)) * 100)),
     })))
+    setLoading(false)
   }
 
   useEffect(() => {
     loadStaff()
   }, [user])
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (departmentFilterRef.current && !departmentFilterRef.current.contains(event.target)) setDepartmentFilterOpen(false)
+      if (statusFilterRef.current && !statusFilterRef.current.contains(event.target)) setStatusFilterOpen(false)
+      if (pageSizeRef.current && !pageSizeRef.current.contains(event.target)) setPageSizeOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const departmentOptions = ['All', ...new Set(staffRows.map(staff => staff.department))]
+
   const visibleStaffRows = staffRows.filter(staff => {
-    if (staffSearch.trim() && !staff.name.toLowerCase().includes(staffSearch.trim().toLowerCase())) return false
-    if (staffStatusFilter !== 'All' && staff.status !== staffStatusFilter) return false
+    if (staffSearch.trim() && !staff.name.toLowerCase().includes(staffSearch.trim().toLowerCase()) && !staff.department.toLowerCase().includes(staffSearch.trim().toLowerCase())) return false
+    if (departmentFilter !== 'All' && staff.department !== departmentFilter) return false
+    if (statusFilter !== 'All' && staff.status !== statusFilter) return false
     return true
   })
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [staffSearch, departmentFilter, statusFilter, pageSize])
+
+  const totalCount = visibleStaffRows.length
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const safePage = Math.min(currentPage, totalPages)
+  const pagedStaffRows = visibleStaffRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const startIndex = totalCount === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const endIndex = Math.min(safePage * pageSize, totalCount)
+
   return (
     <Layout role="departmentStaff">
-      <div className="max-w-2xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="flex items-start gap-3 mb-6">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#003333] text-white">
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Department / Staff</p>
+            <p className="text-xs font-semibold uppercase tracking-wide">
+              <span className="text-[#005252]">Department</span>
+              <span className="text-gray-400"> / Staff</span>
+            </p>
             <h1 className="text-2xl font-bold text-gray-900">Available Staff</h1>
-            <p className="text-gray-500 mt-1">Browse the shared staff pool and their current availability and workload.</p>
+            <p className="text-gray-500 mt-1">Browse the shared staff pool, their workload, and performance.</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div className="p-5 border-b">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  value={staffSearch}
-                  onChange={e => setStaffSearch(e.target.value)}
-                  placeholder="Search staff..."
-                  className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-200"
-                />
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={staffSearch}
+              onChange={e => setStaffSearch(e.target.value)}
+              placeholder="Search staff by name or department..."
+              className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
+            />
+          </div>
+
+          <div className="relative" ref={departmentFilterRef}>
+            <button
+              type="button"
+              onClick={() => setDepartmentFilterOpen(open => !open)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              {departmentFilter === 'All' ? 'All Departments' : departmentFilter}
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${departmentFilterOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {departmentFilterOpen && (
+              <div className="absolute left-0 z-10 mt-1 w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                {departmentOptions.map(option => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => { setDepartmentFilter(option); setDepartmentFilterOpen(false) }}
+                    className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-[#E6F2F2] ${departmentFilter === option ? 'font-semibold text-[#005252]' : 'text-gray-700'}`}
+                  >
+                    {option === 'All' ? 'All Departments' : option}
+                  </button>
+                ))}
               </div>
-              <div className="relative">
+            )}
+          </div>
+
+          <div className="relative" ref={statusFilterRef}>
+            <button
+              type="button"
+              onClick={() => setStatusFilterOpen(open => !open)}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <span className={`h-2 w-2 rounded-full ${statusFilter === 'All' ? 'bg-gray-400' : staffStatusMeta[statusFilter]?.dot}`} />
+              {statusFilter === 'All' ? 'All Status' : statusFilter}
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${statusFilterOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {statusFilterOpen && (
+              <div className="absolute left-0 z-10 mt-1 w-40 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                {STATUS_FILTERS.map(option => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => { setStatusFilter(option); setStatusFilterOpen(false) }}
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-[#E6F2F2] ${statusFilter === option ? 'font-semibold text-[#005252]' : 'text-gray-700'}`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${option === 'All' ? 'bg-gray-400' : staffStatusMeta[option]?.dot}`} />
+                    {option === 'All' ? 'All Status' : option}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <th className="px-5 py-3">Staff Member</th>
+                  <th className="px-5 py-3">Department</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Workload</th>
+                  <th className="px-5 py-3">Rating</th>
+                  <th className="px-5 py-3 w-12" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {pagedStaffRows.map(staff => {
+                  const meta = staffStatusMeta[staff.status] || staffStatusMeta['On Leave']
+                  const DeptIcon = departmentIcon(staff.department)
+                  return (
+                    <tr key={staff.id} className="hover:bg-gray-50/60">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold ${avatarColor(staff.name)}`}>
+                            {staffInitials(staff.name)}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-gray-900">{staff.name}</p>
+                            <p className="text-xs text-gray-400">Team Member</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#E6F2F2] text-[#005252]">
+                            <DeptIcon className="h-3.5 w-3.5" />
+                          </span>
+                          {staff.department}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${meta.pill}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} /> {staff.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="mb-1 text-gray-700">{staff.tasks} active task{staff.tasks === 1 ? '' : 's'}</p>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-24 rounded-full bg-gray-100">
+                            <div className={`h-1.5 rounded-full ${meta.bar}`} style={{ width: `${staff.workloadPercent}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-400">{staff.workloadPercent}%</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="flex items-center gap-1 font-semibold text-gray-900">
+                          <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" /> {staff.rating.toFixed(1)}
+                        </p>
+                        <p className="text-xs text-gray-400">({staff.reviewCount} review{staff.reviewCount === 1 ? '' : 's'})</p>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button type="button" disabled className="inline-flex items-center justify-center rounded-lg p-2 text-gray-300" aria-label="No actions available">
+                          <MoreVertical className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {!loading && pagedStaffRows.length === 0 && (
+              <div className="p-10 text-center text-gray-400">
+                {staffRows.length === 0 ? 'No active staff found.' : 'No staff match this search or filter.'}
+              </div>
+            )}
+            {loading && <div className="p-10 text-center text-gray-400">Loading...</div>}
+          </div>
+
+          {!loading && totalCount > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-3">
+              <p className="text-sm text-gray-500">Showing {startIndex} to {endIndex} of {totalCount} staff</p>
+
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setStaffFiltersOpen(open => !open)}
-                  className="flex items-center gap-1 px-3 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                  onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                  disabled={safePage === 1}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <Filter className="w-4 h-4" /> <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-                {staffFiltersOpen && (
-                  <div className="absolute right-0 mt-1 w-36 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
-                    {STAFF_STATUS_FILTERS.map(option => (
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map(pageNumber => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNumber)}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-medium ${pageNumber === safePage ? 'border-[#003333] bg-[#003333] text-white' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                  disabled={safePage === totalPages}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="relative" ref={pageSizeRef}>
+                <button
+                  type="button"
+                  onClick={() => setPageSizeOpen(open => !open)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+                >
+                  {pageSize} per page
+                  <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${pageSizeOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {pageSizeOpen && (
+                  <div className="absolute right-0 z-10 mt-1 w-28 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+                    {PAGE_SIZE_OPTIONS.map(option => (
                       <button
                         key={option}
                         type="button"
-                        onClick={() => { setStaffStatusFilter(option); setStaffFiltersOpen(false) }}
-                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${staffStatusFilter === option ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
+                        onClick={() => { setPageSize(option); setPageSizeOpen(false) }}
+                        className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-[#E6F2F2] ${pageSize === option ? 'font-semibold text-[#005252]' : 'text-gray-700'}`}
                       >
-                        {option}
+                        {option} per page
                       </button>
                     ))}
                   </div>
                 )}
               </div>
             </div>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {visibleStaffRows.map(staff => (
-              <div key={staff.id} className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 ${avatarColor(staff.name)}`}>
-                    {staff.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-800 truncate">{staff.name}</p>
-                    <p className="text-xs text-gray-500 truncate">{staff.role} - {staff.tasks} active tasks</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${staffStatusColor[staff.status]}`}>{staff.status}</span>
-                    <span className="text-xs text-yellow-500 flex items-center gap-0.5"><Star className="w-3 h-3 fill-yellow-400" />{staff.rating}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {visibleStaffRows.length === 0 && (
-              <div className="p-8 text-center text-gray-400">
-                {staffRows.length === 0 ? 'No active staff found.' : 'No staff match this search or filter.'}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
     </Layout>

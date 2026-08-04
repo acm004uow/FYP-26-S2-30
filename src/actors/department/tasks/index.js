@@ -3,7 +3,7 @@ import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { Bell, Briefcase, ChevronDown, ChevronRight, ClipboardList, Clock, Home, Layers, Lightbulb, Sparkles, Trash2, Truck, UserCheck } from 'lucide-react'
+import { Bell, Briefcase, ChevronDown, ChevronRight, ChevronUp, ClipboardList, Clock, Filter, Home, Layers, Lightbulb, Search, Sparkles, Trash2, Truck, User, UserCheck } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
@@ -39,6 +39,36 @@ const SERVICE_TYPE_ICONS = {
 
 const serviceTypeIcon = (type) => SERVICE_TYPE_ICONS[type] || ClipboardList
 
+const STAFF_STATUS_FILTERS = ['All', 'Available', 'Busy', 'Time Off', 'On Leave']
+
+const staffStatusMeta = {
+  Available: { dot: 'bg-green-500', text: 'text-green-600' },
+  Busy: { dot: 'bg-orange-500', text: 'text-orange-600' },
+  'Time Off': { dot: 'bg-purple-500', text: 'text-purple-600' },
+  'On Leave': { dot: 'bg-gray-400', text: 'text-gray-500' },
+}
+
+// Deterministic per-name color so the same staff member always gets the same avatar color.
+const AVATAR_PALETTE = [
+  'bg-purple-100 text-purple-700',
+  'bg-green-100 text-green-700',
+  'bg-teal-100 text-teal-700',
+  'bg-orange-100 text-orange-700',
+  'bg-indigo-100 text-indigo-700',
+  'bg-pink-100 text-pink-700',
+  'bg-blue-100 text-blue-700',
+]
+
+function avatarColor(name) {
+  let hash = 0
+  for (let i = 0; i < (name || '').length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return AVATAR_PALETTE[hash % AVATAR_PALETTE.length]
+}
+
+function staffInitials(name) {
+  return (name || '?').split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()
+}
+
 export default function DepartmentTasks() {
   const { user } = useAuthUser()
   const [hostAdminId, setHostAdminId] = useState(null)
@@ -57,7 +87,12 @@ export default function DepartmentTasks() {
   const [creating, setCreating] = useState(false)
   const [urgencyOpen, setUrgencyOpen] = useState(false)
   const [formResetKey, setFormResetKey] = useState(0)
+  const [staffPickerOpen, setStaffPickerOpen] = useState(false)
+  const [staffFilterOpen, setStaffFilterOpen] = useState(false)
+  const [staffSearch, setStaffSearch] = useState('')
+  const [staffStatusFilter, setStaffStatusFilter] = useState('All')
   const urgencyRef = useRef(null)
+  const staffPickerRef = useRef(null)
 
   const showNotification = (message) => {
     setNotification(message)
@@ -126,10 +161,21 @@ export default function DepartmentTasks() {
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (urgencyRef.current && !urgencyRef.current.contains(event.target)) setUrgencyOpen(false)
+      if (staffPickerRef.current && !staffPickerRef.current.contains(event.target)) {
+        setStaffPickerOpen(false)
+        setStaffFilterOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (!staffPickerOpen) {
+      setStaffSearch('')
+      setStaffStatusFilter('All')
+    }
+  }, [staffPickerOpen])
 
   useEffect(() => {
     if (!form.location) {
@@ -249,6 +295,12 @@ export default function DepartmentTasks() {
   }
 
   const SelectedServiceIcon = serviceTypeIcon(form.serviceType)
+  const selectedStaff = staffRows.find(staff => staff.id === selectedStaffId) || null
+  const visibleStaffRows = staffRows.filter(staff => {
+    if (staffSearch.trim() && !staff.name.toLowerCase().includes(staffSearch.trim().toLowerCase())) return false
+    if (staffStatusFilter !== 'All' && staff.status !== staffStatusFilter) return false
+    return true
+  })
 
   return (
     <Layout role="departmentStaff">
@@ -266,15 +318,21 @@ export default function DepartmentTasks() {
         {notification && <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#BFE0E0] bg-[#E6F2F2] p-3 text-[#003333]"><Bell className="w-4 h-4" />{notification}</div>}
 
         <form onSubmit={handleCreateTask} className="bg-white rounded-2xl shadow-sm border p-6 space-y-5">
-          <div className="flex items-start gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F2F2] text-[#005252]">
-              <ClipboardList className="w-5 h-5" />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#E6F2F2] text-[#005252]">
+                <ClipboardList className="w-5 h-5" />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-gray-900">New Task</h1>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {departmentName ? `${departmentName} — ` : ''}Provide task details and assign to the right staff.
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">New Task</h1>
-              <p className="text-sm text-gray-500 mt-0.5">
-                {departmentName ? `${departmentName} — ` : ''}Provide task details and assign to the right staff.
-              </p>
+            <div className="flex items-start gap-2 rounded-lg border border-[#BFE0E0] bg-[#E6F2F2] p-3 text-sm text-[#003333] sm:max-w-xs shrink-0">
+              <Lightbulb className="w-4 h-4 mt-0.5 shrink-0" />
+              <span>Tip: The more details you provide, the better AI can match the right staff.</span>
             </div>
           </div>
 
@@ -291,47 +349,6 @@ export default function DepartmentTasks() {
                 >
                   {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
                 </select>
-              </div>
-            </div>
-            <div className="flex items-start gap-2 rounded-lg border border-[#BFE0E0] bg-[#E6F2F2] p-3 text-sm text-[#003333] self-end">
-              <Lightbulb className="w-4 h-4 mt-0.5 shrink-0" />
-              <span>Tip: The more details you provide, the better AI can match the right staff.</span>
-            </div>
-          </div>
-
-          <AddressFields
-            key={formResetKey}
-            onLocationChange={location => setForm(prev => ({ ...prev, location }))}
-            onCoordinatesChange={setCoordinates}
-            compact
-          />
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Scheduled Date <span className="text-red-500">*</span></label>
-              <input required type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]" />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Scheduled Time</label>
-              <TimeInput className="mt-1" value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Estimated Hours <span className="text-red-500">*</span></label>
-              <div className="relative mt-1">
-                <Clock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  required
-                  type="number"
-                  min="1"
-                  step="0.5"
-                  value={form.estimatedHours}
-                  onChange={e => setForm({ ...form, estimatedHours: Number(e.target.value) })}
-                  className="w-full rounded-lg border border-gray-200 p-2 pl-9 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
-                />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">hours</span>
               </div>
             </div>
             <div>
@@ -367,6 +384,40 @@ export default function DepartmentTasks() {
             </div>
           </div>
 
+          <AddressFields
+            key={formResetKey}
+            onLocationChange={location => setForm(prev => ({ ...prev, location }))}
+            onCoordinatesChange={setCoordinates}
+            compact
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700">Scheduled Date <span className="text-red-500">*</span></label>
+              <input required type="date" value={form.scheduledDate} onChange={e => setForm({ ...form, scheduledDate: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]" />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Scheduled Time</label>
+              <TimeInput className="mt-1" value={form.scheduledTime} onChange={value => setForm({ ...form, scheduledTime: value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-700">Estimated Hours <span className="text-red-500">*</span></label>
+              <div className="relative mt-1">
+                <Clock className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  required
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={form.estimatedHours}
+                  onChange={e => setForm({ ...form, estimatedHours: Number(e.target.value) })}
+                  className="w-full rounded-lg border border-gray-200 p-2 pl-9 pr-14 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">hours</span>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="text-sm font-medium text-gray-700">Description (optional)</label>
             <div className="relative mt-1">
@@ -386,21 +437,107 @@ export default function DepartmentTasks() {
             <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-[#005252]" /> Assign Staff
             </label>
-            <select
-              value={selectedStaffId}
-              onChange={e => setSelectedStaffId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
-            >
-              <option value="">— Unassigned (assign later) —</option>
-              {staffRows.map(staff => {
-                const rec = recommendations.find(item => item.staff_id === staff.id)
-                return (
-                  <option key={staff.id} value={staff.id} disabled={!staff.canAssign}>
-                    {staff.name} ({staff.status}) - {staff.tasks} active tasks{rec ? ` — ${rec.reason}` : ''}
-                  </option>
-                )
-              })}
-            </select>
+            <div className="relative mt-1" ref={staffPickerRef}>
+              <button
+                type="button"
+                onClick={() => setStaffPickerOpen(open => !open)}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg border p-2.5 text-sm text-left transition focus:outline-none ${staffPickerOpen ? 'border-[#005252] ring-2 ring-[#005252]/30' : 'border-gray-200'}`}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {selectedStaff ? (
+                    <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarColor(selectedStaff.name)}`}>
+                      {staffInitials(selectedStaff.name)}
+                    </span>
+                  ) : (
+                    <User className="h-4 w-4 shrink-0 text-gray-400" />
+                  )}
+                  <span className="truncate font-medium text-gray-900">{selectedStaff ? selectedStaff.name : '— Unassigned (assign later) —'}</span>
+                </span>
+                {staffPickerOpen ? <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" /> : <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />}
+              </button>
+
+              {staffPickerOpen && (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                  <div className="flex items-center gap-2 border-b border-gray-100 p-3">
+                    <div className="relative flex-1">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <input
+                        autoFocus
+                        value={staffSearch}
+                        onChange={e => setStaffSearch(e.target.value)}
+                        placeholder="Search staff by name..."
+                        className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
+                      />
+                    </div>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setStaffFilterOpen(open => !open)}
+                        className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
+                      >
+                        <Filter className="h-4 w-4" />
+                      </button>
+                      {staffFilterOpen && (
+                        <div className="absolute right-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                          {STAFF_STATUS_FILTERS.map(option => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => { setStaffStatusFilter(option); setStaffFilterOpen(false) }}
+                              className={`w-full px-3 py-2 text-left text-sm hover:bg-[#E6F2F2] ${staffStatusFilter === option ? 'font-semibold text-[#005252]' : 'text-gray-700'}`}
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedStaffId(''); setStaffPickerOpen(false) }}
+                      className="w-full border-b border-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                      — Unassigned (assign later) —
+                    </button>
+                    {visibleStaffRows.map(staff => {
+                      const rec = recommendations.find(item => item.staff_id === staff.id)
+                      const meta = staffStatusMeta[staff.status] || staffStatusMeta['On Leave']
+                      return (
+                        <button
+                          key={staff.id}
+                          type="button"
+                          disabled={!staff.canAssign}
+                          onClick={() => { setSelectedStaffId(staff.id); setStaffPickerOpen(false) }}
+                          className={`flex w-full items-center gap-3 border-b border-gray-50 px-4 py-3 text-left last:border-0 ${
+                            staff.canAssign ? 'hover:bg-gray-50' : 'cursor-not-allowed opacity-50'
+                          } ${selectedStaffId === staff.id ? 'bg-[#E6F2F2]' : ''}`}
+                          title={staff.canAssign ? undefined : 'Only available active staff can be assigned'}
+                        >
+                          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarColor(staff.name)}`}>
+                            {staffInitials(staff.name)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate text-sm font-semibold text-gray-900">{staff.name}</span>
+                              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
+                              <span className={`shrink-0 text-xs font-medium ${meta.text}`}>{staff.status}</span>
+                            </span>
+                            {rec && <span className="mt-0.5 block truncate text-xs text-[#005252]">AI match: {rec.reason}</span>}
+                          </span>
+                          <span className={`shrink-0 text-sm ${staff.canAssign ? 'text-gray-500' : 'text-gray-300'}`}>{staff.tasks} active tasks</span>
+                        </button>
+                      )
+                    })}
+                    {visibleStaffRows.length === 0 && (
+                      <div className="p-6 text-center text-sm text-gray-400">No staff match this search or filter.</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             {selectedStaffId && recommendations[0]?.staff_id === selectedStaffId ? (
               <p className="mt-1 text-xs text-[#005252] flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI-recommended top match</p>
             ) : !form.location ? (
