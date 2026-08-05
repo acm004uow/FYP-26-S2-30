@@ -1,7 +1,7 @@
 import Layout from '../../../components/Layout'
 import TimeInput from '../../../components/TimeInput'
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Calendar, CheckCircle, CheckSquare, Filter, Info, Loader2, MapPin, PenLine, RefreshCw, Send, Sparkles, User, Wand2, X, XCircle } from 'lucide-react'
+import { Bot, Calendar, CheckCircle, CheckSquare, Filter, Info, Loader2, MapPin, RefreshCw, Send, ShieldCheck, Sparkles, User, Wand2, X, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking, rejectBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
 import { fetchApprovedTimeOffClient, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
@@ -551,23 +551,23 @@ export default function ManagerAiAgent() {
                     </div>
                   </div>
                   <h3 className="font-semibold text-gray-900">No proposed schedule yet</h3>
-                  <p className="text-sm text-gray-400 mt-1">Ask the agent to create a schedule to see this week&apos;s bookings here.</p>
+                  <p className="text-sm text-gray-400 mt-1">Ask the agent to create a schedule to see this week&apos;s assignments here.</p>
 
                   <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
                     <div className="rounded-lg border border-gray-100 p-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-100 text-accent-600 mb-2"><RefreshCw className="w-4 h-4" /></div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 text-purple-600 mb-2"><RefreshCw className="w-4 h-4" /></div>
                       <p className="text-sm font-medium text-gray-800">Smart matching</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Considers availability, skills, and workload</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Considers availability, skills, and workload to find the best fit.</p>
                     </div>
                     <div className="rounded-lg border border-gray-100 p-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 text-teal-600 mb-2"><PenLine className="w-4 h-4" /></div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600 mb-2"><ShieldCheck className="w-4 h-4" /></div>
                       <p className="text-sm font-medium text-gray-800">Conflict prevention</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Avoids overlaps and rule violations</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Avoids overlaps, rule violations, and overtime issues.</p>
                     </div>
                     <div className="rounded-lg border border-gray-100 p-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 text-green-600 mb-2"><CheckSquare className="w-4 h-4" /></div>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-100 text-accent-600 mb-2"><CheckSquare className="w-4 h-4" /></div>
                       <p className="text-sm font-medium text-gray-800">Easy to review</p>
-                      <p className="text-xs text-gray-400 mt-0.5">Approve, edit, or reassign with ease</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Approve, edit, or reassign with ease.</p>
                     </div>
                   </div>
                 </div>
