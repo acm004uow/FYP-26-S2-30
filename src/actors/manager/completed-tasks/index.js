@@ -1,8 +1,10 @@
 import Layout from '../../../components/Layout'
 import { Fragment, useEffect, useState } from 'react'
-import { AlertTriangle, Calendar, CheckCircle2, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
+import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
+
+const PAGE_SIZE = 5
 
 function initials(name) {
   return String(name || '?')
@@ -44,6 +46,7 @@ export default function ManagerCompletedTasks() {
   const [activeTaskId, setActiveTaskId] = useState(null)
   const [hoverRating, setHoverRating] = useState(0)
   const [resolvingId, setResolvingId] = useState(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const loadCompletedTasks = async () => {
     if (!user) return
@@ -165,6 +168,10 @@ export default function ManagerCompletedTasks() {
   const activeTask = completedTasks.find(task => task.id === activeTaskId) || null
   const activeDraft = activeTask ? (reviewDrafts[activeTask.id] || { rating: '', feedback: '' }) : null
 
+  const totalPages = Math.max(1, Math.ceil(completedTasks.length / PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const pagedTasks = completedTasks.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   return (
     <Layout role="manager">
       <div className="max-w-6xl mx-auto px-4 py-8">
@@ -188,7 +195,7 @@ export default function ManagerCompletedTasks() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {completedTasks.map(task => {
+                {pagedTasks.map(task => {
                   const proof = task.task_proofs?.[0]
                   const review = task.performance_reviews?.[0]
                   const theme = review?.rating ? ratingTheme(Number(review.rating)) : null
@@ -281,6 +288,44 @@ export default function ManagerCompletedTasks() {
             </table>
             {completedTasks.length === 0 && <div className="p-10 text-center text-gray-400">No completed tasks yet.</div>}
           </div>
+
+          {totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-3">
+              <p className="text-sm text-gray-500">
+                Showing {(safePage - 1) * PAGE_SIZE + 1} to {Math.min(safePage * PAGE_SIZE, completedTasks.length)} of {completedTasks.length} tasks
+              </p>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                  disabled={safePage === 1}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Previous page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                {Array.from({ length: totalPages }, (_, index) => index + 1).map(pageNumber => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNumber)}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg border text-sm font-medium ${pageNumber === safePage ? 'border-accent-600 bg-accent-600 text-white' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                  disabled={safePage === totalPages}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Next page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
