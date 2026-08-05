@@ -548,9 +548,6 @@ export default function BookingsReviewPanel() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
-            <Sparkles className="w-5 h-5" />
-          </div>
           <div>
             <h1 className="text-2xl font-bold">Bookings for Review</h1>
             <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
@@ -564,7 +561,7 @@ export default function BookingsReviewPanel() {
             value={bookingSearch}
             onChange={e => setBookingSearch(e.target.value)}
             placeholder="Search bookings..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent-200"
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#003152]"
           />
         </div>
         <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-gray-200">

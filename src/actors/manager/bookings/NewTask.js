@@ -664,7 +664,7 @@ export default function ManagerNewTask() {
             <button
               type="submit"
               disabled={creating}
-              className="inline-flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-600 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:ring-offset-2 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#00243d] focus:outline-none focus:ring-2 focus:ring-[#003152] focus:ring-offset-2 disabled:opacity-60"
             >
               <UserCheck className="w-4 h-4" /> {creating ? 'Creating...' : 'Create & Assign Task'} <ChevronRight className="w-4 h-4" />
             </button>

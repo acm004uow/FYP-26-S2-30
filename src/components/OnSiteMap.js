@@ -23,16 +23,28 @@ function escapeHtml(value) {
   }[char]))
 }
 
+const TILE_LAYERS = {
+  map: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
+  },
+}
+
 // Built with plain Leaflet rather than react-leaflet: react-leaflet's
 // <MapContainer> measures its container on mount, and inside a CSS grid cell
 // that can happen before the grid has settled on a final size, leaving the
 // map permanently stuck at 0x0 (blank white box, no tiles). Owning the
 // L.map() instance directly lets us force a re-measure (invalidateSize)
 // once the layout has painted.
-export default function OnSiteMap({ points }) {
+export default function OnSiteMap({ points, satellite = false }) {
   const containerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef([])
+  const tileLayerRef = useRef(null)
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -42,9 +54,6 @@ export default function OnSiteMap({ points }) {
       zoom: 12,
       scrollWheelZoom: true,
     })
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    }).addTo(map)
     mapRef.current = map
 
     const raf = requestAnimationFrame(() => map.invalidateSize())
@@ -55,6 +64,16 @@ export default function OnSiteMap({ points }) {
       mapRef.current = null
     }
   }, [])
+
+  // Swaps the tile layer instead of recreating the map so toggling map/satellite
+  // doesn't reset the current pan/zoom position.
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    const layer = satellite ? TILE_LAYERS.satellite : TILE_LAYERS.map
+    if (tileLayerRef.current) map.removeLayer(tileLayerRef.current)
+    tileLayerRef.current = L.tileLayer(layer.url, { attribution: layer.attribution, maxZoom: 19 }).addTo(map)
+  }, [satellite])
 
   useEffect(() => {
     const map = mapRef.current
