@@ -1,7 +1,28 @@
-import { useEffect, useState } from 'react'
-import { Award, CalendarDays, CalendarRange, CheckCircle2, ChevronRight, ClipboardList, Clock, DollarSign, Download, FileText, Printer, Star, Sun, TrendingUp, Users, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Award, CalendarDays, CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, DollarSign, Download, FileText, Printer, Star, Sun, TrendingUp, Users, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatDuration } from '../../../../lib/attendance'
+import { getPeriodRange, getPreviousPeriodRange } from '../../../../lib/reportPeriods'
+import ReportInsights from '../../../components/ReportInsights'
+
+const DELTA_SUFFIX = { daily: 'vs yesterday', weekly: 'vs last week', monthly: 'vs last month' }
+
+function pctDelta(current, previous) {
+  if (previous === null || previous === undefined || current === null || current === undefined) return null
+  if (previous === 0) return current > 0 ? 100 : 0
+  return Math.round(((current - previous) / previous) * 100)
+}
+
+function DeltaBadge({ value, suffix, unit = '%' }) {
+  if (value === null || value === undefined) return null
+  const positive = value > 0
+  const flat = value === 0
+  return (
+    <p className={`mt-2 text-[11px] font-medium ${flat ? 'text-gray-400' : positive ? 'text-green-600' : 'text-red-500'}`}>
+      {flat ? '±0' : positive ? `+${value}` : value}{unit === '%' ? '%' : unit ? ` ${unit}` : ''} {suffix} {!flat && (positive ? '↑' : '↓')}
+    </p>
+  )
+}
 
 const REPORT_TYPES = [
   { value: 'daily', label: 'Daily', icon: Sun },
@@ -17,7 +38,7 @@ const STAT_THEME = {
   yellow: { bg: 'bg-yellow-50', icon: 'text-yellow-500', value: 'text-gray-900' },
 }
 
-function StatCard({ icon: Icon, label, value, caption, theme = 'blue', size = 'lg' }) {
+function StatCard({ icon: Icon, label, value, caption, theme = 'blue', size = 'lg', delta, deltaSuffix, deltaUnit }) {
   const t = STAT_THEME[theme]
   return (
     <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition hover:shadow-md">
@@ -31,6 +52,7 @@ function StatCard({ icon: Icon, label, value, caption, theme = 'blue', size = 'l
         </div>
       </div>
       {caption && <p className="mt-2 text-xs text-gray-400">{caption}</p>}
+      <DeltaBadge value={delta} suffix={deltaSuffix} unit={deltaUnit} />
     </div>
   )
 }
@@ -77,6 +99,8 @@ function DetailModal({ title, subtitle, onClose, children }) {
 // manager_id set to the viewer.
 export default function ReportsPanel() {
   const [reportType, setReportType] = useState('daily')
+  const [periodOffset, setPeriodOffset] = useState(0)
+  const [periodLabel, setPeriodLabel] = useState('')
   const [data, setData] = useState(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
@@ -84,6 +108,14 @@ export default function ReportsPanel() {
   const [viewingPayName, setViewingPayName] = useState(null)
   const [payFilter, setPayFilter] = useState('all')
   const [attendanceFilter, setAttendanceFilter] = useState('all')
+  const [insights, setInsights] = useState([])
+  const [insightsLoading, setInsightsLoading] = useState(false)
+  const [insightsError, setInsightsError] = useState('')
+  const detailsRef = useRef(null)
+
+  useEffect(() => {
+    setPeriodOffset(0)
+  }, [reportType])
 
   const reportLabel = reportType.charAt(0).toUpperCase() + reportType.slice(1)
   const payColumnLabel = reportType === 'daily' ? "Today's Pay" : reportType === 'weekly' ? "This Week's Pay" : "This Month's Pay"
@@ -132,19 +164,45 @@ export default function ReportsPanel() {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;')
 
+  const loadInsights = async (metrics) => {
+    setInsightsLoading(true)
+    setInsightsError('')
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData?.session?.access_token
+      const res = await fetch('/api/reports/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reportLabel: reportType, scope: 'owner', metrics }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Could not generate insights.')
+      setInsights(json.insights || [])
+    } catch (err) {
+      setInsights([])
+      setInsightsError(err.message || 'Insights unavailable right now.')
+    } finally {
+      setInsightsLoading(false)
+    }
+  }
+
   const generate = async () => {
     setLoading(true)
-    const days = reportType === 'daily' ? 1 : reportType === 'weekly' ? 7 : 30
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    const period = getPeriodRange(reportType, periodOffset)
+    const prevPeriod = getPreviousPeriodRange(reportType, periodOffset)
+    setPeriodLabel(period.label)
+    const since = period.start.toISOString()
     const { data: { user } } = await supabase.auth.getUser()
     const hostAdminId = await resolveHostAdminId(user?.id)
 
-    const [{ data: tasks }, { data: staff }, { data: reviews }, { data: allStaff }, { data: payRates }] = await Promise.all([
-      supabase.from('bookings').select('status,service_type,assigned_staff_id,estimated_hours,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).gte('created_at', since),
+    const [{ data: tasks }, { data: staff }, { data: reviews }, { data: allStaff }, { data: payRates }, { data: prevTasks }, { data: prevReviews }] = await Promise.all([
+      supabase.from('bookings').select('status,service_type,assigned_staff_id,estimated_hours,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).gte('created_at', period.start.toISOString()).lt('created_at', period.end.toISOString()),
       supabase.from('staff_profiles').select('id,staff_name,current_workload,basic_salary').eq('host_admin_id', hostAdminId),
-      supabase.from('performance_reviews').select('rating').gte('created_at', since),
+      supabase.from('performance_reviews').select('rating').gte('created_at', period.start.toISOString()).lt('created_at', period.end.toISOString()),
       supabase.from('staff_profiles').select('id,user_id,staff_name').eq('host_admin_id', hostAdminId),
       supabase.from('service_pay_rates').select('service_type,hourly_rate').eq('host_admin_id', hostAdminId),
+      supabase.from('bookings').select('status,assigned_staff_id').eq('host_admin_id', hostAdminId).gte('created_at', prevPeriod.start.toISOString()).lt('created_at', prevPeriod.end.toISOString()),
+      supabase.from('performance_reviews').select('rating').gte('created_at', prevPeriod.start.toISOString()).lt('created_at', prevPeriod.end.toISOString()),
     ])
 
     let attendanceSummary = []
@@ -221,28 +279,61 @@ export default function ReportsPanel() {
       }
     })
 
+    const efficiencyPct = totalTasks ? Math.round((completed / totalTasks) * 100) : 0
+    const staffUtilizationPct = staffRows.length ? Math.round((taskRows.filter(task => task.assigned_staff_id).length / staffRows.length) * 100) : 0
+    const totalPayroll = paySummary.reduce((sum, row) => sum + row.totalPay, 0)
+
+    const prevTaskRows = prevTasks || []
+    const prevCompleted = prevTaskRows.filter(task => task.status === 'completed').length
+    const prevTotalTasks = prevTaskRows.length
+    const prevEfficiencyPct = prevTotalTasks ? Math.round((prevCompleted / prevTotalTasks) * 100) : null
+    const prevStaffUtilizationPct = staffRows.length ? Math.round((prevTaskRows.filter(task => task.assigned_staff_id).length / staffRows.length) * 100) : null
+    const prevAvgRating = prevReviews?.length ? prevReviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / prevReviews.length : null
+
     setData({
       totalTasks,
+      totalTasksDelta: pctDelta(totalTasks, prevTotalTasks),
       completed,
+      completedDelta: pctDelta(completed, prevCompleted),
       pending: taskRows.filter(task => task.status === 'pending').length,
-      efficiency: totalTasks ? `${Math.round((completed / totalTasks) * 100)}%` : '0%',
-      staffUtilization: staffRows.length ? `${Math.round((taskRows.filter(task => task.assigned_staff_id).length / staffRows.length) * 100)}%` : '0%',
+      efficiency: `${efficiencyPct}%`,
+      efficiencyDelta: prevTotalTasks ? efficiencyPct - prevEfficiencyPct : null,
+      staffUtilization: `${staffUtilizationPct}%`,
+      staffUtilizationDelta: prevStaffUtilizationPct !== null ? staffUtilizationPct - prevStaffUtilizationPct : null,
       topStaff: topEntry ? `${topEntry[0]} (${topEntry[1]} tasks)` : 'No assigned tasks',
       avgRating,
+      avgRatingDelta: prevAvgRating !== null ? Number((Number(avgRating) - prevAvgRating).toFixed(1)) : null,
       tasksByCategory: Object.keys(tasksByCategory).length ? tasksByCategory : { General: 0 },
       attendanceSummary,
       paySummary,
-      totalPayroll: paySummary.reduce((sum, row) => sum + row.totalPay, 0),
+      totalPayroll,
       generatedAt: new Date().toLocaleString(),
     })
     setMessage('')
     setLoading(false)
+
+    loadInsights({
+      period: period.label,
+      totalTasks,
+      totalTasksChangePct: pctDelta(totalTasks, prevTotalTasks),
+      completedTasks: completed,
+      completedTasksChangePct: pctDelta(completed, prevCompleted),
+      pendingTasks: taskRows.filter(task => task.status === 'pending').length,
+      efficiencyPct,
+      efficiencyChangePts: prevTotalTasks ? efficiencyPct - prevEfficiencyPct : null,
+      staffUtilizationPct: staffUtilizationPct,
+      staffUtilizationChangePts: prevStaffUtilizationPct !== null ? staffUtilizationPct - prevStaffUtilizationPct : null,
+      averageRating: avgRating,
+      averageRatingChange: prevAvgRating !== null ? Number((Number(avgRating) - prevAvgRating).toFixed(1)) : null,
+      topPerformer: topEntry ? topEntry[0] : null,
+      totalPayroll: Number(totalPayroll.toFixed(2)),
+    })
   }
 
   useEffect(() => {
     generate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reportType])
+  }, [reportType, periodOffset])
 
   const downloadCsv = () => {
     if (!data) return
@@ -384,23 +475,45 @@ export default function ReportsPanel() {
   const maxCategoryCount = data ? Math.max(1, ...Object.values(data.tasksByCategory)) : 1
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
         <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
           <FileText className="h-5 w-5 text-accent" /> Business Reports
         </h2>
         <p className="mt-1 mb-5 text-sm text-gray-500">Daily, weekly, or monthly performance reports across your whole business — every manager&apos;s staff and bookings, not just one team.</p>
 
-        <div className="inline-flex rounded-xl bg-gray-100 p-1 mb-5">
-          {REPORT_TYPES.map(t => (
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div className="inline-flex rounded-xl bg-gray-100 p-1">
+            {REPORT_TYPES.map(t => (
+              <button
+                key={t.value}
+                onClick={() => setReportType(t.value)}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <t.icon className="w-4 h-4" /> {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-1.5 py-1.5">
             <button
-              key={t.value}
-              onClick={() => setReportType(t.value)}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              type="button"
+              onClick={() => setPeriodOffset(offset => offset + 1)}
+              className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+              aria-label="Previous period"
             >
-              <t.icon className="w-4 h-4" /> {t.label}
+              <ChevronLeft className="h-4 w-4" />
             </button>
-          ))}
+            <span className="px-1 text-xs font-medium text-gray-700 whitespace-nowrap">{periodLabel || '—'}</span>
+            <button
+              type="button"
+              onClick={() => setPeriodOffset(offset => Math.max(0, offset - 1))}
+              disabled={periodOffset === 0}
+              className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+              aria-label="Next period"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {data && (
@@ -415,18 +528,23 @@ export default function ReportsPanel() {
         {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         {data ? (
-          <div className="mt-6 space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <StatCard icon={ClipboardList} label="Total Tasks" value={data.totalTasks} theme="blue" />
-              <StatCard icon={CheckCircle2} label="Completed" value={data.completed} theme="green" />
-              <StatCard icon={Clock} label="Pending" value={data.pending} theme="orange" />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <StatCard icon={TrendingUp} label="Efficiency" value={data.efficiency} caption="Completed / Total" theme="purple" />
-              <StatCard icon={Users} label="Staff Utilization" value={data.staffUtilization} caption="Avg tasks per staff" theme="blue" />
-              <StatCard icon={Award} label="Top Performer" value={data.topStaff} theme="yellow" size="sm" />
-              <StatCard icon={Star} label="Average Rating" value={`${data.avgRating} / 5`} theme="yellow" />
-              <StatCard icon={DollarSign} label="Total Payroll" value={formatMoney(data.totalPayroll)} caption="Basic salary + allowance" theme="green" />
+          <div className="mt-6 space-y-5" ref={detailsRef}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+              <div className="lg:col-span-2 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <StatCard icon={ClipboardList} label="Total Tasks" value={data.totalTasks} theme="blue" delta={data.totalTasksDelta} deltaSuffix={DELTA_SUFFIX[reportType]} />
+                  <StatCard icon={CheckCircle2} label="Completed" value={data.completed} theme="green" delta={data.completedDelta} deltaSuffix={DELTA_SUFFIX[reportType]} />
+                  <StatCard icon={Clock} label="Pending" value={data.pending} theme="orange" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <StatCard icon={TrendingUp} label="Efficiency" value={data.efficiency} caption="Completed / Total" theme="purple" delta={data.efficiencyDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="pts" />
+                  <StatCard icon={Users} label="Staff Utilization" value={data.staffUtilization} caption="Avg tasks per staff" theme="blue" delta={data.staffUtilizationDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="pts" />
+                  <StatCard icon={Award} label="Top Performer" value={data.topStaff} theme="yellow" size="sm" />
+                  <StatCard icon={Star} label="Average Rating" value={`${data.avgRating} / 5`} theme="yellow" delta={data.avgRatingDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="" />
+                  <StatCard icon={DollarSign} label="Total Payroll" value={formatMoney(data.totalPayroll)} caption="Basic salary + allowance" theme="green" />
+                </div>
+              </div>
+              <ReportInsights insights={insights} loading={insightsLoading} error={insightsError} onViewDetails={() => detailsRef.current?.scrollIntoView({ behavior: 'smooth' })} />
             </div>
             <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
               <p className="text-xs font-medium text-gray-500 mb-3">Tasks by Category</p>
