@@ -39,7 +39,7 @@ const SIDEBAR_ROLE_COLORS = {
   manager: '#003152',
   staffMember: '#07191E',
   departmentStaff: '#003333',
-  admin: '#003152',
+  admin: '#2564A8',
   userAdmin: '#003152',
 }
 
@@ -84,8 +84,8 @@ const HEADER_ROLE_THEME = {
     profile: 'bg-[#003333]',
   },
   admin: {
-    logo: 'bg-purple-600',
-    profile: 'bg-purple-900',
+    logo: 'bg-[#2564A8]',
+    profile: 'bg-[#2564A8]',
   },
   userAdmin: {
     logo: 'bg-orange-600',

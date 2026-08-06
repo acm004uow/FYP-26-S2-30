@@ -33,7 +33,7 @@ export const navMap = {
   ],
   admin: [
     { name: 'Employees', path: '/admin', icon: UserCog },
-    { name: 'Tasks', path: '/admin?section=tasks', icon: ClipboardList },
+    { name: 'New Task', path: '/admin?section=tasks', icon: ClipboardList },
     { name: 'Categories', path: '/admin?section=categories', icon: Tags },
     { name: 'Attendance', path: '/admin?section=attendance', icon: UserCheck },
     { name: 'Marketing', path: '/admin?section=marketing', icon: Megaphone },

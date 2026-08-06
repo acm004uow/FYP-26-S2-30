@@ -7,7 +7,6 @@ import { useAuthUser } from '../../../context/AuthUserContext'
 import AttendancePanel from '../attendance/AttendancePanel'
 import ClosuresPanel from '../closures/ClosuresPanel'
 import SchedulingCutoffPanel from '../closures/SchedulingCutoffPanel'
-import BookingsReviewPanel from '../../manager/bookings/BookingsReviewPanel'
 import CategoriesPanel from '../../manager/categories/CategoriesPanel'
 import MarketingPanel from '../marketing/MarketingPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
@@ -17,6 +16,7 @@ import TimeOffRequestsPanel from '../timeoff/TimeOffRequestsPanel'
 import UserAccountsPanel, { roleOptions } from '../users/UserAccountsPanel'
 import DepartmentsPanel from '../departments/DepartmentsPanel'
 import StaffPanel from '../staff/StaffPanel'
+import TaskCreationForm from '../../../components/TaskCreationForm'
 
 export default function AdminPanel() {
   const router = useRouter()
@@ -289,7 +289,13 @@ export default function AdminPanel() {
               currentUserId={currentUserId}
             />
           )}
-          {activeSection === 'tasks' && <BookingsReviewPanel />}
+          {activeSection === 'tasks' && (
+            <TaskCreationForm
+              actorRole="admin"
+              source="owner"
+              backHref="/admin?section=tasks"
+            />
+          )}
           {activeSection === 'attendance' && <AttendancePanel />}
           {activeSection === 'categories' && <CategoriesPanel />}
           {activeSection === 'marketing' && <MarketingPanel />}

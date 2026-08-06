@@ -72,7 +72,16 @@ function staffInitials(name) {
   return (name || '?').split(' ').map(part => part[0]).join('').slice(0, 2).toUpperCase()
 }
 
-export default function ManagerNewTask() {
+function EmbeddedContent({ children }) {
+  return children
+}
+
+export default function ManagerNewTask({
+  actorRole = 'manager',
+  source = 'manager',
+  backHref = '/manager-bookings',
+  embedded = false,
+}) {
   const { user } = useAuthUser()
   const [hostAdminId, setHostAdminId] = useState(null)
   const [staffRows, setStaffRows] = useState([])
@@ -217,6 +226,8 @@ export default function ManagerNewTask() {
     return user
   }
 
+  
+
   const handleClearAll = () => {
     setForm(prev => ({ ...emptyForm, serviceType: serviceTypes.includes(emptyForm.serviceType) ? emptyForm.serviceType : serviceTypes[0] }))
     setCoordinates(null)
@@ -316,10 +327,10 @@ export default function ManagerNewTask() {
       estimated_hours: form.estimatedHours || 2,
       urgency: form.urgency,
       assigned_staff_id: staff?.id || null,
-      recommendation_reason: matchedRecommendation?.reason || (staff ? 'Manually assigned by manager' : null),
+      recommendation_reason: matchedRecommendation?.reason || (staff ? `Manually assigned by ${source}` : null),
       status: 'approved',
       reviewed_by: user.id,
-      source: 'manager',
+      source,
       created_by: user.id,
     }).select('id').single()
     setCreating(false)
@@ -344,7 +355,7 @@ export default function ManagerNewTask() {
       }
     }
 
-    await supabase.from('audit_logs').insert({ user_id: user.id, action: 'manager_create_booking', details: `${form.serviceType} (${createdBooking?.id || ''})` })
+    await supabase.from('audit_logs').insert({ user_id: user.id, action: `${source}_create_booking`, details: `${form.serviceType} (${createdBooking?.id || ''})` })
     showNotification(staff ? `Task created and assigned to ${staff.name}.` : 'Task created, unassigned.')
     handleClearAll()
     await loadDashboard()
@@ -358,15 +369,17 @@ export default function ManagerNewTask() {
     return true
   })
 
+  const PageWrapper = embedded ? EmbeddedContent : Layout
+
   return (
-    <Layout role="manager">
+    <PageWrapper role={actorRole}>
       <div className="max-w-3xl mx-auto px-4 py-8">
         <nav className="mb-4 flex items-center gap-1.5 text-sm text-gray-400">
-          <Link href="/manager-bookings" className="flex items-center hover:text-gray-600">
+          <Link href={backHref} className="flex items-center hover:text-gray-600">
             <Home className="w-4 h-4" />
           </Link>
           <ChevronRight className="w-3.5 h-3.5" />
-          <Link href="/manager-bookings" className="hover:text-gray-600">Bookings</Link>
+          <Link href={backHref} className="hover:text-gray-600">Tasks</Link>
           <ChevronRight className="w-3.5 h-3.5" />
           <span className="font-medium text-gray-900">New Task</span>
         </nav>
@@ -671,6 +684,6 @@ export default function ManagerNewTask() {
           </div>
         </form>
       </div>
-    </Layout>
+    </PageWrapper>
   )
 }
