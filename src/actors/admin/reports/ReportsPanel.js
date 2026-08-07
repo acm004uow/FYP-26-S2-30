@@ -546,20 +546,7 @@ export default function ReportsPanel() {
               </div>
               <ReportInsights insights={insights} loading={insightsLoading} error={insightsError} onViewDetails={() => detailsRef.current?.scrollIntoView({ behavior: 'smooth' })} />
             </div>
-            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium text-gray-500 mb-3">Tasks by Category</p>
-              <div className="space-y-2.5">
-                {Object.entries(data.tasksByCategory).map(([cat, val]) => (
-                  <div key={cat} className="flex items-center gap-3 text-sm">
-                    <span className="w-32 shrink-0 truncate text-gray-600">{cat}</span>
-                    <div className="h-2 flex-1 rounded-full bg-gray-100">
-                      <div className="h-2 rounded-full bg-accent" style={{ width: `${(val / maxCategoryCount) * 100}%` }} />
-                    </div>
-                    <span className="w-6 shrink-0 text-right font-medium text-gray-900">{val}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+      
             <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">

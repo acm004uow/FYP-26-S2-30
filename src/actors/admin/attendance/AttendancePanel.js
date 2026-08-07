@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import QRCode from 'qrcode'
-import { Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, RefreshCw, UserCheck, UserRound } from 'lucide-react'
+import { Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, Info, RefreshCw, Sparkles, UserCheck, UserRound, UserSearch } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { shiftDate, formatDuration } from '../../../../lib/attendance'
 
@@ -11,15 +11,15 @@ const STAT_THEME = {
   red: { bg: 'bg-red-50', icon: 'text-red-600', value: 'text-red-600' },
 }
 
-function CompactStat({ icon: Icon, label, value, theme = 'blue' }) {
+function AttendanceStatCard({ icon: Icon, label, value, theme = 'blue' }) {
   const t = STAT_THEME[theme]
   return (
-    <div className="flex items-center gap-3">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${t.bg}`}>
-        <Icon className={`h-4 w-4 ${t.icon}`} />
+    <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg ${t.bg}`}>
+        <Icon className={`h-5 w-5 ${t.icon}`} />
       </span>
-      <p className="min-w-0 flex-1 truncate text-xs text-gray-500">{label}</p>
-      <p className={`shrink-0 text-base font-bold ${t.value}`}>{value}</p>
+      <p className="min-w-0 flex-1 truncate text-sm text-gray-600">{label}</p>
+      <p className={`shrink-0 text-xl font-bold ${t.value}`}>{value}</p>
     </div>
   )
 }
@@ -151,32 +151,36 @@ export default function AttendancePanel() {
   const notCheckedInCount = people.length - checkedInCount - completedCount
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 pb-16 items-start">
-      <div className="w-full lg:w-72 shrink-0 space-y-4">
-        <div className="bg-white rounded-xl shadow-sm border p-5">
-          <h2 className="text-sm font-semibold flex items-center gap-2 text-gray-900"><UserCheck className="w-4 h-4 text-accent" /> Office QR Check-in</h2>
-          <p className="mt-1 text-xs text-gray-500">Display at the office entrance. Staff and managers scan it to clock in, and scan again to clock out.</p>
-          <div className="mt-3 flex aspect-square items-center justify-center rounded-xl border bg-gray-50">
-            {qr.loading ? <p className="text-xs text-gray-400">Loading...</p> : qr.dataUrl ? <img src={qr.dataUrl} alt="Office attendance QR code" className="h-5/6 w-5/6" /> : <p className="text-xs text-gray-400 px-4 text-center">QR unavailable</p>}
-          </div>
-          <p className="mt-2 text-xs text-gray-400">Refreshes automatically every minute{rotatesIn !== null ? ` (next in ${rotatesIn}s)` : ''}.</p>
-          <button onClick={resetQrSecret} disabled={qr.loading} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60">
-            <RefreshCw className="w-3.5 h-3.5" /> Reset QR Secret
-          </button>
-          {qrMessage && <p className="mt-2 text-xs text-accent-600">{qrMessage}</p>}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Attendance Today</p>
-          <div className="space-y-3">
-            <CompactStat icon={UserCheck} label="Checked in now" value={checkedInCount} theme="blue" />
-            <CompactStat icon={CheckCircle2} label="Completed today" value={completedCount} theme="green" />
-            <CompactStat icon={Clock} label="Not checked in" value={notCheckedInCount} theme="red" />
-          </div>
-        </div>
+    <div className="pb-16">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <AttendanceStatCard icon={UserCheck} label="Checked in now" value={checkedInCount} theme="blue" />
+        <AttendanceStatCard icon={CheckCircle2} label="Completed today" value={completedCount} theme="green" />
+        <AttendanceStatCard icon={Clock} label="Not checked in" value={notCheckedInCount} theme="red" />
       </div>
 
-      <div className="flex-1 w-full bg-white rounded-xl shadow-sm border overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="w-full lg:w-72 shrink-0 space-y-4">
+          <div className="bg-white rounded-xl shadow-sm border p-5">
+            <h2 className="text-sm font-semibold flex items-center gap-2 text-gray-900"><UserCheck className="w-4 h-4 text-accent" /> Office QR Check-in</h2>
+            <p className="mt-1 text-xs text-gray-500">Display at the office entrance. Staff and managers scan it to clock in and out.</p>
+            <div className="relative mt-3 aspect-square rounded-xl border border-gray-100 bg-white p-3">
+              <span className="absolute -top-0.5 -left-0.5 h-6 w-6 rounded-tl-lg border-t-2 border-l-2 border-accent-500" />
+              <span className="absolute -top-0.5 -right-0.5 h-6 w-6 rounded-tr-lg border-t-2 border-r-2 border-accent-500" />
+              <span className="absolute -bottom-0.5 -left-0.5 h-6 w-6 rounded-bl-lg border-b-2 border-l-2 border-accent-500" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-6 w-6 rounded-br-lg border-b-2 border-r-2 border-accent-500" />
+              <div className="flex h-full w-full items-center justify-center">
+                {qr.loading ? <p className="text-xs text-gray-400">Loading...</p> : qr.dataUrl ? <img src={qr.dataUrl} alt="Office attendance QR code" className="h-5/6 w-5/6" /> : <p className="text-xs text-gray-400 px-4 text-center">QR unavailable</p>}
+              </div>
+            </div>
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-400"><Clock className="h-3.5 w-3.5 shrink-0" /> Refreshes automatically every minute{rotatesIn !== null ? ` (next in ${rotatesIn}s)` : ''}.</p>
+            <button onClick={resetQrSecret} disabled={qr.loading} className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60">
+              <RefreshCw className="w-3.5 h-3.5" /> Reset QR Secret
+            </button>
+            {qrMessage && <p className="mt-2 text-xs text-accent-600">{qrMessage}</p>}
+          </div>
+        </div>
+
+        <div className="flex-1 w-full bg-white rounded-xl shadow-sm border overflow-hidden">
         <div className="p-5 border-b flex items-center gap-2">
           <button onClick={() => goToDay(-1)} className="p-1 rounded hover:bg-gray-100" aria-label="Previous day"><ChevronLeft className="w-4 h-4 text-gray-500" /></button>
           <h2 className="font-semibold text-gray-900">
@@ -242,8 +246,25 @@ export default function AttendancePanel() {
               </div>
             )
           })}
-          {people.length === 0 && <div className="p-8 text-center text-gray-400">No active managers or staff found.</div>}
+          {people.length === 0 && (
+            <div className="flex flex-col items-center gap-4 px-6 py-16 text-center">
+              <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-accent-100">
+                <UserSearch className="h-11 w-11 text-accent-500" />
+                <Sparkles className="absolute -top-1 -left-2 h-4 w-4 text-accent-300" />
+                <Sparkles className="absolute right-0 top-3 h-3 w-3 text-accent-300" />
+              </div>
+              <div>
+                <p className="text-lg font-bold text-gray-900">No active managers or staff found.</p>
+                <p className="mt-1 text-sm text-gray-400">When staff check in, they will appear here.</p>
+              </div>
+              <div className="mt-2 flex w-full max-w-md items-start gap-2 rounded-lg bg-accent-100 px-4 py-3 text-left text-sm text-accent-800">
+                <Info className="h-4 w-4 shrink-0 mt-0.5" />
+                <span><span className="font-semibold">Tip:</span> Make sure staff scan the QR code at the office entrance to check in.</span>
+              </div>
+            </div>
+          )}
         </div>
+      </div>
       </div>
     </div>
   )
