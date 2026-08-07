@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Award, CalendarDays, CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, DollarSign, Download, FileText, Printer, Star, Sun, TrendingUp, Users, X } from 'lucide-react'
+import { Calendar, CalendarDays, CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Clock, DollarSign, Download, FileText, Printer, RefreshCw, Star, Sun, Users, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatDuration } from '../../../../lib/attendance'
 import { getPeriodRange, getPreviousPeriodRange } from '../../../../lib/reportPeriods'
@@ -104,18 +104,60 @@ export default function ReportsPanel() {
   const [data, setData] = useState(null)
   const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(true)
-  const [viewingAttendanceName, setViewingAttendanceName] = useState(null)
-  const [viewingPayName, setViewingPayName] = useState(null)
-  const [payFilter, setPayFilter] = useState('all')
+  const [viewingStaffName, setViewingStaffName] = useState(null)
   const [attendanceFilter, setAttendanceFilter] = useState('all')
   const [insights, setInsights] = useState([])
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError, setInsightsError] = useState('')
+  const [showDatePicker, setShowDatePicker] = useState(false)
   const detailsRef = useRef(null)
+  const dateInputRef = useRef(null)
 
   useEffect(() => {
     setPeriodOffset(0)
   }, [reportType])
+
+  useEffect(() => {
+    if (!showDatePicker || !dateInputRef.current) return
+    dateInputRef.current.focus()
+    try {
+      dateInputRef.current.showPicker?.()
+    } catch {
+      // showPicker is unsupported or blocked in this browser — the visible input still works.
+    }
+  }, [showDatePicker])
+
+  // Converts a picked calendar date into "whole periods back from now" so it lines up with
+  // periodOffset's meaning (0 = current daily/weekly/monthly period, 1 = previous, ...).
+  const offsetForPickedDate = (pickedIso) => {
+    const now = new Date()
+    const picked = new Date(`${pickedIso}T00:00:00Z`)
+
+    if (reportType === 'monthly') {
+      return (now.getUTCFullYear() * 12 + now.getUTCMonth()) - (picked.getUTCFullYear() * 12 + picked.getUTCMonth())
+    }
+
+    const mondayOf = (date) => {
+      const anchor = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+      const day = anchor.getUTCDay()
+      anchor.setUTCDate(anchor.getUTCDate() + (day === 0 ? -6 : 1 - day))
+      return anchor
+    }
+
+    if (reportType === 'weekly') {
+      return Math.round((mondayOf(now) - mondayOf(picked)) / (7 * 86400000))
+    }
+
+    const startOfUtcDay = (date) => Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+    return Math.round((startOfUtcDay(now) - startOfUtcDay(picked)) / 86400000)
+  }
+
+  const handlePickDate = (event) => {
+    const pickedIso = event.target.value
+    if (!pickedIso) return
+    setPeriodOffset(Math.max(0, offsetForPickedDate(pickedIso)))
+    setShowDatePicker(false)
+  }
 
   const reportLabel = reportType.charAt(0).toUpperCase() + reportType.slice(1)
   const payColumnLabel = reportType === 'daily' ? "Today's Pay" : reportType === 'weekly' ? "This Week's Pay" : "This Month's Pay"
@@ -140,9 +182,7 @@ export default function ReportsPanel() {
       ['Total Tasks', reportData.totalTasks],
       ['Completed', reportData.completed],
       ['Pending', reportData.pending],
-      ['Efficiency', reportData.efficiency],
       ['Staff Utilization', reportData.staffUtilization],
-      ['Top Performer', reportData.topStaff],
       ['Average Rating', reportData.avgRating],
       ...Object.entries(reportData.tasksByCategory).map(([category, value]) => [`Category: ${category}`, value]),
       ...reportData.attendanceSummary.map(row => [`Attendance: ${row.name}`, `${row.daysPresent} days present, avg clock-in ${row.avgClockIn}, ${row.totalHours} worked`]),
@@ -195,49 +235,50 @@ export default function ReportsPanel() {
     const { data: { user } } = await supabase.auth.getUser()
     const hostAdminId = await resolveHostAdminId(user?.id)
 
-    const [{ data: tasks }, { data: staff }, { data: reviews }, { data: allStaff }, { data: payRates }, { data: prevTasks }, { data: prevReviews }] = await Promise.all([
+    const [{ data: tasks }, { data: staff }, { data: reviews }, { data: payRates }, { data: prevTasks }, { data: prevReviews }] = await Promise.all([
       supabase.from('bookings').select('status,service_type,assigned_staff_id,estimated_hours,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).gte('created_at', period.start.toISOString()).lt('created_at', period.end.toISOString()),
-      supabase.from('staff_profiles').select('id,staff_name,current_workload,basic_salary').eq('host_admin_id', hostAdminId),
+      supabase.from('staff_profiles').select('id,user_id,staff_name,basic_salary').eq('host_admin_id', hostAdminId),
       supabase.from('performance_reviews').select('rating').gte('created_at', period.start.toISOString()).lt('created_at', period.end.toISOString()),
-      supabase.from('staff_profiles').select('id,user_id,staff_name').eq('host_admin_id', hostAdminId),
       supabase.from('service_pay_rates').select('service_type,hourly_rate').eq('host_admin_id', hostAdminId),
       supabase.from('bookings').select('status,assigned_staff_id').eq('host_admin_id', hostAdminId).gte('created_at', prevPeriod.start.toISOString()).lt('created_at', prevPeriod.end.toISOString()),
       supabase.from('performance_reviews').select('rating').gte('created_at', prevPeriod.start.toISOString()).lt('created_at', prevPeriod.end.toISOString()),
     ])
 
-    let attendanceSummary = []
-    const staffUserIds = (allStaff || []).map(s => s.user_id).filter(Boolean)
+    const taskRows = tasks || []
+    const staffRows = staff || []
+
+    const staffUserIds = staffRows.map(s => s.user_id).filter(Boolean)
+    let attendance = []
     if (staffUserIds.length > 0) {
-      const { data: attendance } = await supabase
+      const { data: attendanceRows } = await supabase
         .from('attendance_records')
         .select('profile_id,clocked_in_at,clocked_out_at')
         .eq('host_admin_id', hostAdminId)
         .in('profile_id', staffUserIds)
         .gte('work_date', since.slice(0, 10))
-
-      attendanceSummary = allStaff.map(member => {
-        const rows = (attendance || []).filter(row => row.profile_id === member.user_id && row.clocked_in_at)
-        const daysPresent = rows.length
-        const avgClockInMinutes = daysPresent
-          ? rows.reduce((sum, row) => {
-              const d = new Date(row.clocked_in_at)
-              return sum + d.getHours() * 60 + d.getMinutes()
-            }, 0) / daysPresent
-          : null
-        const totalHoursMs = rows.reduce((sum, row) => row.clocked_out_at ? sum + (new Date(row.clocked_out_at) - new Date(row.clocked_in_at)) : sum, 0)
-        return {
-          name: member.staff_name,
-          daysPresent,
-          avgClockIn: avgClockInMinutes !== null
-            ? `${String(Math.floor(avgClockInMinutes / 60)).padStart(2, '0')}:${String(Math.round(avgClockInMinutes % 60)).padStart(2, '0')}`
-            : '—',
-          totalHours: formatDuration(totalHoursMs),
-        }
-      })
+      attendance = attendanceRows || []
     }
 
-    const taskRows = tasks || []
-    const staffRows = staff || []
+    const attendanceSummary = staffRows.map(member => {
+      const rows = attendance.filter(row => row.profile_id === member.user_id && row.clocked_in_at)
+      const daysPresent = rows.length
+      const avgClockInMinutes = daysPresent
+        ? rows.reduce((sum, row) => {
+            const d = new Date(row.clocked_in_at)
+            return sum + d.getHours() * 60 + d.getMinutes()
+          }, 0) / daysPresent
+        : null
+      const totalHoursMs = rows.reduce((sum, row) => row.clocked_out_at ? sum + (new Date(row.clocked_out_at) - new Date(row.clocked_in_at)) : sum, 0)
+      return {
+        id: member.id,
+        name: member.staff_name,
+        daysPresent,
+        avgClockIn: avgClockInMinutes !== null
+          ? `${String(Math.floor(avgClockInMinutes / 60)).padStart(2, '0')}:${String(Math.round(avgClockInMinutes % 60)).padStart(2, '0')}`
+          : '—',
+        totalHours: formatDuration(totalHoursMs),
+      }
+    })
     const completed = taskRows.filter(task => task.status === 'completed').length
     const totalTasks = taskRows.length
     const assignedCounts = taskRows.reduce((acc, task) => {
@@ -271,13 +312,22 @@ export default function ReportsPanel() {
       const totalAllowance = breakdown.reduce((sum, row) => sum + row.allowance, 0)
       const basicSalary = Number(member.basic_salary) || 0
       return {
+        id: member.id,
         name: member.staff_name,
         basicSalary,
         breakdown,
         totalAllowance,
         totalPay: basicSalary + totalAllowance,
+        hoursWorked: breakdown.reduce((sum, row) => sum + Number(row.hours || 0), 0),
       }
     })
+
+    // attendanceSummary and paySummary both map 1:1 over staffRows, so they line up by index —
+    // merge them here instead of asking the table to look name/id up in two separate arrays.
+    const staffSummary = staffRows.map((_, index) => ({
+      ...attendanceSummary[index],
+      ...paySummary[index],
+    }))
 
     const efficiencyPct = totalTasks ? Math.round((completed / totalTasks) * 100) : 0
     const staffUtilizationPct = staffRows.length ? Math.round((taskRows.filter(task => task.assigned_staff_id).length / staffRows.length) * 100) : 0
@@ -285,6 +335,7 @@ export default function ReportsPanel() {
 
     const prevTaskRows = prevTasks || []
     const prevCompleted = prevTaskRows.filter(task => task.status === 'completed').length
+    const prevPending = prevTaskRows.filter(task => task.status === 'pending').length
     const prevTotalTasks = prevTaskRows.length
     const prevEfficiencyPct = prevTotalTasks ? Math.round((prevCompleted / prevTotalTasks) * 100) : null
     const prevStaffUtilizationPct = staffRows.length ? Math.round((prevTaskRows.filter(task => task.assigned_staff_id).length / staffRows.length) * 100) : null
@@ -296,18 +347,17 @@ export default function ReportsPanel() {
       completed,
       completedDelta: pctDelta(completed, prevCompleted),
       pending: taskRows.filter(task => task.status === 'pending').length,
-      efficiency: `${efficiencyPct}%`,
-      efficiencyDelta: prevTotalTasks ? efficiencyPct - prevEfficiencyPct : null,
+      pendingDelta: pctDelta(taskRows.filter(task => task.status === 'pending').length, prevPending),
       staffUtilization: `${staffUtilizationPct}%`,
       staffUtilizationDelta: prevStaffUtilizationPct !== null ? staffUtilizationPct - prevStaffUtilizationPct : null,
-      topStaff: topEntry ? `${topEntry[0]} (${topEntry[1]} tasks)` : 'No assigned tasks',
       avgRating,
       avgRatingDelta: prevAvgRating !== null ? Number((Number(avgRating) - prevAvgRating).toFixed(1)) : null,
       tasksByCategory: Object.keys(tasksByCategory).length ? tasksByCategory : { General: 0 },
       attendanceSummary,
       paySummary,
+      staffSummary,
       totalPayroll,
-      generatedAt: new Date().toLocaleString(),
+      generatedAt: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }),
     })
     setMessage('')
     setLoading(false)
@@ -358,9 +408,7 @@ export default function ReportsPanel() {
       clipboard: '<path d="M8 2h8a1 1 0 0 1 1 1v2H7V3a1 1 0 0 1 1-1Z"/><path d="M6 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h0"/><path d="M9 12h6"/><path d="M9 16h6"/>',
       check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
       clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-      trending: '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
       users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-      award: '<circle cx="12" cy="8" r="6"/><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11"/>',
       star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
       dollar: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
     }
@@ -442,9 +490,7 @@ export default function ReportsPanel() {
           </div>
 
           <div class="row-2">
-            ${statCard({ iconName: 'trending', label: 'Efficiency', value: data.efficiency, caption: 'Completed / Total', bg: '#faf5ff', color: '#9333ea' })}
             ${statCard({ iconName: 'users', label: 'Staff Utilization', value: data.staffUtilization, caption: 'Avg tasks per staff', bg: '#eff6ff', color: '#2563eb' })}
-            ${statCard({ iconName: 'award', label: 'Top Performer', value: data.topStaff, bg: '#fefce8', color: '#eab308' })}
             ${statCard({ iconName: 'star', label: 'Average Rating', value: `${data.avgRating} / 5`, bg: '#fefce8', color: '#eab308' })}
             ${statCard({ iconName: 'dollar', label: 'Total Payroll', value: formatMoney(data.totalPayroll), caption: 'Basic salary + allowance', bg: '#f0fdf4', color: '#16a34a', valueColor: '#16a34a' })}
           </div>
@@ -477,76 +523,97 @@ export default function ReportsPanel() {
   return (
     <div className="max-w-6xl mx-auto">
       <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
-        <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-          <FileText className="h-5 w-5 text-accent" /> Business Reports
-        </h2>
-        <p className="mt-1 mb-5 text-sm text-gray-500">Daily, weekly, or monthly performance reports across your whole business — every manager&apos;s staff and bookings, not just one team.</p>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <div className="inline-flex rounded-xl bg-gray-100 p-1">
-            {REPORT_TYPES.map(t => (
-              <button
-                key={t.value}
-                onClick={() => setReportType(t.value)}
-                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-              >
-                <t.icon className="w-4 h-4" /> {t.label}
-              </button>
-            ))}
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent-100 text-accent-600">
+              <FileText className="h-6 w-6" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Business Reports</h1>
+              <p className="mt-1 max-w-xl text-sm text-gray-500">Daily, weekly, or monthly performance across your whole business — every manager&apos;s staff and bookings, not just one team.</p>
+            </div>
           </div>
-          <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-1.5 py-1.5">
-            <button
-              type="button"
-              onClick={() => setPeriodOffset(offset => offset + 1)}
-              className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
-              aria-label="Previous period"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="px-1 text-xs font-medium text-gray-700 whitespace-nowrap">{periodLabel || '—'}</span>
-            <button
-              type="button"
-              onClick={() => setPeriodOffset(offset => Math.max(0, offset - 1))}
-              disabled={periodOffset === 0}
-              className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
-              aria-label="Next period"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+          <div className="flex flex-col items-end gap-3">
+            <div className="inline-flex shrink-0 rounded-xl bg-gray-100 p-1">
+              {REPORT_TYPES.map(t => (
+                <button
+                  key={t.value}
+                  onClick={() => setReportType(t.value)}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition ${reportType === t.value ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                  <t.icon className="w-4 h-4" /> {t.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 bg-white px-1.5 py-1.5">
+              <button
+                type="button"
+                onClick={() => setPeriodOffset(offset => offset + 1)}
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                aria-label="Previous period"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-1 text-xs font-medium text-gray-700 whitespace-nowrap">{periodLabel || '—'}</span>
+              <button
+                type="button"
+                onClick={() => setPeriodOffset(offset => Math.max(0, offset - 1))}
+                disabled={periodOffset === 0}
+                className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                aria-label="Next period"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+              <div className="relative ml-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowDatePicker(v => !v)}
+                  className="rounded-md p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                  aria-label="Jump to a specific date"
+                >
+                  <Calendar className="h-4 w-4" />
+                </button>
+                {showDatePicker && (
+                  <input
+                    ref={dateInputRef}
+                    type="date"
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={handlePickDate}
+                    onBlur={() => setShowDatePicker(false)}
+                    className="absolute right-0 top-full z-10 mt-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-100"
+                  />
+                )}
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+
+        <div className="mt-5 flex flex-wrap items-center gap-3">
           {data && (
             <>
               <button onClick={downloadCsv} className="border border-gray-200 bg-white text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50"><Download className="w-4 h-4" /> Download CSV</button>
               <button onClick={exportPdf} className="border border-gray-200 bg-white text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium hover:bg-gray-50"><Printer className="w-4 h-4" /> Export PDF</button>
-              <span className="text-xs text-gray-400">Generated {data.generatedAt}</span>
+              <span className="text-xs text-gray-400">Generated: {data.generatedAt}</span>
             </>
           )}
-          <button onClick={generate} disabled={loading} className="ml-auto bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition disabled:opacity-60"><FileText className="w-4 h-4" /> {loading ? 'Loading...' : data ? 'Refresh' : 'Generate Report'}</button>
+          <button onClick={generate} disabled={loading} className="ml-auto bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-semibold transition disabled:opacity-60"><RefreshCw className="w-4 h-4" /> {loading ? 'Loading...' : data ? 'Refresh' : 'Generate Report'}</button>
         </div>
         {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         {data ? (
           <div className="mt-6 space-y-5" ref={detailsRef}>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
-              <div className="lg:col-span-2 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <StatCard icon={ClipboardList} label="Total Tasks" value={data.totalTasks} theme="blue" delta={data.totalTasksDelta} deltaSuffix={DELTA_SUFFIX[reportType]} />
-                  <StatCard icon={CheckCircle2} label="Completed" value={data.completed} theme="green" delta={data.completedDelta} deltaSuffix={DELTA_SUFFIX[reportType]} />
-                  <StatCard icon={Clock} label="Pending" value={data.pending} theme="orange" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <StatCard icon={TrendingUp} label="Efficiency" value={data.efficiency} caption="Completed / Total" theme="purple" delta={data.efficiencyDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="pts" />
-                  <StatCard icon={Users} label="Staff Utilization" value={data.staffUtilization} caption="Avg tasks per staff" theme="blue" delta={data.staffUtilizationDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="pts" />
-                  <StatCard icon={Award} label="Top Performer" value={data.topStaff} theme="yellow" size="sm" />
-                  <StatCard icon={Star} label="Average Rating" value={`${data.avgRating} / 5`} theme="yellow" delta={data.avgRatingDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="" />
-                  <StatCard icon={DollarSign} label="Total Payroll" value={formatMoney(data.totalPayroll)} caption="Basic salary + allowance" theme="green" />
-                </div>
-              </div>
-              <ReportInsights insights={insights} loading={insightsLoading} error={insightsError} onViewDetails={() => detailsRef.current?.scrollIntoView({ behavior: 'smooth' })} />
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <StatCard icon={ClipboardList} label="Total Tasks" value={data.totalTasks} theme="blue" delta={data.totalTasksDelta} deltaSuffix={DELTA_SUFFIX[reportType]} />
+              <StatCard icon={CheckCircle2} label="Completed" value={data.completed} theme="green" delta={data.completedDelta} deltaSuffix={DELTA_SUFFIX[reportType]} />
+              <StatCard icon={Clock} label="Pending" value={data.pending} theme="orange" delta={data.pendingDelta} deltaSuffix={DELTA_SUFFIX[reportType]} />
+              <StatCard icon={Users} label="Staff Utilization" value={data.staffUtilization} caption="Avg tasks per staff" theme="blue" delta={data.staffUtilizationDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="pts" />
             </div>
-      
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <StatCard icon={Star} label="Average Rating" value={`${data.avgRating} / 5`} theme="yellow" delta={data.avgRatingDelta} deltaSuffix={DELTA_SUFFIX[reportType]} deltaUnit="" />
+              <StatCard icon={DollarSign} label="Total Payroll" value={formatMoney(data.totalPayroll)} caption="Basic salary + allowance" theme="green" />
+            </div>
+
             <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -554,8 +621,8 @@ export default function ReportsPanel() {
                     <Clock className="h-4 w-4" />
                   </span>
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">Staff Attendance Summary ({reportLabel})</p>
-                    <p className="text-xs text-gray-400">{reportLabel} attendance breakdown by staff</p>
+                    <p className="text-sm font-semibold text-gray-900">Staff Attendance & Pay Summary ({reportLabel})</p>
+                    <p className="text-xs text-gray-400">{reportLabel} attendance and payroll breakdown by staff</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -575,7 +642,7 @@ export default function ReportsPanel() {
                 </div>
               </div>
 
-              {data.attendanceSummary.length > 0 ? (
+              {data.staffSummary.length > 0 ? (
                 <div className="overflow-x-auto rounded-lg border border-gray-100">
                   <table className="w-full text-sm">
                     <thead>
@@ -583,20 +650,23 @@ export default function ReportsPanel() {
                         <th className="px-4 py-2.5 font-medium">Staff Member</th>
                         <th className="px-4 py-2.5 font-medium">{hoursColumnLabel}</th>
                         <th className="px-4 py-2.5 font-medium">Status</th>
+                        <th className="px-4 py-2.5 font-medium">{payColumnLabel}</th>
+                        <th className="px-4 py-2.5 font-medium">Hours Worked</th>
+                        <th className="px-4 py-2.5 font-medium">Estimated Earnings</th>
                         <th className="w-8 px-2 py-2.5"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {data.attendanceSummary
+                      {data.staffSummary
                         .filter(row => attendanceFilter === 'all' ? true : attendanceFilter === 'present' ? row.daysPresent > 0 : row.daysPresent === 0)
                         .map((row, index) => {
                           const palette = AVATAR_PALETTE[index % AVATAR_PALETTE.length]
                           const present = row.daysPresent > 0
                           return (
                             <tr
-                              key={row.name}
-                              onClick={() => setViewingAttendanceName(row.name)}
-                              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setViewingAttendanceName(row.name) } }}
+                              key={row.id}
+                              onClick={() => setViewingStaffName(row.name)}
+                              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setViewingStaffName(row.name) } }}
                               role="button"
                               tabIndex={0}
                               className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
@@ -611,82 +681,8 @@ export default function ReportsPanel() {
                               <td className="px-4 py-3">
                                 <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${present ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{present ? 'Present' : 'Absent'}</span>
                               </td>
-                              <td className="px-2 py-3">
-                                <ChevronRight className="ml-auto h-4 w-4 text-gray-300" />
-                              </td>
-                            </tr>
-                          )
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400">No staff attendance recorded yet.</p>
-              )}
-            </div>
-            <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
-                    <FileText className="h-4 w-4" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">Staff Pay Summary ({reportLabel})</p>
-                    <p className="text-xs text-gray-400">{reportLabel} payroll breakdown by staff</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    value={payFilter}
-                    onChange={event => setPayFilter(event.target.value)}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-100"
-                    aria-label="Filter staff by pay status"
-                  >
-                    <option value="all">All Staff</option>
-                    <option value="paid">Paid</option>
-                    <option value="nopay">No Pay</option>
-                  </select>
-                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600">
-                    <CalendarDays className="h-3.5 w-3.5" /> {reportLabel}
-                  </span>
-                </div>
-              </div>
-
-              {data.paySummary.length > 0 ? (
-                <div className="overflow-x-auto rounded-lg border border-gray-100">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-gray-50 text-left text-xs font-medium text-gray-400">
-                        <th className="px-4 py-2.5 font-medium">Staff Member</th>
-                        <th className="px-4 py-2.5 font-medium">{payColumnLabel}</th>
-                        <th className="px-4 py-2.5 font-medium">Hours Worked</th>
-                        <th className="px-4 py-2.5 font-medium">Estimated Earnings</th>
-                        <th className="w-8 px-2 py-2.5"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {data.paySummary
-                        .filter(row => payFilter === 'all' ? true : payFilter === 'paid' ? row.totalPay > 0 : row.totalPay === 0)
-                        .map((row, index) => {
-                          const palette = AVATAR_PALETTE[index % AVATAR_PALETTE.length]
-                          const hoursWorked = row.breakdown.reduce((sum, b) => sum + Number(b.hours || 0), 0)
-                          return (
-                            <tr
-                              key={row.name}
-                              onClick={() => setViewingPayName(row.name)}
-                              onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setViewingPayName(row.name) } }}
-                              role="button"
-                              tabIndex={0}
-                              className="cursor-pointer hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
-                            >
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-2.5">
-                                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${palette.bg} ${palette.text}`}>{initialsOf(row.name)}</span>
-                                  <span className="font-medium text-gray-900">{row.name}</span>
-                                </div>
-                              </td>
                               <td className="px-4 py-3 text-gray-700">{formatMoney(row.totalPay)}</td>
-                              <td className="px-4 py-3 text-gray-700">{hoursWorked.toFixed(1)} hrs</td>
+                              <td className="px-4 py-3 text-gray-700">{row.hoursWorked.toFixed(1)} hrs</td>
                               <td className="px-4 py-3 font-medium text-gray-900">{formatMoney(row.totalAllowance)}</td>
                               <td className="px-2 py-3">
                                 <ChevronRight className="ml-auto h-4 w-4 text-gray-300" />
@@ -701,6 +697,8 @@ export default function ReportsPanel() {
                 <p className="text-sm text-gray-400">No staff found.</p>
               )}
             </div>
+
+            <ReportInsights insights={insights} loading={insightsLoading} error={insightsError} onViewDetails={() => detailsRef.current?.scrollIntoView({ behavior: 'smooth' })} />
           </div>
         ) : (
           <div className="mt-6 rounded-xl border border-dashed border-gray-200 p-10 text-center text-sm text-gray-400">
@@ -709,11 +707,11 @@ export default function ReportsPanel() {
         )}
       </div>
 
-      {viewingAttendanceName && (() => {
-        const row = data?.attendanceSummary.find(r => r.name === viewingAttendanceName)
+      {viewingStaffName && (() => {
+        const row = data?.staffSummary.find(r => r.name === viewingStaffName)
         if (!row) return null
         return (
-          <DetailModal title={row.name} subtitle={`Attendance — ${reportLabel}`} onClose={() => setViewingAttendanceName(null)}>
+          <DetailModal title={row.name} subtitle={`Attendance & Pay — ${reportLabel}`} onClose={() => setViewingStaffName(null)}>
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="rounded-lg border border-gray-100 bg-gray-50 py-3">
                 <p className={`text-lg font-bold ${row.daysPresent > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{row.daysPresent}</p>
@@ -728,16 +726,8 @@ export default function ReportsPanel() {
                 <p className="mt-0.5 text-[11px] text-gray-400">worked</p>
               </div>
             </div>
-          </DetailModal>
-        )
-      })()}
 
-      {viewingPayName && (() => {
-        const row = data?.paySummary.find(r => r.name === viewingPayName)
-        if (!row) return null
-        return (
-          <DetailModal title={row.name} subtitle={`Pay — ${reportLabel}`} onClose={() => setViewingPayName(null)}>
-            <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+            <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">Total pay</span>
                 <span className="font-bold text-gray-900">{formatMoney(row.totalPay)}</span>
