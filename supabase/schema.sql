@@ -54,6 +54,10 @@ create table if not exists departments (
   created_at timestamptz default now()
 );
 
+alter table departments add column if not exists description text;
+alter table departments add column if not exists status text not null default 'active';
+alter table departments add column if not exists updated_at timestamptz default now();
+
 alter table profiles add column if not exists department_id uuid references departments(id) on delete set null;
 
 update profiles
