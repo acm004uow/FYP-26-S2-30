@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ExternalLink, Megaphone, Pencil, Sparkles } from 'lucide-react'
+import { CheckCircle2, ExternalLink, EyeOff, Megaphone, Pencil, Sparkles } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 
@@ -59,6 +59,14 @@ export default function MarketingPanel() {
       setRates(cleanedRates)
       setEditMode(false)
     }
+  }
+
+  const handleCancel = async () => {
+    setMessage('')
+    setGenerateError('')
+    setInstruction('')
+    setLoading(true)
+    await load()
   }
 
   const handleGenerateDescription = async () => {
@@ -138,119 +146,155 @@ export default function MarketingPanel() {
     setInstruction('')
   }
 
-  if (loading) return <div className="bg-white rounded-xl shadow-sm border p-6 text-sm text-gray-400">Loading...</div>
+  if (loading) return <div className="max-w-5xl mx-auto rounded-xl border border-gray-100 bg-white p-6 shadow-sm text-sm text-gray-400">Loading...</div>
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border p-6">
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-lg font-semibold flex items-center gap-2"><Megaphone className="w-5 h-5 text-accent" /> Marketing Page</h2>
-          <p className="mt-1 text-xs text-gray-500">Describe your business and set service rates for the public marketplace. Only published companies appear there.</p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          {!editMode && (
-            <button
-              type="button"
-              onClick={() => { setEditMode(true); setMessage('') }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <Pencil className="w-3.5 h-3.5" /> Edit
-            </button>
-          )}
-          <a href="/marketplace" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50">
-            View public page <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
-      </div>
-
-      {!editMode}
-
-      <div className="space-y-4 max-w-xl">
-        <div>
-          <label className="text-sm font-medium text-gray-700">Business Name</label>
-          <input value={businessName} disabled className="mt-1 w-full rounded-lg border bg-gray-50 p-2 text-sm text-gray-500" />
-        </div>
-        <div>
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-gray-700">Description</label>
-            <button
-              type="button"
-              onClick={handleGenerateDescription}
-              disabled={generating || !editMode}
-              className="flex items-center gap-1 rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-600 hover:bg-purple-100 disabled:opacity-60"
-            >
-              <Sparkles className="w-3 h-3" /> {generating ? 'Generating...' : 'Generate with AI'}
-            </button>
+    <div className="max-w-5xl mx-auto">
+      <div className="rounded-xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-start gap-4">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent-100 text-accent-600">
+              <Megaphone className="h-6 w-6" />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Marketing Page</h1>
+              <p className="mt-1 text-sm text-gray-500">Describe your business and set service rates for the public marketplace. Only published companies appear there.</p>
+            </div>
           </div>
-          {generateError && <p className="mt-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{generateError}</p>}
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            disabled={!editMode}
-            rows={4}
-            placeholder="Tell customers what your business does and what makes it stand out."
-            className="mt-1 w-full rounded-lg border p-2 text-sm disabled:bg-gray-50 disabled:text-gray-500"
-          />
-          <p className="mt-1 text-xs text-gray-400">Set your services and rates below first for a more tailored description, or generate now and edit afterward.</p>
-
-          {description && editMode && (
-            <div className="mt-2 flex gap-2">
-              <input
-                value={instruction}
-                onChange={e => setInstruction(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRefineDescription() } }}
-                placeholder={'Don\'t like it? Tell the AI what to change, e.g. "make it shorter" or "mention we\'re eco-friendly"'}
-                className="flex-1 rounded-lg border p-2 text-sm"
-              />
+          <div className="flex shrink-0 gap-2">
+            {!editMode && (
               <button
                 type="button"
-                onClick={handleRefineDescription}
-                disabled={refining}
-                className="flex shrink-0 items-center gap-1 rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-700 disabled:opacity-60"
+                onClick={() => { setEditMode(true); setMessage('') }}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
               >
-                <Sparkles className="w-3.5 h-3.5" /> {refining ? 'Applying...' : 'Apply change'}
+                <Pencil className="h-4 w-4" /> Edit
               </button>
-            </div>
-          )}
-        </div>
-        <div>
-          <label className="text-sm font-medium text-gray-700">Services &amp; Rates</label>
-          <p className="text-xs text-gray-400 mb-2">Leave a service blank if you don&apos;t offer it.</p>
-          <div className="space-y-2">
-            {serviceTypes.map(type => (
-              <div key={type} className="flex items-center gap-3">
-                <span className="w-40 shrink-0 text-sm text-gray-700">{type}</span>
-                <div className="flex items-center gap-1">
-                  <span className="text-sm text-gray-400">$</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={rates[type] ?? ''}
-                    onChange={e => setRates(prev => ({ ...prev, [type]: e.target.value }))}
-                    disabled={!editMode}
-                    placeholder="Not offered"
-                    className="w-32 rounded-lg border p-2 text-sm disabled:bg-gray-50 disabled:text-gray-500"
-                  />
-                </div>
-              </div>
-            ))}
+            )}
+            <a href="/marketplace" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <ExternalLink className="h-4 w-4" /> View public page
+            </a>
           </div>
         </div>
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-          <input type="checkbox" checked={published} onChange={e => setPublished(e.target.checked)} disabled={!editMode} />
-          Published (visible on the public marketplace)
-        </label>
+
+        {message && <div className="mb-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
+
+        <p className="mb-3 text-sm font-bold text-gray-900">Business Information</p>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium text-gray-700">Business Name</label>
+            <input value={businessName} disabled className="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-gray-700">Description</label>
+              <button
+                type="button"
+                onClick={handleGenerateDescription}
+                disabled={generating || !editMode}
+                className="flex items-center gap-1.5 rounded-full bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-600 hover:bg-purple-100 disabled:opacity-60"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> {generating ? 'Generating...' : 'Generate with AI'}
+              </button>
+            </div>
+            {generateError && <p className="mt-1 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{generateError}</p>}
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              disabled={!editMode}
+              rows={4}
+              placeholder="Tell customers what your business does and what makes it stand out."
+              className="mt-2 w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:bg-gray-50 disabled:text-gray-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">Set your services and rates below first for a more tailored description, or generate now and edit afterward.</p>
+
+            {description && editMode && (
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={instruction}
+                  onChange={e => setInstruction(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleRefineDescription() } }}
+                  placeholder={'Don\'t like it? Tell the AI what to change, e.g. "make it shorter" or "mention we\'re eco-friendly"'}
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleRefineDescription}
+                  disabled={refining}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-purple-700 disabled:opacity-60"
+                >
+                  <Sparkles className="h-4 w-4" /> {refining ? 'Applying...' : 'Apply change'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <hr className="my-6 border-gray-100" />
+
+        <p className="text-sm font-bold text-gray-900">Services &amp; Rates</p>
+        <p className="mb-3 text-xs text-gray-400">Leave a service blank if you don&apos;t offer it.</p>
+        <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+          {serviceTypes.map(type => (
+            <div key={type} className="flex items-center justify-between gap-4 px-4 py-3">
+              <span className="text-sm text-gray-700">{type}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm text-gray-400">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={rates[type] ?? ''}
+                  onChange={e => setRates(prev => ({ ...prev, [type]: e.target.value }))}
+                  disabled={!editMode}
+                  placeholder="Not offered"
+                  className="w-36 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:bg-gray-50 disabled:text-gray-400"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => editMode && setPublished(v => !v)}
+          disabled={!editMode}
+          className={`mt-6 flex w-full items-start gap-3 rounded-lg border px-4 py-4 text-left transition ${
+            published ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
+          } ${editMode ? 'cursor-pointer hover:opacity-90' : 'cursor-default'}`}
+        >
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${published ? 'bg-green-600 text-white' : 'border-2 border-gray-300 bg-white text-transparent'}`}>
+            <CheckCircle2 className="h-4 w-4" />
+          </span>
+          <span>
+            <span className={`flex items-center gap-1.5 text-sm font-semibold ${published ? 'text-green-800' : 'text-gray-700'}`}>
+              {published ? 'Published (visible on the public marketplace)' : <><EyeOff className="h-3.5 w-3.5" /> Not published</>}
+            </span>
+            <span className="mt-0.5 block text-xs text-gray-500">
+              {published ? 'Unpublish to hide your company from the public marketplace.' : 'Publish to make your company visible on the public marketplace.'}
+            </span>
+          </span>
+        </button>
+
         {editMode && (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-accent hover:bg-accent-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-60"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-600 disabled:opacity-60"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              disabled={saving}
+              className="rounded-lg border border-gray-200 px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
         )}
-        {message && <p className="text-sm text-accent-600">{message}</p>}
       </div>
     </div>
   )

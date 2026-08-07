@@ -5,8 +5,6 @@ import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
 import AttendancePanel from '../attendance/AttendancePanel'
-import ClosuresPanel from '../closures/ClosuresPanel'
-import SchedulingCutoffPanel from '../closures/SchedulingCutoffPanel'
 import CategoriesPanel from '../../manager/categories/CategoriesPanel'
 import MarketingPanel from '../marketing/MarketingPanel'
 import ParametersPanel from '../parameters/ParametersPanel'
@@ -142,7 +140,7 @@ export default function AdminPanel() {
   }, [user])
 
   useEffect(() => {
-    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'parameters', 'closures', 'reports', 'payrates', 'timeoff', 'departments', 'staff']
+    const validSections = ['users', 'tasks', 'categories', 'attendance', 'marketing', 'parameters', 'reports', 'payrates', 'timeoff', 'departments', 'staff']
     const section = Array.isArray(router.query.section) ? router.query.section[0] : router.query.section
     setActiveSection(validSections.includes(section) ? section : 'users')
   }, [router.query.section])
@@ -305,12 +303,6 @@ export default function AdminPanel() {
           {activeSection === 'timeoff' && <TimeOffRequestsPanel />}
           {activeSection === 'departments' && <DepartmentsPanel onChange={loadAdminData} />}
           {activeSection === 'staff' && <StaffPanel />}
-          {activeSection === 'closures' && (
-            <>
-              <SchedulingCutoffPanel />
-              <ClosuresPanel />
-            </>
-          )}
         </div>
       </div>
 
