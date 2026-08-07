@@ -145,6 +145,12 @@ export default function Layout({ children, role = 'manager' }) {
     async function loadSessionData() {
       if (initializing) return
       if (!user) {
+        // A successful sign-in can navigate here before AuthUserContext has
+        // committed its SIGNED_IN update. Check Supabase directly so that
+        // transient state does not send the user back to the login page.
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) return
+        if (cancelled) return
         router.push(`/login?next=${encodeURIComponent(router.asPath)}`)
         return
       }
