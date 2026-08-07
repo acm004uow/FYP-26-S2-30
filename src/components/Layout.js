@@ -40,7 +40,7 @@ const SIDEBAR_ROLE_COLORS = {
   staffMember: '#07191E',
   departmentStaff: '#003333',
   admin: '#2564A8',
-  userAdmin: '#003152',
+  userAdmin: '#0F172A',
 }
 
 const NAV_LINK_ROLE_THEME = {
@@ -65,7 +65,7 @@ const NAV_LINK_ROLE_THEME = {
   },
 
   userAdmin: {
-    active: 'bg-[#FEE2E2] text-[#991B1B]',
+    active: 'bg-[#0F172A] text-[#F97316]',
     inactive: 'text-red-100 hover:bg-white/10 hover:text-white',
   },
 }
@@ -88,8 +88,8 @@ const HEADER_ROLE_THEME = {
     profile: 'bg-[#2564A8]',
   },
   userAdmin: {
-    logo: 'bg-orange-600',
-    profile: 'bg-orange-900',
+    logo: 'bg-[#0F172A]',
+    profile: 'bg-[#0F172A]',
   },
   customer: {
     logo: 'bg-sky-600',
@@ -345,6 +345,8 @@ export default function Layout({ children, role = 'manager' }) {
           ? 'bg-[#E8FFF7]'
           : role === 'departmentStaff'
           ? 'bg-[#F5FAEB]'
+          : role === 'userAdmin'
+          ? 'bg-[#F3F6FA]'
           : 'bg-gray-100'
     }`}>
       <nav className="sticky top-0 z-40 border-b-2 border-divider bg-white">

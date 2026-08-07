@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 
-const VALID_ROLES = new Set(["manager", "staff_member", "system_admin", "department_staff"]);
+const VALID_ROLES = new Set(["manager", "staff_member", "system_admin", "department_staff", "customer", "user_admin"]);
 const VALID_STATUSES = new Set(["active", "inactive"]);
 
 export async function POST(request) {
@@ -29,12 +29,24 @@ export async function POST(request) {
       .eq("id", requesterId)
       .single();
 
-    if (profileError || requesterProfile?.role !== "system_admin" || requesterProfile.status !== "active") {
-      return NextResponse.json({ error: "Only active owners can manage account access" }, { status: 403 });
+    const isPlatformAdmin = requesterProfile?.role === "user_admin";
+    if (profileError || requesterProfile.status !== "active" || !(requesterProfile?.role === "system_admin" || isPlatformAdmin)) {
+      return NextResponse.json({ error: "Only active owners or platform admins can manage account access" }, { status: 403 });
     }
 
     if (requesterId === user_id && (role || status === "inactive")) {
-      return NextResponse.json({ error: "You cannot change or deactivate your own owner access" }, { status: 400 });
+      return NextResponse.json({ error: "You cannot change or deactivate your own access" }, { status: 400 });
+    }
+
+    // Platform admins can activate/deactivate accounts and reset passwords, but role changes
+    // stay an owner-only action, scoped to their own company.
+    if (role && isPlatformAdmin) {
+      return NextResponse.json({ error: "Platform admins cannot change user roles" }, { status: 403 });
+    }
+    // Granting platform admin access isn't something an owner can hand out to their own staff —
+    // only done through the platform admin's own "Add User" invite flow.
+    if (role === "user_admin") {
+      return NextResponse.json({ error: "Platform admin access can't be granted here" }, { status: 403 });
     }
 
     const { data: targetProfile, error: targetError } = await supabase
@@ -47,11 +59,14 @@ export async function POST(request) {
       return NextResponse.json({ error: "User profile not found" }, { status: 404 });
     }
 
-    const requesterHostAdminId = requesterProfile.host_admin_id || requesterId;
-    const isSameHost = targetProfile.id === requesterId || targetProfile.host_admin_id === requesterHostAdminId;
-    const isSameBusiness = requesterProfile.business_name && targetProfile.business_name === requesterProfile.business_name;
-    if (!isSameHost && !isSameBusiness) {
-      return NextResponse.json({ error: "This user is not under your organisation" }, { status: 403 });
+    // Platform admins manage accounts across every company; owners stay scoped to their own.
+    if (!isPlatformAdmin) {
+      const requesterHostAdminId = requesterProfile.host_admin_id || requesterId;
+      const isSameHost = targetProfile.id === requesterId || targetProfile.host_admin_id === requesterHostAdminId;
+      const isSameBusiness = requesterProfile.business_name && targetProfile.business_name === requesterProfile.business_name;
+      if (!isSameHost && !isSameBusiness) {
+        return NextResponse.json({ error: "This user is not under your organisation" }, { status: 403 });
+      }
     }
 
     if (targetProfile.role === "system_admin" && (role && role !== "system_admin" || status === "inactive")) {

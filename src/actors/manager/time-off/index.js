@@ -259,7 +259,7 @@ export default function ManagerTimeOff() {
               onClick={() => setRequestType('leave')}
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${requestType === 'leave' ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
-              Leave Request
+              One-off Leave
             </button>
           </div>
 

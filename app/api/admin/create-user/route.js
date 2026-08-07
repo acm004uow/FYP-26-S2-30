@@ -3,12 +3,14 @@ import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(request) {
   try {
-    const { email, full_name, business_name, role, department_id } = await request.json();
+    const { email, full_name, business_name, role, department_id, host_admin_id } = await request.json();
     if (!email || !full_name || !role) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     const supabase = createSupabaseAdmin();
     const token = request.headers.get("authorization")?.replace("Bearer ", "");
     let creatorBusinessName = null;
-    let hostAdminId = null;
+    // An explicit host_admin_id (e.g. a platform admin assigning a new user to a specific
+    // existing company) always wins over the creator-based resolution below.
+    let hostAdminId = host_admin_id || null;
 
     if (token) {
       const { data: authData } = await supabase.auth.getUser(token);
@@ -31,9 +33,11 @@ export async function POST(request) {
         }
 
         creatorBusinessName = creatorProfile?.business_name || null;
-        hostAdminId = creatorProfile?.role === "system_admin"
-          ? creatorId
-          : creatorProfile?.host_admin_id || null;
+        if (!host_admin_id) {
+          hostAdminId = creatorProfile?.role === "system_admin"
+            ? creatorId
+            : creatorProfile?.host_admin_id || null;
+        }
 
         if (!hostAdminId && creatorBusinessName) {
           const { data: hostAdmin } = await supabase

@@ -1,4 +1,4 @@
-import { Activity, Briefcase, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, ClipboardPlus, Clock, DollarSign, FileText, Globe, History, LayoutDashboard, ListChecks, Megaphone, Settings, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
+import { Activity, Briefcase, Building2, Calendar, CalendarClock, CalendarOff, CheckCircle2, ClipboardList, ClipboardPlus, Clock, DollarSign, FileText, Globe, History, LayoutDashboard, ListChecks, Megaphone, Settings, Sparkles, Tags, TrendingUp, UserCheck, UserCog, Users } from 'lucide-react'
 
 export const navMap = {
   manager: [
@@ -46,5 +46,7 @@ export const navMap = {
   ],
   userAdmin: [
     { name: 'Overview', path: '/user-admin', icon: Globe },
+    { name: 'Companies', path: '/user-admin-companies', icon: Building2 },
+    { name: 'Users', path: '/user-admin-users', icon: Users },
   ],
 }
