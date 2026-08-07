@@ -296,10 +296,10 @@ export default function MarketingHome() {
                 Browse companies
               </Link>
               <Link
-                href="/login?mode=signin"
+                href="/login"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
               >
-                Sign in
+                Sign in / Sign up
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -328,23 +328,7 @@ export default function MarketingHome() {
                 {hero.description}
               </p>
 
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Link
-                  href="/login"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-bold text-white shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:bg-indigo-500"
-                >
-                  Open application
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-                <Link
-                  href="/login"
-                  className="inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-5 text-sm font-bold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-white/15"
-                >
-                  Register as owner
-                </Link>
-              </div>
-
-              <div className="mt-7 flex items-center gap-3">
+              <div className="mt-9 flex items-center gap-3">
                 {heroScenarios.map((scenario, index) => (
                   <button
                     key={scenario.title}
@@ -467,13 +451,6 @@ export default function MarketingHome() {
                 The system connects department requests, manager decisions, staff execution, and reporting without
                 scattering updates across separate tools.
               </p>
-              <Link
-                href="/login"
-                className="mt-8 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-5 text-sm font-black text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
-              >
-                See it in action
-                <ArrowRight className="h-4 w-4" />
-              </Link>
             </div>
 
             <div className="grid gap-9">
@@ -499,20 +476,11 @@ export default function MarketingHome() {
         </section>
 
         <section id="roles" className="mx-auto max-w-7xl scroll-mt-32 px-5 py-20 sm:px-8">
-          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-            <div className="max-w-2xl">
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-indigo-600">Role-based workspace</p>
-              <h2 className="mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
-                Every user sees the work that matters to them.
-              </h2>
-            </div>
-            <Link
-              href="/login"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
-            >
-              Go to login
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+          <div className="max-w-2xl">
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-indigo-600">Role-based workspace</p>
+            <h2 className="mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
+              Every user sees the work that matters to them.
+            </h2>
           </div>
 
           <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -574,21 +542,6 @@ export default function MarketingHome() {
           </div>
         </section>
 
-        <section className="bg-white">
-          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 px-5 py-12 sm:px-8 md:flex-row md:items-center">
-            <div>
-              <h2 className="text-xl font-extrabold sm:text-2xl">Ready to manage allocations from one place?</h2>
-              <p className="mt-2 text-slate-600">Sign in with your role or create the first owner account.</p>
-            </div>
-            <Link
-              href="/login?mode=owner"
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-black text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
-            >
-              Launch Smart Task Allocation
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </section>
       </main>
     </>
   )

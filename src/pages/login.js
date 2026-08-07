@@ -21,7 +21,6 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [isCustomerBookingFlow, setIsCustomerBookingFlow] = useState(false)
-  const [isSignInOnly, setIsSignInOnly] = useState(false)
   const [isOwnerFlow, setIsOwnerFlow] = useState(false)
 
   useEffect(() => {
@@ -35,7 +34,6 @@ export default function LoginPage() {
     const next = params.get('next') || ''
     const mode = params.get('mode')
     setIsCustomerBookingFlow(next.startsWith('/customer-book'))
-    setIsSignInOnly(mode === 'signin')
     setIsOwnerFlow(mode === 'owner')
   }, [])
 
@@ -117,14 +115,6 @@ export default function LoginPage() {
     router.push(routeByRole[profile.role] || '/login')
   }
 
-  const handleGoogleSignIn = async () => {
-    setError('')
-    const next = typeof router.query.next === 'string' ? router.query.next : ''
-    const redirectTo = `${window.location.origin}/auth/callback${next ? `?next=${encodeURIComponent(next)}` : ''}`
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } })
-    if (oauthError) setError(oauthError.message)
-  }
-
   const signupRoleLabel = signupRoleLabels[signupRole] || ''
 
   const openSignup = (nextRole) => {
@@ -133,6 +123,10 @@ export default function LoginPage() {
     setCodeDigits(['', '', '', '', '', ''])
     setError('')
     setMessage('')
+  }
+
+  const closeSignup = () => {
+    setSignupRole(null)
   }
 
   const handleCodeDigitChange = (index, rawValue) => {
@@ -273,7 +267,8 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-lg p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">Welcome Back</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h2>
+          <p className="text-sm text-gray-500 mb-6">Log in to your account to continue.</p>
 
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
@@ -288,10 +283,10 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
               <input
                 type="email"
-                placeholder="Enter your email"
+                placeholder="you@company.com"
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
                 className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent text-sm bg-white"
@@ -325,51 +320,29 @@ export default function LoginPage() {
 
             <button type="submit"
               className="w-full py-3 bg-accent text-white rounded-lg font-semibold text-sm hover:bg-accent-600 active:bg-accent-700 transition">
-              Sign In
+              Log in
             </button>
 
-            <div className="flex items-center gap-3 text-xs text-gray-400">
-              <div className="h-px flex-1 bg-gray-200" />
-              or
-              <div className="h-px flex-1 bg-gray-200" />
+            <div className={isCustomerBookingFlow || isOwnerFlow ? '' : 'grid grid-cols-2 gap-3'}>
+              {!isCustomerBookingFlow && (
+                <button
+                  type="button"
+                  onClick={() => openSignup('system_admin')}
+                  className="w-full py-3 border border-accent-200 text-accent-600 rounded-lg font-semibold text-sm hover:bg-accent-100 transition"
+                >
+                  Sign Up as Owner
+                </button>
+              )}
+              {!isOwnerFlow && (
+                <button
+                  type="button"
+                  onClick={() => openSignup('customer')}
+                  className="w-full py-3 border border-accent-200 text-accent-600 rounded-lg font-semibold text-sm hover:bg-accent-100 transition"
+                >
+                  Sign Up as Customer
+                </button>
+              )}
             </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              className="w-full py-3 border border-gray-200 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-50 transition flex items-center justify-center gap-2"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 48 48" aria-hidden="true">
-                <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
-                <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
-                <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
-                <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
-              </svg>
-              Sign in with Google
-            </button>
-
-            {!isSignInOnly && (
-              <div className={isCustomerBookingFlow || isOwnerFlow ? '' : 'grid grid-cols-2 gap-3'}>
-                {!isCustomerBookingFlow && (
-                  <button
-                    type="button"
-                    onClick={() => openSignup('system_admin')}
-                    className="w-full py-3 border border-accent-200 text-accent-600 rounded-lg font-semibold text-sm hover:bg-accent-100 transition"
-                  >
-                    Sign Up as Owner
-                  </button>
-                )}
-                {!isOwnerFlow && (
-                  <button
-                    type="button"
-                    onClick={() => openSignup('customer')}
-                    className="w-full py-3 border border-accent-200 text-accent-600 rounded-lg font-semibold text-sm hover:bg-accent-100 transition"
-                  >
-                    Sign Up as Customer
-                  </button>
-                )}
-              </div>
-            )}
           </form>
 
           <p className="text-center text-xs text-gray-400 mt-6">
@@ -379,8 +352,8 @@ export default function LoginPage() {
       </div>
 
       {signupRole && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeSignup}>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg" onClick={event => event.stopPropagation()}>
             <div className="mb-5 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-800">Create {signupRoleLabel} Account</h3>
@@ -392,7 +365,7 @@ export default function LoginPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setSignupRole(null)}
+                onClick={closeSignup}
                 className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
               >
                 x

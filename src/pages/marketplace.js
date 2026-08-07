@@ -284,7 +284,7 @@ function PublicMarketplace() {
               </span>
             </Link>
             <Link
-              href="/login?mode=signin"
+              href="/login"
               className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
             >
               Sign in
