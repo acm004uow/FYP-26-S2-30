@@ -415,7 +415,7 @@ export default function TimeOffRequestsPanel() {
                 </span>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900">New Request</h3>
-                  <p className="mt-0.5 text-sm text-gray-500">Log a time-off request on behalf of a manager or staff member. It's saved as approved.</p>
+                  <p className="mt-0.5 text-sm text-gray-500">Log a time-off request on behalf of a manager or staff member. It&apos;s saved as approved.</p>
                 </div>
               </div>
               <button onClick={() => setModal(false)} className="shrink-0 rounded-lg p-1 hover:bg-gray-100">
