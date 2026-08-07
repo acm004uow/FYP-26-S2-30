@@ -46,6 +46,18 @@ export default function LoginPage() {
     department_staff: '/department',
   }
 
+  const canAccessNextRoute = (next, role) => {
+    const roleBase = routeByRole[role]
+    if (!roleBase || !next.startsWith('/') || next.startsWith('//')) return false
+
+    // This project uses both nested routes and hyphenated role routes, such
+    // as /manager-reports and /department-time-off.
+    return next === roleBase
+      || next.startsWith(`${roleBase}/`)
+      || next.startsWith(`${roleBase}-`)
+      || next.startsWith(`${roleBase}?`)
+  }
+
   const ensureProfile = async (accessToken, fallbackRole) => {
     const response = await fetch('/api/auth/ensure-profile', {
       method: 'POST',
@@ -107,12 +119,12 @@ export default function LoginPage() {
     }
 
     const next = typeof router.query.next === 'string' ? router.query.next : ''
-    if (next.startsWith('/') && !next.startsWith('//')) {
-      router.push(next)
+    if (canAccessNextRoute(next, profile.role)) {
+      router.replace(next)
       return
     }
 
-    router.push(routeByRole[profile.role] || '/login')
+    router.replace(routeByRole[profile.role] || '/login')
   }
 
   const signupRoleLabel = signupRoleLabels[signupRole] || ''

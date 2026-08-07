@@ -57,7 +57,7 @@ function DeltaBadge({ value, suffix, unit = '%' }) {
 function StatCard({ icon: Icon, label, value, theme, delta, deltaSuffix, deltaUnit }) {
   const t = STAT_THEME[theme]
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-gray-100 bg-white p-2 shadow-sm">
       <span className={`inline-flex h-9 w-9 items-center justify-center rounded-lg ${t.bg} mb-2.5`}>
         <Icon className={`h-5 w-5 ${t.icon}`} />
       </span>

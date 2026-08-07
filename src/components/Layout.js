@@ -12,6 +12,7 @@ import { useAuthUser } from '../context/AuthUserContext'
 const roleDisplayMap = {
   manager: 'Manager',
   staffMember: 'Staff Member',
+  departmentStaff: 'Department Staff',
   admin: 'Owner',
   customer: 'Customer',
   userAdmin: 'User Admin',
@@ -144,37 +145,40 @@ export default function Layout({ children, role = 'manager' }) {
 
     async function loadSessionData() {
       if (initializing) return
-      if (!user) {
+      let effectiveUser = user
+      if (!effectiveUser) {
         // A successful sign-in can navigate here before AuthUserContext has
-        // committed its SIGNED_IN update. Check Supabase directly so that
-        // transient state does not send the user back to the login page.
+        // committed its SIGNED_IN update. Continue with Supabase's session
+        // user immediately instead of leaving the protected page unresolved.
         const { data: { session } } = await supabase.auth.getSession()
-        if (session?.user) return
-        if (cancelled) return
-        router.push(`/login?next=${encodeURIComponent(router.asPath)}`)
-        return
+        effectiveUser = session?.user || null
+        if (!effectiveUser) {
+          if (cancelled) return
+          router.replace(`/login?next=${encodeURIComponent(router.asPath)}`)
+          return
+        }
       }
 
       const [{ data: profile }, { data: notificationRows }] = await Promise.all([
         supabase
           .from('profiles')
           .select('full_name,email,role,business_name,status,host_admin_id,phone')
-          .eq('id', user.id)
+          .eq('id', effectiveUser.id)
           .single(),
         supabase
           .from('notifications')
           .select('id,title,message,created_at')
-          .eq('user_id', user.id)
+          .eq('user_id', effectiveUser.id)
           .order('created_at', { ascending: false })
           .limit(10),
       ])
       if (cancelled) return
 
       const resolvedProfile = profile || {
-        full_name: user.user_metadata?.full_name || user.email,
-        email: user.email,
+        full_name: effectiveUser.user_metadata?.full_name || effectiveUser.email,
+        email: effectiveUser.email,
         role,
-        business_name: user.user_metadata?.business_name || '',
+        business_name: effectiveUser.user_metadata?.business_name || '',
         status: 'active',
         phone: '',
       }
@@ -213,7 +217,7 @@ export default function Layout({ children, role = 'manager' }) {
       }
 
       setProfileInfo({ ...resolvedProfile, business_name: resolvedBusinessName })
-      setUserId(user.id)
+      setUserId(effectiveUser.id)
       setProfileEditForm({ full_name: resolvedProfile.full_name || '', phone: resolvedProfile.phone || '' })
       if (resolvedBusinessName) setBusinessName(resolvedBusinessName)
 
@@ -221,7 +225,7 @@ export default function Layout({ children, role = 'manager' }) {
         const { data: staffProfile } = await supabase
           .from('staff_profiles')
           .select('assigned_region,latitude,longitude')
-          .eq('user_id', user.id)
+          .eq('user_id', effectiveUser.id)
           .maybeSingle()
         if (!cancelled && staffProfile) {
           setStaffAddress({ assigned_region: staffProfile.assigned_region || '', latitude: staffProfile.latitude, longitude: staffProfile.longitude })
@@ -235,10 +239,10 @@ export default function Layout({ children, role = 'manager' }) {
       })))
 
       notificationChannel = supabase
-        .channel(`notifications-${user.id}-${Date.now()}`)
+        .channel(`notifications-${effectiveUser.id}-${Date.now()}`)
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${effectiveUser.id}` },
           (payload) => {
             const row = payload.new
             setNotifications(prev => [{

@@ -11,11 +11,13 @@ import {
   LayoutDashboard,
   LockKeyhole,
   MapPin,
+  Menu,
   MessageSquareText,
   ShieldCheck,
   Sparkles,
   UserRound,
   UsersRound,
+  X,
 } from 'lucide-react'
 
 const metrics = [
@@ -164,6 +166,7 @@ export default function MarketingHome() {
   const [activeHero, setActiveHero] = useState(0)
   const [activeNav, setActiveNav] = useState('#features')
   const [activeStep, setActiveStep] = useState(0)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     const syncActiveNav = () => {
@@ -257,7 +260,7 @@ export default function MarketingHome() {
 
       <main className="min-h-screen bg-[#f6f9fc] text-slate-950">
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
-          <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
+          <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-3 sm:px-8">
             <Link href="/" className="flex min-w-0 items-center gap-3">
               <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-lg">
                 <LayoutDashboard className="h-7 w-7" />
@@ -288,7 +291,7 @@ export default function MarketingHome() {
               ))}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <Link
                 href="/marketplace"
                 className="hidden sm:inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-md"
@@ -297,13 +300,37 @@ export default function MarketingHome() {
               </Link>
               <Link
                 href="/login"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
+                className="hidden h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600 sm:inline-flex"
               >
                 Sign in / Sign up
                 <ArrowRight className="h-4 w-4" />
               </Link>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen((open) => !open)}
+                className="grid h-11 w-11 place-items-center rounded-xl border border-slate-200 bg-white text-slate-800 md:hidden"
+                aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
             </div>
           </nav>
+          {mobileMenuOpen && (
+            <div className="border-t border-slate-200 bg-white px-5 py-4 shadow-xl md:hidden">
+              <div className="mx-auto grid max-w-7xl gap-1">
+                {navItems.map((item) => (
+                  <a key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)} className="rounded-xl px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                    {item.label}
+                  </a>
+                ))}
+                <div className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-4">
+                  <Link href="/marketplace" className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 text-sm font-bold text-slate-800">Browse companies</Link>
+                  <Link href="/login" className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white">Sign in / Sign up</Link>
+                </div>
+              </div>
+            </div>
+          )}
         </header>
 
         <section className="relative overflow-hidden bg-slate-950 text-white">
@@ -327,6 +354,15 @@ export default function MarketingHome() {
               <p key={hero.description} className="hero-copy-in mt-6 max-w-xl text-base font-semibold leading-8 text-slate-400">
                 {hero.description}
               </p>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Link href="/login" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-6 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-50">
+                  Get started free <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link href="/marketplace" className="inline-flex h-12 items-center justify-center rounded-xl border border-white/20 bg-white/5 px-6 text-sm font-bold text-white transition hover:bg-white/10">
+                  Find a service company
+                </Link>
+              </div>
 
               <div className="mt-9 flex items-center gap-3">
                 {heroScenarios.map((scenario, index) => (
@@ -409,6 +445,21 @@ export default function MarketingHome() {
                 </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section className="border-b border-slate-200 bg-white">
+          <div className="mx-auto grid max-w-7xl gap-6 px-5 py-8 sm:grid-cols-3 sm:px-8">
+            {[
+              ['One shared workspace', 'Requests, schedules, assignments, proof, and reports stay connected.'],
+              ['Decisions with context', 'Availability, workload, distance, and priority inform every match.'],
+              ['Built for accountability', 'Role permissions and audit history make every action traceable.'],
+            ].map(([title, text]) => (
+              <div key={title} className="flex gap-3">
+                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
+                <div><p className="font-extrabold text-slate-950">{title}</p><p className="mt-1 text-sm leading-6 text-slate-600">{text}</p></div>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -538,6 +589,19 @@ export default function MarketingHome() {
                   <span className="font-bold">{label}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="relative overflow-hidden bg-white px-5 py-20 sm:px-8">
+          <div className="absolute left-1/2 top-0 h-64 w-64 -translate-x-1/2 rounded-full bg-emerald-200/40 blur-3xl" />
+          <div className="relative mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-gradient-to-br from-blue-600 via-indigo-600 to-emerald-500 px-6 py-14 text-center text-white shadow-2xl shadow-blue-200 sm:px-12">
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-100">Ready when your team is</p>
+            <h2 className="mx-auto mt-4 max-w-2xl text-3xl font-black tracking-tight sm:text-5xl">Turn incoming work into clear, accountable action.</h2>
+            <p className="mx-auto mt-5 max-w-xl leading-7 text-blue-50">Create your workspace, bring your team together, and make the next assignment with better information.</p>
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+              <Link href="/login" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-white px-7 text-sm font-black text-indigo-700 shadow-lg transition hover:-translate-y-0.5">Create an account <ArrowRight className="h-4 w-4" /></Link>
+              <Link href="/marketplace" className="inline-flex h-12 items-center justify-center rounded-xl border border-white/30 bg-white/10 px-7 text-sm font-bold text-white transition hover:bg-white/20">Browse the marketplace</Link>
             </div>
           </div>
         </section>
