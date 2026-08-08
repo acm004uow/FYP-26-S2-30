@@ -278,7 +278,7 @@ export default function AdminPanel() {
               users={users}
               staffProfiles={staffProfiles}
               managers={users.filter(u => u.role === 'manager' && u.status === 'active')}
-              onAddUser={() => setShowCreate(true)}
+              onAddUser={() => { setMessage(''); setShowCreate(true) }}
               onResetUser={(user) => { setShowReset(user); setResetPassword('') }}
               onChangeRole={handleRoleChange}
               onToggleStatus={handleToggleStatus}

@@ -181,14 +181,14 @@ export default function ManagerUserAccounts() {
             <p className="text-gray-500 text-sm mt-1">{filteredUsers.length} of {users.length} staff profiles</p>
           </div>
           <button
-            onClick={() => setShowCreate(true)}
+            onClick={() => { setMessage(''); setShowCreate(true) }}
             className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2.5 text-sm font-semibold text-white transition"
           >
             <Plus className="w-4 h-4" /> Add employee
           </button>
         </div>
 
-        {message && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
+        {message && !showCreate && <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-3 text-sm text-accent-800">{message}</div>}
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <div className="relative w-full sm:w-72">
