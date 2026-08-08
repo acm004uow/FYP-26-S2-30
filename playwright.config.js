@@ -12,7 +12,9 @@ module.exports = defineConfig({
   // a file serial (default fullyParallel:false) avoids that; different files still run in
   // parallel across workers.
   fullyParallel: false,
-  timeout: 60000, // next dev JIT-compiles each route on first visit; give that room under load.
+  timeout: 90000, // next dev JIT-compiles each route on first visit; give that room under load.
+  workers: 4, // cap concurrency against the single shared dev server as the suite has grown — more
+  // workers just means more simultaneous first-compiles competing for the same process.
   retries: process.env.CI ? 1 : 0,
   reporter: 'html',
   use: {

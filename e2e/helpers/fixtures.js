@@ -33,5 +33,9 @@ module.exports = {
     secretBookingLocation: 'Company B Secret Location, Singapore',
     secretCustomerName: 'Company B Confidential Customer',
   },
+  platformAdmin: {
+    id: '681bcc6f-6baa-43af-8518-6bd73d96fc14',
+    email: 'platform-admin@e2e-test.local',
+  },
   password: process.env.E2E_TEST_PASSWORD || 'E2eTest!2026',
 }
