@@ -384,6 +384,17 @@ export default function LoginPage() {
               </button>
             </div>
 
+            {error && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+                {error}
+              </div>
+            )}
+            {message && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+                {message}
+              </div>
+            )}
+
             {signupStep === 'details' ? (
               <form onSubmit={handleSignup} className="space-y-4">
                 <div>
