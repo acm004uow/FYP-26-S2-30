@@ -3,6 +3,7 @@ import { Activity, Briefcase, Building2, Calendar, CalendarClock, CalendarOff, C
 export const navMap = {
   manager: [
     { name: 'Dashboard', path: '/manager', icon: LayoutDashboard },
+    { name: 'Crew', path: '/manager-user-accounts', icon: UserCog },
     { name: 'Staff', path: '/manager-staff', icon: Users },
     { name: 'Bookings', path: '/manager-bookings', icon: ClipboardList },
     { name: 'New Task', path: '/manager-new-task', icon: ClipboardPlus },

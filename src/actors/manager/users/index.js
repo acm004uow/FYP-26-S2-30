@@ -18,10 +18,16 @@ const ROLE_FILTERS = [
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'active', label: 'Active' },
+  { value: 'pending', label: 'Pending' },
   { value: 'suspended', label: 'Suspended' },
 ]
 
 const PAGE_SIZE = 8
+
+// Invited but never signed in yet — status is already 'active' at invite time (see
+// app/api/admin/create-user/route.js), so "accepted the invite" is tracked separately via
+// first_login_at (set once, on first successful login — see src/pages/login.js).
+const isPending = (user) => user.status === 'active' && !user.first_login_at
 
 const roleLabel = (role) => ({ manager: 'Manager', staff_member: 'Staff Member' }[role] || role)
 
@@ -62,7 +68,7 @@ export default function ManagerUserAccounts() {
 
     const hostAdminId = currentProfile?.host_admin_id || ''
     const businessName = currentProfile?.business_name || ''
-    const baseProfileSelect = 'id,full_name,email,role,status,updated_at,business_name'
+    const baseProfileSelect = 'id,full_name,email,role,status,updated_at,business_name,first_login_at'
     const hostProfileSelect = `${baseProfileSelect},host_admin_id`
     const profileRequests = [
       supabase.from('profiles').select(baseProfileSelect).eq('id', user?.id),
@@ -158,7 +164,8 @@ export default function ManagerUserAccounts() {
     const term = search.trim().toLowerCase()
     return users.filter(user => {
       if (roleFilter !== 'all' && user.role !== roleFilter) return false
-      if (statusFilter === 'active' && user.status !== 'active') return false
+      if (statusFilter === 'active' && (user.status !== 'active' || isPending(user))) return false
+      if (statusFilter === 'pending' && !isPending(user)) return false
       if (statusFilter === 'suspended' && user.status === 'active') return false
       if (!term) return true
       const staffProfile = staffProfilesByUserId[user.id]
@@ -184,7 +191,7 @@ export default function ManagerUserAccounts() {
             onClick={() => { setMessage(''); setShowCreate(true) }}
             className="inline-flex items-center gap-2 rounded-lg bg-accent hover:bg-accent-600 px-4 py-2.5 text-sm font-semibold text-white transition"
           >
-            <Plus className="w-4 h-4" /> Add employee
+            <Plus className="w-4 h-4" /> Add Crew Member
           </button>
         </div>
 
@@ -288,8 +295,8 @@ export default function ManagerUserAccounts() {
                         ) : '—'}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${suspended ? 'bg-gray-100 text-gray-600' : 'border border-accent-500 text-accent-600'}`}>
-                          {suspended ? 'Suspended' : 'Active'}
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${suspended ? 'bg-gray-100 text-gray-600' : isPending(user) ? 'bg-amber-100 text-amber-700' : 'border border-accent-500 text-accent-600'}`}>
+                          {suspended ? 'Suspended' : isPending(user) ? 'Pending' : 'Active'}
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
@@ -367,9 +374,12 @@ export default function ManagerUserAccounts() {
               </button>
             </div>
 
-            <div className={`mt-4 inline-block rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${managingUser.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {managingUser.status === 'active' ? 'active' : 'inactive'}
+            <div className={`mt-4 inline-block rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${isPending(managingUser) ? 'bg-amber-100 text-amber-700' : managingUser.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {isPending(managingUser) ? 'pending' : managingUser.status === 'active' ? 'active' : 'inactive'}
             </div>
+            {isPending(managingUser) && (
+              <p className="mt-1.5 text-xs text-amber-700">Invited — hasn&apos;t signed in yet.</p>
+            )}
 
             <div className="mt-4">
               <label htmlFor="manage-role" className="mb-1 block text-xs font-medium text-gray-500">Access role</label>

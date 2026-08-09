@@ -1,7 +1,7 @@
 import Layout from '../../../components/Layout'
 import BookingMessagesPanel from '../../../components/BookingMessagesPanel'
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, AlertTriangle, Bell, Briefcase, Calendar, CheckCircle2, ChevronDown, Clock, Filter, Flag, History, Home, Layers, MapPin, MessageCircle, RefreshCw, Sparkles, Truck, User, XCircle } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Bell, Briefcase, Calendar, CheckCircle2, ChevronDown, Clock, FileText, Filter, Flag, History, Home, Layers, MapPin, MessageCircle, RefreshCw, Search, Sparkles, Truck, User, XCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
 
@@ -67,6 +67,7 @@ export default function DepartmentHistory() {
   const [issueSubmitting, setIssueSubmitting] = useState(false)
   const [statusFilter, setStatusFilter] = useState('All')
   const [filterOpen, setFilterOpen] = useState(false)
+  const [historySearch, setHistorySearch] = useState('')
   const filterRef = useRef(null)
 
   const showNotification = (message) => {
@@ -79,7 +80,7 @@ export default function DepartmentHistory() {
     setHistoryLoading(true)
     const { data } = await supabase
       .from('bookings')
-      .select('id,service_type,location,scheduled_date,scheduled_time,status,created_at,urgency,issue_status,issue_description,issue_reported_at,department_confirmed_at,assigned_staff_id,staff_profiles(staff_name,user_id)')
+      .select('id,service_type,location,scheduled_date,scheduled_time,status,created_at,urgency,issue_status,issue_description,issue_reported_at,department_confirmed_at,assigned_staff_id,staff_profiles(staff_name,user_id),task_proofs(file_url,file_name,created_at)')
       .eq('created_by', user?.id)
       .eq('source', 'department')
       .order('created_at', { ascending: false })
@@ -165,9 +166,15 @@ export default function DepartmentHistory() {
     await loadHistory()
   }
 
-  const visibleBookings = statusFilter === 'All'
-    ? historyBookings
-    : historyBookings.filter(booking => booking.status === statusFilter)
+  const matchesHistorySearch = (booking, term) => {
+    if (!term.trim()) return true
+    const haystack = [booking.service_type, booking.location].filter(Boolean).join(' ').toLowerCase()
+    return haystack.includes(term.trim().toLowerCase())
+  }
+
+  const visibleBookings = historyBookings
+    .filter(booking => statusFilter === 'All' || booking.status === statusFilter)
+    .filter(booking => matchesHistorySearch(booking, historySearch))
 
   return (
     <Layout role="departmentStaff">
@@ -187,7 +194,17 @@ export default function DepartmentHistory() {
             </div>
           </div>
 
-          <div className="relative shrink-0" ref={filterRef}>
+          <div className="flex shrink-0 items-center gap-2">
+          <div className="relative w-56">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={historySearch}
+              onChange={e => setHistorySearch(e.target.value)}
+              placeholder="Search by title or location..."
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
+            />
+          </div>
+          <div className="relative" ref={filterRef}>
             <button
               type="button"
               onClick={() => setFilterOpen(open => !open)}
@@ -210,6 +227,7 @@ export default function DepartmentHistory() {
                 ))}
               </div>
             )}
+          </div>
           </div>
         </div>
 
@@ -292,6 +310,27 @@ export default function DepartmentHistory() {
 
                 {booking.status === 'completed' && (
                   <div className="mt-3 border-t border-gray-100 pt-3">
+                    <div className="mb-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1.5">Proof of work</p>
+                      {booking.task_proofs?.[0]?.file_url ? (
+                        <a
+                          href={booking.task_proofs[0].file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between gap-2 rounded-lg border border-[#BFE0E0] bg-[#E6F2F2] px-3 py-2 text-sm font-semibold text-[#005252] hover:bg-[#d5eaea] transition"
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <FileText className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{booking.task_proofs[0].file_name || 'View proof'}</span>
+                          </span>
+                          <span className="shrink-0 text-xs">Open →</span>
+                        </a>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-sm text-gray-400">
+                          No proof uploaded
+                        </div>
+                      )}
+                    </div>
                     {booking.issue_status === 'open' ? (
                       <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                         <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
