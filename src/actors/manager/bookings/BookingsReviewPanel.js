@@ -190,7 +190,7 @@ export default function BookingsReviewPanel() {
         .from('bookings')
         .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
         .eq('host_admin_id', hostAdminIdResolved)
-        .in('status', ['pending', 'approved', 'rejected'])
+        .in('status', ['pending', 'approved', 'in_progress', 'completed', 'rejected'])
         .order('created_at', { ascending: false }),
       supabase
         .from('staff_profiles')
@@ -404,7 +404,7 @@ export default function BookingsReviewPanel() {
 
   const performAssignment = async (booking, staffId, action) => {
     const staff = staffRows.find(item => item.id === staffId)
-    if (!staff || booking.status === 'rejected') return
+    if (!staff || ['rejected', 'completed'].includes(booking.status)) return
     if (!staff.canAssign) {
       showNotification(`${staff.name} is not available for assignment.`)
       return
@@ -906,7 +906,7 @@ export default function BookingsReviewPanel() {
                   </div>
                 )}
 
-                {booking.status !== 'rejected' && (
+                {!['rejected', 'completed'].includes(booking.status) && (
                   <button
                     type="button"
                     onClick={() => setReassigningId(prev => prev === booking.id ? null : booking.id)}
