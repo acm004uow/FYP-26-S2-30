@@ -242,9 +242,10 @@ export default function AdminPanel() {
       setMessage('Please enter a new temporary password.')
       return
     }
+    const { data: { session } } = await supabase.auth.getSession()
     const response = await fetch('/api/admin/reset-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
       body: JSON.stringify({ user_id: showReset.id, new_password: resetPassword }),
     })
     const result = await response.json()

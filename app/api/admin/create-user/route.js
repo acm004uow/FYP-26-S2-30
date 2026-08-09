@@ -1,60 +1,74 @@
 import { NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabaseAdmin";
 
+// Which target roles each creator role is allowed to invite through this endpoint.
+const ALLOWED_CREATE_ROLES = {
+  user_admin: new Set(["system_admin", "manager", "department_staff", "staff_member", "customer", "user_admin"]),
+  system_admin: new Set(["manager", "department_staff", "staff_member", "system_admin"]),
+  manager: new Set(["manager", "staff_member"]),
+};
+
 export async function POST(request) {
   try {
     const { email, full_name, business_name, role, department_id, host_admin_id } = await request.json();
     if (!email || !full_name || !role) return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+
     const supabase = createSupabaseAdmin();
     const token = request.headers.get("authorization")?.replace("Bearer ", "");
-    let creatorBusinessName = null;
-    // An explicit host_admin_id (e.g. a platform admin assigning a new user to a specific
-    // existing company) always wins over the creator-based resolution below.
-    let hostAdminId = host_admin_id || null;
+    if (!token) return NextResponse.json({ error: "You must be logged in." }, { status: 401 });
 
-    if (token) {
-      const { data: authData } = await supabase.auth.getUser(token);
-      const creatorId = authData?.user?.id;
+    const { data: authData } = await supabase.auth.getUser(token);
+    const creatorId = authData?.user?.id;
+    if (!creatorId) return NextResponse.json({ error: "Your session has expired. Please log in again." }, { status: 401 });
 
-      if (creatorId) {
-        let { data: creatorProfile, error: creatorProfileError } = await supabase
-          .from("profiles")
-          .select("role,status,business_name,host_admin_id")
-          .eq("id", creatorId)
-          .single();
+    let { data: creatorProfile, error: creatorProfileError } = await supabase
+      .from("profiles")
+      .select("role,status,business_name,host_admin_id")
+      .eq("id", creatorId)
+      .single();
 
-        if (creatorProfileError) {
-          const fallbackProfile = await supabase
-            .from("profiles")
-            .select("role,status,business_name")
-            .eq("id", creatorId)
-            .single();
-          creatorProfile = fallbackProfile.data;
-        }
-
-        creatorBusinessName = creatorProfile?.business_name || null;
-        if (!host_admin_id) {
-          hostAdminId = creatorProfile?.role === "system_admin"
-            ? creatorId
-            : creatorProfile?.host_admin_id || null;
-        }
-
-        if (!hostAdminId && creatorBusinessName) {
-          const { data: hostAdmin } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("role", "system_admin")
-            .eq("business_name", creatorBusinessName)
-            .order("created_at", { ascending: true })
-            .limit(1)
-            .maybeSingle();
-
-          hostAdminId = hostAdmin?.id || null;
-        }
-      }
+    if (creatorProfileError) {
+      const fallbackProfile = await supabase
+        .from("profiles")
+        .select("role,status,business_name")
+        .eq("id", creatorId)
+        .single();
+      creatorProfile = fallbackProfile.data;
     }
 
-    const resolvedBusinessName = business_name || creatorBusinessName || null;
+    if (!creatorProfile || creatorProfile.status !== "active") {
+      return NextResponse.json({ error: "Only an active account can invite users." }, { status: 403 });
+    }
+
+    const allowedRoles = ALLOWED_CREATE_ROLES[creatorProfile.role];
+    if (!allowedRoles || !allowedRoles.has(role)) {
+      return NextResponse.json({ error: "You are not allowed to create a user with this role." }, { status: 403 });
+    }
+
+    const isPlatformAdmin = creatorProfile.role === "user_admin";
+    const creatorBusinessName = creatorProfile.business_name || null;
+
+    // Only a platform admin may assign an arbitrary company — an owner or manager is always
+    // scoped to their own, regardless of what the client sends.
+    let hostAdminId = isPlatformAdmin ? (host_admin_id || null) : null;
+    if (!hostAdminId) {
+      hostAdminId = creatorProfile.role === "system_admin" ? creatorId : creatorProfile.host_admin_id || null;
+    }
+
+    if (!hostAdminId && creatorBusinessName) {
+      const { data: hostAdmin } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "system_admin")
+        .eq("business_name", creatorBusinessName)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      hostAdminId = hostAdmin?.id || null;
+    }
+
+    const resolvedBusinessName = (isPlatformAdmin ? business_name : null) || creatorBusinessName || null;
     const metadata = { full_name, role };
     if (resolvedBusinessName) metadata.business_name = resolvedBusinessName;
     if (hostAdminId) metadata.host_admin_id = hostAdminId;
