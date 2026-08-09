@@ -46,8 +46,14 @@ const ROLE_META = {
 const STATUS_FILTERS = [
   { value: 'all', label: 'All' },
   { value: 'active', label: 'Active' },
+  { value: 'pending', label: 'Pending' },
   { value: 'suspended', label: 'Suspended' },
 ]
+
+// Invited but never signed in yet — status is already 'active' at invite time (see
+// app/api/admin/create-user/route.js), so "accepted the invite" is tracked separately via
+// first_login_at (set once, on first successful login — see src/pages/login.js).
+const isPending = (user) => user.status === 'active' && !user.first_login_at
 
 const PAGE_SIZE = 8
 
@@ -85,9 +91,12 @@ function UserManageModal({ user, staffProfile, managers, currentUserId, onClose,
           </button>
         </div>
 
-        <div className={`mt-4 inline-block rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {user.status === 'active' ? 'active' : 'inactive'}
+        <div className={`mt-4 inline-block rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide ${isPending(user) ? 'bg-amber-100 text-amber-700' : user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+          {isPending(user) ? 'pending' : user.status === 'active' ? 'active' : 'inactive'}
         </div>
+        {isPending(user) && (
+          <p className="mt-1.5 text-xs text-amber-700">Invited — hasn&apos;t signed in yet.</p>
+        )}
 
         <div className="mt-4">
           <label htmlFor={`role-${user.id}`} className="mb-1 block text-xs font-medium text-gray-500">Access role</label>
@@ -223,7 +232,8 @@ export default function UserAccountsPanel({ users, staffProfiles = [], managers 
     const term = search.trim().toLowerCase()
     return users.filter(user => {
       if (roleFilter !== 'all' && user.role !== roleFilter) return false
-      if (statusFilter === 'active' && user.status !== 'active') return false
+      if (statusFilter === 'active' && (user.status !== 'active' || isPending(user))) return false
+      if (statusFilter === 'pending' && !isPending(user)) return false
       if (statusFilter === 'suspended' && user.status === 'active') return false
       if (!term) return true
       const staffProfile = staffProfilesByUserId[user.id]
@@ -343,8 +353,14 @@ export default function UserAccountsPanel({ users, staffProfiles = [], managers 
                     </td>
                     <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{staffProfile?.assigned_region || '—'}</span></td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${suspended ? 'bg-gray-100 text-gray-600' : 'border border-accent-500 text-accent-600'}`}>
-                        {suspended ? 'Suspended' : 'Active'}
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                        suspended
+                          ? 'bg-gray-100 text-gray-600'
+                          : isPending(user)
+                            ? 'border border-amber-400 text-amber-600'
+                            : 'border border-accent-500 text-accent-600'
+                      }`}>
+                        {suspended ? 'Suspended' : isPending(user) ? 'Pending' : 'Active'}
                       </span>
                     </td>
                     <td className="px-3 py-2.5">

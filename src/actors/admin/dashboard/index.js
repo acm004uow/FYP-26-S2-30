@@ -62,7 +62,7 @@ export default function AdminPanel() {
     // An admin's own host_admin_id should always self-reference; don't trust a stale value left
     // over from before a role change (e.g. this account used to be a manager under someone else).
     const hostAdminId = currentProfile?.role === 'system_admin' ? user?.id || '' : currentProfile?.host_admin_id || user?.id || ''
-    const baseProfileSelect = 'id,full_name,email,role,status,created_at,business_name'
+    const baseProfileSelect = 'id,full_name,email,role,status,created_at,business_name,first_login_at'
     const hostProfileSelect = `${baseProfileSelect},host_admin_id`
     const profileRequests = [
       supabase.from('profiles').select(baseProfileSelect).eq('id', user?.id),

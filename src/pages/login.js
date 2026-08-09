@@ -118,6 +118,14 @@ export default function LoginPage() {
       return
     }
 
+    // First successful login after being invited — lets the Users panels distinguish
+    // "invited, hasn't signed in yet" (Pending) from actually active. Only ever set once.
+    await supabase
+      .from('profiles')
+      .update({ first_login_at: new Date().toISOString() })
+      .eq('id', data.user.id)
+      .is('first_login_at', null)
+
     const next = typeof router.query.next === 'string' ? router.query.next : ''
     if (canAccessNextRoute(next, profile.role)) {
       router.replace(next)

@@ -23,7 +23,7 @@ export default function UserAdminUsers() {
   const loadPlatformData = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('id,full_name,email,role,business_name,host_admin_id,status,created_at')
+      .select('id,full_name,email,role,business_name,host_admin_id,status,created_at,first_login_at')
       .order('created_at', { ascending: false })
     setProfiles(data || [])
   }
@@ -199,6 +199,10 @@ export default function UserAdminUsers() {
               const palette = avatarPaletteFor(p.full_name || p.email)
               const meta = ROLE_META[p.role]
               const isActive = p.status === 'active'
+              // Invited but never signed in — status is already 'active' at invite time (see
+              // app/api/admin/create-user/route.js); acceptance is tracked via first_login_at
+              // (set once, on first successful login — see src/pages/login.js).
+              const isPending = isActive && !p.first_login_at
               return (
                 <div
                   key={p.id}
@@ -223,8 +227,8 @@ export default function UserAdminUsers() {
                     </div>
                   </div>
                   <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap ${meta?.pill || 'bg-gray-100 text-gray-700'}`}>{roleLabel(p.role)}</span>
-                  <span className={`inline-flex w-fit items-center gap-1.5 text-xs font-medium ${isActive ? 'text-green-600' : 'text-red-500'}`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${isActive ? 'bg-green-500' : 'bg-red-500'}`} /> {isActive ? 'Active' : 'Inactive'}
+                  <span className={`inline-flex w-fit items-center gap-1.5 text-xs font-medium ${isPending ? 'text-amber-600' : isActive ? 'text-green-600' : 'text-red-500'}`}>
+                    <span className={`h-1.5 w-1.5 rounded-full ${isPending ? 'bg-amber-500' : isActive ? 'bg-green-500' : 'bg-red-500'}`} /> {isPending ? 'Pending' : isActive ? 'Active' : 'Inactive'}
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 justify-self-end" />
                 </div>

@@ -96,6 +96,7 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
   const [leaveReasonCategory, setLeaveReasonCategory] = useState(LEAVE_REASON_OPTIONS[0])
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
+  const [profileError, setProfileError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [notification, setNotification] = useState(null)
   const [publicHolidays, setPublicHolidays] = useState(new Set())
@@ -144,6 +145,9 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
       if (cancelled) return
       setProfile(requesterProfile)
       if (!requesterProfile) {
+        setProfileError(
+          "We couldn't load your staff profile, so time-off requests are unavailable right now. Contact your administrator to check your account."
+        )
         setLoading(false)
         return
       }
@@ -229,7 +233,10 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
   const handleSubmit = async (event) => {
     event.preventDefault()
     setError('')
-    if (!profile) return
+    if (!profile) {
+      setError("We couldn't load your staff profile, so this request can't be submitted. Contact your administrator to check your account.")
+      return
+    }
 
     let payloads
     let summary
@@ -321,6 +328,9 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
 
         {notification && (
           <div className={`mb-5 rounded-lg border px-4 py-3 text-sm ${theme.notif}`}>{notification}</div>
+        )}
+        {profileError && (
+          <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{profileError}</div>
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 mb-6">
@@ -488,7 +498,8 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !!profileError}
+              title={profileError || undefined}
               className={`inline-flex w-auto items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-60 ${theme.solid}`}
             >
               <Send className="w-4 h-4" /> {submitting ? 'Submitting...' : 'Submit request'}
