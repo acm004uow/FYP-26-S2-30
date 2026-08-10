@@ -110,7 +110,7 @@ const profileRoleDisplayMap = {
   userAdmin: 'User Admin',
 }
 
-export default function Layout({ children, role = 'manager' }) {
+export default function Layout({ children, role = 'manager', sidebarExtra = null }) {
   const router = useRouter()
   const { user, initializing } = useAuthUser()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -515,6 +515,7 @@ export default function Layout({ children, role = 'manager' }) {
             <div className="flex-1 space-y-0.5 overflow-y-auto rounded-2xl border border-gray-100 p-2 shadow-sm" style={{ backgroundColor: SIDEBAR_ROLE_COLORS[role] || '#003152' }}>
               {nav.map(item => renderNavLink(item))}
             </div>
+            {sidebarExtra}
             {isOwnerNav && (
               <p className="mt-4 px-4 text-center text-[11px] text-gray-400">© {new Date().getFullYear()} {ownerBusinessName}</p>
             )}

@@ -21,6 +21,7 @@ export const navMap = {
     { name: 'Next Week', path: '/staff-next-week', icon: Calendar },
     { name: 'Leave Application', path: '/staff-time-off', icon: CalendarOff },
     { name: 'Attendance', path: '/staff-attendance', icon: UserCheck },
+    { name: 'Worked Hours', path: '/staff-worked-hours', icon: Clock },
   ],
   departmentStaff: [
     { name: 'Task', path: '/department', icon: ListChecks },
