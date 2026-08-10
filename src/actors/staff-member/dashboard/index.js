@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, FileUp, AlertCircle, AlertTriangle, ClipboardList, Sparkles, FileText, User, LogIn, LogOut, MessageCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
-import { getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
+import { formatDuration, getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
 import { CHECK_IN_RADIUS_METERS, getCurrentPosition, getDistanceMeters } from '../../../../lib/geolocation'
 import { useAuthUser } from '../../../context/AuthUserContext'
 
@@ -266,19 +266,34 @@ export default function StaffMemberDashboard() {
         if (proofInsertError) throw proofInsertError
       }
 
+      const completedAt = new Date()
+
       const { error: taskError } = await supabase
         .from('bookings')
-        .update({ status: 'completed', checked_out_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .update({ status: 'completed', checked_out_at: completedAt.toISOString(), updated_at: completedAt.toISOString() })
         .eq('id', proofTask.id)
         .eq('assigned_staff_id', profile.id)
 
       if (taskError) throw taskError
 
+      // Real elapsed check-in-to-check-out time, not the pre-assigned estimate — this feeds the
+      // owner's allowance/payroll calculation (see ReportsPanel.js's Staff Pay Summary, which
+      // computes hours the same way from bookings.checked_in_at/checked_out_at directly) and the
+      // recommendation engine's max-weekly-hours cap (lib/recommendationEngine.js), so both need
+      // to reflect actual time worked. Falls back to a nominal 2h only if check-in was somehow
+      // never recorded (shouldn't happen — completion is only reachable after check-in).
+      const actualHours = proofTask.checkedInAtRaw
+        ? Math.round(Math.max(0, (completedAt - new Date(proofTask.checkedInAtRaw)) / 3600000) * 100) / 100
+        : 2
+
       const { error: workloadError } = await supabase
         .from('staff_profiles')
         .update({
           current_workload: Math.max(0, Number(profile.current_workload || 0) - 1),
-          updated_at: new Date().toISOString(),
+          // Accumulates actual hours worked this week (reset to 0 by the weekly cron once each
+          // business's own cutoff passes — app/api/cron/weekly-schedule/route.js).
+          weekly_working_hours: Number(profile.weekly_working_hours || 0) + actualHours,
+          updated_at: completedAt.toISOString(),
         })
         .eq('id', profile.id)
 
@@ -557,10 +572,13 @@ export default function StaffMemberDashboard() {
               </div>
             </div>
 
-            {(task.checkedInAt || task.checkedOutAt) && (
+            {(task.checkedInAtRaw || task.checkedOutAtRaw) && (
               <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-100 p-3 text-xs text-emerald-800 space-y-1">
                 {task.checkedInAt && <p>Checked in: {task.checkedInAt}</p>}
                 {task.checkedOutAt && <p>Checked out: {task.checkedOutAt}</p>}
+                {task.checkedInAtRaw && task.checkedOutAtRaw && (
+                  <p className="font-semibold">Worked: {formatDuration(new Date(task.checkedOutAtRaw) - new Date(task.checkedInAtRaw))}</p>
+                )}
               </div>
             )}
 
@@ -937,6 +955,13 @@ export default function StaffMemberDashboard() {
                             {getTaskDisplayStatus(selectedCalendarTask)}
                           </p>
 
+                          {selectedCalendarTask.checkedInAtRaw && selectedCalendarTask.checkedOutAtRaw && (
+                            <p>
+                              <span className="font-medium text-gray-800">Worked:</span>{' '}
+                              {formatDuration(new Date(selectedCalendarTask.checkedOutAtRaw) - new Date(selectedCalendarTask.checkedInAtRaw))}
+                            </p>
+                          )}
+
                           <p>
                             <span className="font-medium text-gray-800">Instructions:</span>{' '}
                             {selectedCalendarTask.instructions}
@@ -1150,6 +1175,22 @@ export default function StaffMemberDashboard() {
                           </div>
                         </div>
                       </div>
+
+                      {task.checkedInAtRaw && task.checkedOutAtRaw && (
+                        <div className="rounded-lg bg-gray-50 p-4 sm:col-span-2">
+                          <div className="flex items-start gap-3">
+                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                              <Clock className="h-5 w-5" />
+                            </span>
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">Worked</p>
+                              <p className="mt-1 text-sm font-semibold text-emerald-700">
+                                {formatDuration(new Date(task.checkedOutAtRaw) - new Date(task.checkedInAtRaw))}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="rounded-lg bg-gray-50 p-4">
                         <div className="flex items-start gap-3">

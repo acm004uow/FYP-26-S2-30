@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getUpcomingScheduleWeek, hasCutoffPassedToday } from '../../../../lib/businessWeek'
-import { buildScheduleProposal, fetchSupabaseRows, insertSupabaseRow, insertSupabaseRows, summarizeProposal } from '../../../../lib/scheduleProposal'
+import { buildScheduleProposal, fetchSupabaseRows, insertSupabaseRow, insertSupabaseRows, patchSupabaseRows, summarizeProposal } from '../../../../lib/scheduleProposal'
 import { fetchSchedulingSettingsServer } from '../../../../lib/scheduleSettings'
 
 // Runs daily (see vercel.json) rather than once a week, since each business can configure its own
@@ -34,6 +34,13 @@ export async function GET(request) {
         results.push({ host_admin_id: business.id, skipped: 'cutoff_not_reached' })
         continue
       }
+
+      // Resets each business's weekly hours-worked counter (staff_profiles.weekly_working_hours,
+      // incremented per completed booking — see the staff dashboard's complete-task handler) the
+      // moment that business's own weekly cutoff passes, same cadence as schedule generation
+      // below. Setting to 0 is naturally idempotent, so no separate guard is needed even if this
+      // route is invoked more than once on the cutoff day.
+      await patchSupabaseRows('staff_profiles', [['host_admin_id', `eq.${business.id}`]], { weekly_working_hours: 0 })
 
       const existingProposal = await fetchSupabaseRows('schedule_proposals', [
         ['select', 'id'],

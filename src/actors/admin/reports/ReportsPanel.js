@@ -236,7 +236,7 @@ export default function ReportsPanel() {
     const hostAdminId = await resolveHostAdminId(user?.id)
 
     const [{ data: tasks }, { data: staff }, { data: reviews }, { data: payRates }, { data: prevTasks }, { data: prevReviews }] = await Promise.all([
-      supabase.from('bookings').select('status,service_type,assigned_staff_id,estimated_hours,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).gte('created_at', period.start.toISOString()).lt('created_at', period.end.toISOString()),
+      supabase.from('bookings').select('status,service_type,assigned_staff_id,estimated_hours,checked_in_at,checked_out_at,staff_profiles(staff_name)').eq('host_admin_id', hostAdminId).gte('created_at', period.start.toISOString()).lt('created_at', period.end.toISOString()),
       supabase.from('staff_profiles').select('id,user_id,staff_name,basic_salary').eq('host_admin_id', hostAdminId),
       supabase.from('performance_reviews').select('rating').gte('created_at', period.start.toISOString()).lt('created_at', period.end.toISOString()),
       supabase.from('service_pay_rates').select('service_type,hourly_rate').eq('host_admin_id', hostAdminId),
@@ -302,13 +302,20 @@ export default function ReportsPanel() {
       const memberTasks = completedTasks.filter(task => task.assigned_staff_id === member.id)
       const byService = memberTasks.reduce((acc, task) => {
         const serviceType = task.service_type || 'General'
-        const hours = Number(task.estimated_hours) || 0
+        // Actual hours on the job (check-in to check-out), not the pre-assigned estimate — this
+        // is what the allowance is paid out on. Falls back to the estimate only for legacy
+        // completed bookings from before checked_in_at/checked_out_at were recorded.
+        const hours = task.checked_in_at && task.checked_out_at
+          ? Math.max(0, (new Date(task.checked_out_at) - new Date(task.checked_in_at)) / 3600000)
+          : Number(task.estimated_hours) || 0
         if (!acc[serviceType]) acc[serviceType] = { hours: 0, allowance: 0 }
         acc[serviceType].hours += hours
         acc[serviceType].allowance += hours * (rateMap[serviceType] || 0)
         return acc
       }, {})
-      const breakdown = Object.entries(byService).map(([serviceType, value]) => ({ service_type: serviceType, hours: value.hours, allowance: value.allowance }))
+      // Allowance above is computed from full-precision hours; only the displayed figure is
+      // rounded, since real check-in/check-out timestamps rarely land on a clean half-hour.
+      const breakdown = Object.entries(byService).map(([serviceType, value]) => ({ service_type: serviceType, hours: Math.round(value.hours * 100) / 100, allowance: value.allowance }))
       const totalAllowance = breakdown.reduce((sum, row) => sum + row.allowance, 0)
       const basicSalary = Number(member.basic_salary) || 0
       return {

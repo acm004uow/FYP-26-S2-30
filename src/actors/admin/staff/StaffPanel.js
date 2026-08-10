@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Building2, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Search, Star } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+import { formatDuration } from '../../../../lib/attendance'
+import { getPeriodRange } from '../../../../lib/reportPeriods'
 
 const staffStatusMeta = {
   Available: { dot: 'bg-green-500', pill: 'bg-green-100 text-green-700', bar: 'bg-green-500' },
@@ -84,6 +86,27 @@ export default function StaffPanel() {
       }, {})
     }
 
+    // Real hours worked this week (check-in to check-out), same source of truth as
+    // staff-member/dashboard's complete-task handler and this owner's own payroll report.
+    let workedHoursByStaffId = {}
+    if (staffIds.length) {
+      const weekRange = getPeriodRange('weekly', 0)
+      const { data: completed } = await supabase
+        .from('bookings')
+        .select('assigned_staff_id,checked_in_at,checked_out_at')
+        .in('assigned_staff_id', staffIds)
+        .eq('status', 'completed')
+        .not('checked_in_at', 'is', null)
+        .not('checked_out_at', 'is', null)
+        .gte('checked_in_at', weekRange.start.toISOString())
+        .lt('checked_in_at', weekRange.end.toISOString())
+      workedHoursByStaffId = (completed || []).reduce((acc, booking) => {
+        const hours = Math.max(0, (new Date(booking.checked_out_at) - new Date(booking.checked_in_at)) / 3600000)
+        acc[booking.assigned_staff_id] = (acc[booking.assigned_staff_id] || 0) + hours
+        return acc
+      }, {})
+    }
+
     setStaffRows((staff || []).map(row => ({
       id: row.id,
       name: row.staff_name,
@@ -95,6 +118,7 @@ export default function StaffPanel() {
       rating: row.performance_rating || 0,
       reviewCount: reviewCounts[row.id] || 0,
       workloadPercent: Math.min(100, Math.round(((row.weekly_working_hours || 0) / (row.max_weekly_hours || 40)) * 100)),
+      workedHoursThisWeek: workedHoursByStaffId[row.id] || 0,
     })))
     setLoading(false)
   }
@@ -215,6 +239,7 @@ export default function StaffPanel() {
                 <th className="px-5 py-3">Department</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Workload</th>
+                <th className="px-5 py-3">Tme Spent</th>
                 <th className="px-5 py-3">Rating</th>
                 <th className="px-5 py-3 w-12" />
               </tr>
@@ -256,6 +281,9 @@ export default function StaffPanel() {
                         </div>
                         <span className="text-xs text-gray-400">{staff.workloadPercent}%</span>
                       </div>
+                    </td>
+                    <td className="px-5 py-4 text-gray-700">
+                      {formatDuration(staff.workedHoursThisWeek * 3600000)}
                     </td>
                     <td className="px-5 py-4">
                       <p className="flex items-center gap-1 font-semibold text-gray-900">
