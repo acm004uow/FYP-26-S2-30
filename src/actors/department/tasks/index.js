@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from 'react'
 import { Bell, Briefcase, ChevronDown, ChevronRight, ChevronUp, ClipboardList, Clock, Filter, Home, Layers, Lightbulb, Search, Sparkles, Trash2, Truck, User, UserCheck, Wand2 } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
+import { adjustStaffWorkload } from '../../../../lib/assignBooking'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
+import { fetchAssignedBookingsForDate } from '../../../../lib/staffAvailability'
 import { SERVICE_TYPES, loadServiceTypes } from '../../../../lib/serviceTypes'
 import { useAuthUser } from '../../../context/AuthUserContext'
 
@@ -79,6 +81,7 @@ export default function DepartmentTasks() {
   const [recommendationParams, setRecommendationParams] = useState({})
   const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
   const [approvedTimeOff, setApprovedTimeOff] = useState([])
+  const [existingAssignments, setExistingAssignments] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [coordinates, setCoordinates] = useState(null)
   const [recommendations, setRecommendations] = useState([])
@@ -123,7 +126,7 @@ export default function DepartmentTasks() {
         : Promise.resolve({ data: null }),
       supabase
         .from('staff_profiles')
-        .select('id,user_id,staff_name,availability,current_workload,performance_rating,status,is_suspended')
+        .select('id,user_id,staff_name,availability,current_workload,weekly_working_hours,performance_rating,status,is_suspended')
         .eq('host_admin_id', resolvedHostAdminId)
         .eq('status', 'active')
         .order('staff_name'),
@@ -148,6 +151,7 @@ export default function DepartmentTasks() {
         : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
       canAssign: !row.is_suspended && row.status === 'active' && row.availability === 'available',
       tasks: row.current_workload || 0,
+      hours: row.weekly_working_hours || 0,
       rating: row.performance_rating || 0,
     })))
     setRecommendationPool(pool || [])
@@ -181,6 +185,18 @@ export default function DepartmentTasks() {
   }, [staffPickerOpen])
 
   useEffect(() => {
+    if (!hostAdminId || !form.scheduledDate) {
+      setExistingAssignments([])
+      return
+    }
+    let cancelled = false
+    fetchAssignedBookingsForDate(supabase, hostAdminId, form.scheduledDate).then((rows) => {
+      if (!cancelled) setExistingAssignments(rows)
+    })
+    return () => { cancelled = true }
+  }, [hostAdminId, form.scheduledDate])
+
+  useEffect(() => {
     if (!form.location) {
       setRecommendations([])
       return
@@ -194,14 +210,17 @@ export default function DepartmentTasks() {
         location: form.location,
         latitude: coordinates?.latitude ?? null,
         longitude: coordinates?.longitude ?? null,
+        scheduled_date: form.scheduledDate || null,
+        scheduled_time: form.scheduledTime || null,
         estimated_hours: form.estimatedHours,
         requested_text: form.description || '',
       },
       recommendationParams,
-      excludedStaffIds
+      excludedStaffIds,
+      existingAssignments
     )
     setRecommendations(recs)
-  }, [form.location, coordinates, form.estimatedHours, form.description, form.scheduledDate, recommendationPool, recommendationParams, approvedTimeOff])
+  }, [form.location, coordinates, form.estimatedHours, form.description, form.scheduledDate, form.scheduledTime, recommendationPool, recommendationParams, approvedTimeOff, existingAssignments])
 
   useEffect(() => {
     if (!recommendations.length) return
@@ -325,10 +344,13 @@ export default function DepartmentTasks() {
     }
 
     if (staff) {
-      await supabase
-        .from('staff_profiles')
-        .update({ current_workload: Number(staff.tasks || 0) + 1, updated_at: new Date().toISOString() })
-        .eq('id', staff.id)
+      await adjustStaffWorkload({
+        staffId: staff.id,
+        currentWorkload: staff.tasks,
+        currentHours: staff.hours,
+        workloadDelta: 1,
+        hoursDelta: Number(form.estimatedHours || 2),
+      })
 
       if (staff.userId) {
         await supabase.from('notifications').insert({

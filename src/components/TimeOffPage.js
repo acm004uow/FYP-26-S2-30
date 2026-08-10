@@ -1,6 +1,6 @@
 import Layout from './Layout'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Briefcase, Calendar, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, ListChecks, MoreVertical, Send, ShieldCheck, Sun, X } from 'lucide-react'
+import { Briefcase, Calendar, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, FileText, ListChecks, MoreVertical, Paperclip, Send, ShieldCheck, Stethoscope, Sun, X } from 'lucide-react'
 import { supabase } from '../../lib/supabaseClient'
 import { fetchOwnTimeOffRequests, fetchTimeOffRequesterProfile } from '../../lib/staffTimeOff'
 import { useAuthUser } from '../context/AuthUserContext'
@@ -42,7 +42,10 @@ const REQUESTS_PAGE_SIZE = 5
 const requestTypeMeta = {
   weekly_day_off: { label: 'Weekly Day Off', subtitle: 'Recurring', icon: Calendar },
   leave: { label: 'One-off Leave', subtitle: 'One-off', icon: Briefcase },
+  mc: { label: 'Medical Certificate', subtitle: 'MC', icon: Stethoscope },
 }
+
+const MC_BUCKET = 'medical-certificates'
 
 function formatDateDisplay(iso) {
   if (!iso) return '—'
@@ -95,6 +98,10 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
   const [endDate, setEndDate] = useState('')
   const [leaveReasonCategory, setLeaveReasonCategory] = useState(LEAVE_REASON_OPTIONS[0])
   const [note, setNote] = useState('')
+  const [mcStartDate, setMcStartDate] = useState(todayIso())
+  const [mcEndDate, setMcEndDate] = useState(todayIso())
+  const [mcFile, setMcFile] = useState(null)
+  const [mcNote, setMcNote] = useState('')
   const [error, setError] = useState('')
   const [profileError, setProfileError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -228,6 +235,10 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
     setEndDate('')
     setLeaveReasonCategory(LEAVE_REASON_OPTIONS[0])
     setNote('')
+    setMcStartDate(todayIso())
+    setMcEndDate(todayIso())
+    setMcFile(null)
+    setMcNote('')
   }
 
   const handleSubmit = async (event) => {
@@ -262,7 +273,7 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
         reason,
         status: 'pending',
       }))
-    } else {
+    } else if (requestType === 'leave') {
       if (!startDate || !endDate) {
         setError('Choose a start and end date.')
         return
@@ -283,6 +294,66 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
         start_date: startDate,
         end_date: endDate,
         reason,
+        status: 'pending',
+      }]
+    } else {
+      // MC (medical certificate): needs a date range plus the certificate itself, uploaded to the
+      // medical-certificates storage bucket before the request row exists — same upload-then-insert
+      // pattern as staff-member/dashboard's task-proof upload.
+      if (!mcStartDate || !mcEndDate) {
+        setError('Choose the date(s) the MC covers.')
+        return
+      }
+      if (mcEndDate < mcStartDate) {
+        setError('End date must be on or after the start date.')
+        return
+      }
+      if (!mcFile) {
+        setError('Attach a PDF of the medical certificate.')
+        return
+      }
+      if (mcFile.type !== 'application/pdf') {
+        setError('The medical certificate must be a PDF file.')
+        return
+      }
+      // MC must be submitted within 24 hours of the covered day, per company policy.
+      const hoursSinceStart = (Date.now() - new Date(`${mcStartDate}T00:00:00`).getTime()) / 3600000
+      if (hoursSinceStart > 24) {
+        setError('Medical certificates must be submitted within 24 hours of the sick day.')
+        return
+      }
+
+      setSubmitting(true)
+
+      const staffFolder = profile.staffProfileId || user?.id
+      const safeName = mcFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const path = `${staffFolder}/${Date.now()}-${safeName}`
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(MC_BUCKET)
+        .upload(path, mcFile, { upsert: false })
+
+      if (uploadError) {
+        setError(uploadError.message || 'Could not upload the medical certificate. Please try again.')
+        setSubmitting(false)
+        return
+      }
+
+      const { data: publicUrlData } = supabase.storage.from(MC_BUCKET).getPublicUrl(uploadData.path)
+
+      reason = mcNote.trim() || null
+      summary = `an MC from ${mcStartDate} to ${mcEndDate}`
+      payloads = [{
+        staff_profile_id: profile.staffProfileId,
+        host_admin_id: profile.hostAdminId,
+        requested_by: user?.id,
+        request_type: 'mc',
+        day_of_week: null,
+        start_date: mcStartDate,
+        end_date: mcEndDate,
+        reason,
+        document_url: publicUrlData?.publicUrl || null,
+        document_name: mcFile.name,
         status: 'pending',
       }]
     }
@@ -324,7 +395,7 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{breadcrumbLabel} / Time off</p>
         <h1 className="mt-1 text-4xl font-bold text-gray-900">Time off</h1>
-        <p className="text-gray-500 text-sm mt-2 mb-6">Request a standing weekly day off, or a one-off leave period. The owner will review and approve or reject each request.</p>
+        <p className="text-gray-500 text-sm mt-2 mb-6">Request a standing weekly day off, a one-off leave period, or submit a medical certificate. The owner will review and approve or reject each request.</p>
 
         {notification && (
           <div className={`mb-5 rounded-lg border px-4 py-3 text-sm ${theme.notif}`}>{notification}</div>
@@ -356,6 +427,14 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
             >
               <Briefcase className="h-4 w-4" />
               One-off Leave
+            </button>
+            <button
+              type="button"
+              onClick={() => setRequestType('mc')}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg border-b-2 px-4 py-2.5 text-sm font-semibold transition ${requestType === 'mc' ? theme.activeTab : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            >
+              <Stethoscope className="h-4 w-4" />
+              Medical Certificate
             </button>
           </div>
 
@@ -443,7 +522,7 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
                   </div>
                 </div>
               </>
-            ) : (
+            ) : requestType === 'leave' ? (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -492,6 +571,60 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
                   </div>
                 </div>
               </>
+            ) : (
+              <>
+                <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Submit within 24 hours of the sick day, with a PDF of the certificate attached.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start date</label>
+                    <input
+                      type="date"
+                      value={mcStartDate}
+                      onChange={event => setMcStartDate(event.target.value)}
+                      className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 ${theme.ring}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End date</label>
+                    <input
+                      type="date"
+                      value={mcEndDate}
+                      min={mcStartDate || todayIso()}
+                      onChange={event => setMcEndDate(event.target.value)}
+                      className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 ${theme.ring}`}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Medical certificate (PDF)</label>
+                  <label className={`flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 ${theme.ring}`}>
+                    <Paperclip className="h-4 w-4 shrink-0 text-gray-400" />
+                    <span className="truncate">{mcFile ? mcFile.name : 'Choose a PDF file to attach'}</span>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={event => setMcFile(event.target.files?.[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Note (optional)</label>
+                  <div className="relative">
+                    <textarea
+                      value={mcNote}
+                      onChange={event => setMcNote(event.target.value.slice(0, 250))}
+                      rows={3}
+                      maxLength={250}
+                      placeholder="e.g. Flu, follow-up appointment, etc."
+                      className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 ${theme.ring}`}
+                    />
+                    <span className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">{mcNote.length} / 250</span>
+                  </div>
+                </div>
+              </>
             )}
 
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -502,7 +635,7 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
               title={profileError || undefined}
               className={`inline-flex w-auto items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white transition disabled:opacity-60 ${theme.solid}`}
             >
-              <Send className="w-4 h-4" /> {submitting ? 'Submitting...' : 'Submit request'}
+              <Send className="w-4 h-4" /> {submitting ? (requestType === 'mc' ? 'Uploading...' : 'Submitting...') : 'Submit request'}
             </button>
 
             <p className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
@@ -568,6 +701,17 @@ export default function TimeOffPage({ role, profileSource, breadcrumbLabel, noti
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{detailLines.primary}</p>
                       {detailLines.secondary && <p className="text-sm text-gray-500">{detailLines.secondary}</p>}
+                      {request.document_url && (
+                        <a
+                          href={request.document_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`mt-1 inline-flex items-center gap-1 text-xs font-medium hover:underline ${theme.text600}`}
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          {request.document_name || 'View certificate'}
+                        </a>
+                      )}
                       {request.status === 'rejected' && request.rejection_reason && (
                         <p className="mt-0.5 text-xs text-red-500">Reason: {request.rejection_reason}</p>
                       )}

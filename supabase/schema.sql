@@ -163,6 +163,26 @@ create table if not exists bookings (
   updated_at timestamptz default now()
 );
 
+-- Customer-facing price (see lib/bookingPricing.js — $10/hr, 1.5x for rush/same-day) and whether
+-- the owner has confirmed payment. No payment is actually processed by this app: the customer pays
+-- via the owner's own payment_link_url (profiles column below) and the owner then marks the
+-- booking paid from BookingsReviewPanel.js. Cancelling a paid booking does not flip this back to
+-- 'unpaid' — there's no refund flow, so the customer has to book again if they want the service.
+alter table bookings add column if not exists price numeric;
+alter table bookings add column if not exists payment_status text not null default 'unpaid' check (payment_status in ('unpaid', 'paid'));
+alter table profiles add column if not exists payment_link_url text;
+
+-- Optional link to a company's real Google Business Profile listing (set from Marketing Page).
+-- When google_place_id is set, the customer booking page ranks that company using this cached
+-- rating instead of in-app reviews (see lib/companyDirectory.js) — refreshed on demand from the
+-- Marketing Page and daily by the cron job below. Never fetched live on the booking page itself,
+-- to avoid paying for a Google Places API call on every page load.
+alter table profiles add column if not exists google_place_id text;
+alter table profiles add column if not exists google_place_name text;
+alter table profiles add column if not exists google_rating numeric;
+alter table profiles add column if not exists google_rating_count integer;
+alter table profiles add column if not exists google_rating_synced_at timestamptz;
+
 alter table bookings add column if not exists host_admin_id uuid references profiles(id) on delete set null;
 alter table bookings add column if not exists recommendation_reason text;
 alter table bookings add column if not exists checked_in_at timestamptz;
@@ -269,11 +289,16 @@ create table if not exists staff_time_off_requests (
   staff_profile_id uuid references staff_profiles(id) on delete cascade,
   host_admin_id uuid references profiles(id) on delete cascade,
   requested_by uuid references profiles(id) on delete set null,
-  request_type text not null check (request_type in ('weekly_day_off', 'leave')),
+  request_type text not null check (request_type in ('weekly_day_off', 'leave', 'mc')),
   day_of_week int check (day_of_week is null or (day_of_week between 0 and 6)),
   start_date date not null,
   end_date date,
   reason text,
+  -- 'mc' (medical certificate) requests carry a supporting document, uploaded to the
+  -- medical-certificates storage bucket before this row is inserted (same upload-then-insert
+  -- pattern as task_proofs). Nullable for the other two request types, required for 'mc'.
+  document_url text,
+  document_name text,
   status text not null default 'pending', -- pending | approved | rejected
   rejection_reason text,
   reviewed_by uuid references profiles(id) on delete set null,
@@ -281,12 +306,37 @@ create table if not exists staff_time_off_requests (
   updated_at timestamptz default now(),
   constraint weekly_day_off_requires_day check (
     (request_type = 'weekly_day_off' and day_of_week is not null)
-    or (request_type = 'leave' and day_of_week is null)
+    or (request_type in ('leave', 'mc') and day_of_week is null)
   ),
   constraint leave_requires_end_date check (
-    (request_type = 'leave' and end_date is not null and end_date >= start_date)
+    (request_type in ('leave', 'mc') and end_date is not null and end_date >= start_date)
     or (request_type = 'weekly_day_off')
+  ),
+  constraint mc_requires_document check (
+    (request_type = 'mc' and document_url is not null)
+    or (request_type != 'mc')
   )
+);
+
+-- Idempotent for databases created from an earlier version of this file, before 'mc' existed.
+alter table staff_time_off_requests drop constraint if exists staff_time_off_requests_request_type_check;
+alter table staff_time_off_requests add constraint staff_time_off_requests_request_type_check check (request_type in ('weekly_day_off', 'leave', 'mc'));
+alter table staff_time_off_requests drop constraint if exists weekly_day_off_requires_day;
+alter table staff_time_off_requests add constraint weekly_day_off_requires_day check (
+  (request_type = 'weekly_day_off' and day_of_week is not null)
+  or (request_type in ('leave', 'mc') and day_of_week is null)
+);
+alter table staff_time_off_requests drop constraint if exists leave_requires_end_date;
+alter table staff_time_off_requests add constraint leave_requires_end_date check (
+  (request_type in ('leave', 'mc') and end_date is not null and end_date >= start_date)
+  or (request_type = 'weekly_day_off')
+);
+alter table staff_time_off_requests add column if not exists document_url text;
+alter table staff_time_off_requests add column if not exists document_name text;
+alter table staff_time_off_requests drop constraint if exists mc_requires_document;
+alter table staff_time_off_requests add constraint mc_requires_document check (
+  (request_type = 'mc' and document_url is not null)
+  or (request_type != 'mc')
 );
 
 create index if not exists idx_staff_time_off_requests_staff_status on staff_time_off_requests(staff_profile_id, status);
@@ -589,6 +639,24 @@ do $$ begin
   create policy "authenticated update task proof files" on storage.objects
   for update using (bucket_id = 'task-proofs' and auth.role() = 'authenticated')
   with check (bucket_id = 'task-proofs' and auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+
+-- Medical certificates uploaded with 'mc' time-off requests (see staff_time_off_requests.
+-- document_url above). Same public-bucket + authenticated-role pattern as task-proofs (the app
+-- only ever calls getPublicUrl(), not signed URLs) — access control for who gets shown the link
+-- is enforced in the UI (staff see their own requests, the owner/admin review panel sees all),
+-- not at the storage layer.
+insert into storage.buckets (id, name, public)
+values ('medical-certificates', 'medical-certificates', true)
+on conflict (id) do nothing;
+
+do $$ begin
+  create policy "authenticated read medical certificate files" on storage.objects
+  for select using (bucket_id = 'medical-certificates' and auth.role() = 'authenticated');
+exception when duplicate_object then null; end $$;
+do $$ begin
+  create policy "authenticated upload medical certificate files" on storage.objects
+  for insert with check (bucket_id = 'medical-certificates' and auth.role() = 'authenticated');
 exception when duplicate_object then null; end $$;
 
 create or replace function public.handle_new_auth_user()

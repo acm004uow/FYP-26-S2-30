@@ -55,7 +55,6 @@ export default function ManagerDashboard() {
   const [operationStats, setOperationStats] = useState([
     { label: 'active bookings', value: '24', path: '/manager-bookings' },
     { label: 'pending approvals', value: '6', path: '/manager-bookings' },
-    { label: 'completed bookings', value: '0', path: '/manager-completed-tasks' },
     { label: 'avg. performance', value: '4.3★', path: '/manager-reports' },
   ])
   const [recentTaskRows, setRecentTaskRows] = useState([])
@@ -94,7 +93,6 @@ export default function ManagerDashboard() {
     setOperationStats([
       { label: 'active bookings', value: String(activeTasks.length || 24), path: '/manager-bookings' },
       { label: 'pending approvals', value: String(pendingTasks.length || 6), path: '/manager-bookings' },
-      { label: 'completed bookings', value: String(completedTasks.length), path: '/manager-completed-tasks' },
       { label: 'avg. performance', value: `${averageRating}★`, path: '/manager-reports' },
     ])
     setRecentTaskRows(taskData.slice(0, 3).map(t => ({
@@ -153,7 +151,7 @@ export default function ManagerDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-px bg-divider mb-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-px bg-divider mb-8 sm:grid-cols-2 lg:grid-cols-3">
           {operationStats.map(stat => (
             <button
               key={stat.label}

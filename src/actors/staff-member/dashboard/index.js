@@ -278,6 +278,7 @@ export default function StaffMemberDashboard() {
         .from('staff_profiles')
         .update({
           current_workload: Math.max(0, Number(profile.current_workload || 0) - 1),
+          weekly_working_hours: Math.max(0, Number(profile.weekly_working_hours || 0) - Number(proofTask.estimatedHours || 0)),
           updated_at: new Date().toISOString(),
         })
         .eq('id', profile.id)

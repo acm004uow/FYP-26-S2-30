@@ -299,7 +299,7 @@ export default function ManagerSchedule() {
 
     const { data: staff } = await supabase
       .from('staff_profiles')
-      .select('id,user_id,staff_name,availability,current_workload,is_suspended,status')
+      .select('id,user_id,staff_name,availability,current_workload,weekly_working_hours,is_suspended,status')
       .eq('host_admin_id', resolvedHostAdminId)
       .eq('status', 'active')
       .order('staff_name')
@@ -310,6 +310,7 @@ export default function ManagerSchedule() {
       name: row.staff_name,
       canAssign: !row.is_suspended && row.status === 'active' && row.availability === 'available',
       tasks: row.current_workload || 0,
+      hours: row.weekly_working_hours || 0,
     })))
     await loadApprovedTimeOff(resolvedHostAdminId)
     setServiceTypes(await loadServiceTypes(supabase, resolvedHostAdminId))

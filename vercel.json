@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/weekly-schedule", "schedule": "0 15 * * *" }
+    { "path": "/api/cron/weekly-schedule", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/refresh-google-ratings", "schedule": "0 2 * * *" }
   ]
 }

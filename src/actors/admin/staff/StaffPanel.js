@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Building2, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Search, Star } from 'lucide-react'
+import { AlertTriangle, Building2, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Phone, Search, Star } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
+
+// Below this share of max_weekly_hours, a staff member is flagged so the owner knows to call
+// them and find more work — per the Backend To Improve notes ("he call phone number... look for
+// the job outside or plan it").
+const NEEDS_MORE_WORK_THRESHOLD = 50
 
 const staffStatusMeta = {
   Available: { dot: 'bg-green-500', pill: 'bg-green-100 text-green-700', bar: 'bg-green-500' },
@@ -69,7 +74,7 @@ export default function StaffPanel() {
 
     const { data: staff } = await supabase
       .from('staff_profiles')
-      .select('id,staff_name,availability,current_workload,performance_rating,status,is_suspended,weekly_working_hours,max_weekly_hours,department_id,departments(name)')
+      .select('id,staff_name,phone,availability,current_workload,performance_rating,status,is_suspended,weekly_working_hours,max_weekly_hours,department_id,departments(name)')
       .eq('host_admin_id', resolvedHostAdminId)
       .eq('status', 'active')
       .order('staff_name')
@@ -84,18 +89,27 @@ export default function StaffPanel() {
       }, {})
     }
 
-    setStaffRows((staff || []).map(row => ({
-      id: row.id,
-      name: row.staff_name,
-      department: row.departments?.name || 'Unassigned',
-      status: row.is_suspended
-        ? 'On Leave'
-        : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
-      tasks: row.current_workload || 0,
-      rating: row.performance_rating || 0,
-      reviewCount: reviewCounts[row.id] || 0,
-      workloadPercent: Math.min(100, Math.round(((row.weekly_working_hours || 0) / (row.max_weekly_hours || 40)) * 100)),
-    })))
+    setStaffRows((staff || []).map(row => {
+      const weeklyHours = Number(row.weekly_working_hours || 0)
+      const maxHours = Number(row.max_weekly_hours || 40)
+      const hoursPercent = maxHours > 0 ? Math.round((weeklyHours / maxHours) * 100) : 0
+      return {
+        id: row.id,
+        name: row.staff_name,
+        phone: row.phone || '',
+        department: row.departments?.name || 'Unassigned',
+        status: row.is_suspended
+          ? 'On Leave'
+          : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
+        tasks: row.current_workload || 0,
+        rating: row.performance_rating || 0,
+        reviewCount: reviewCounts[row.id] || 0,
+        weeklyHours,
+        maxHours,
+        workloadPercent: Math.min(100, hoursPercent),
+        needsMoreWork: !row.is_suspended && row.status === 'active' && hoursPercent < NEEDS_MORE_WORK_THRESHOLD,
+      }
+    }))
     setLoading(false)
   }
 
@@ -213,8 +227,9 @@ export default function StaffPanel() {
               <tr className="border-b border-gray-100 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <th className="px-5 py-3">Staff Member</th>
                 <th className="px-5 py-3">Department</th>
+                <th className="px-5 py-3">Phone</th>
                 <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Workload</th>
+                <th className="px-5 py-3">Weekly Hours</th>
                 <th className="px-5 py-3">Rating</th>
                 <th className="px-5 py-3 w-12" />
               </tr>
@@ -244,18 +259,32 @@ export default function StaffPanel() {
                       </div>
                     </td>
                     <td className="px-5 py-4">
+                      {staff.phone ? (
+                        <a href={`tel:${staff.phone}`} className="inline-flex items-center gap-1.5 text-gray-600 hover:text-accent-600 hover:underline">
+                          <Phone className="h-3.5 w-3.5 text-gray-400" /> {staff.phone}
+                        </a>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
                       <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${meta.pill}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} /> {staff.status}
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <p className="mb-1 text-gray-700">{staff.tasks} active task{staff.tasks === 1 ? '' : 's'}</p>
+                      <p className="mb-1 text-gray-700">{staff.weeklyHours}/{staff.maxHours} hrs</p>
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-24 rounded-full bg-gray-100">
                           <div className={`h-1.5 rounded-full ${meta.bar}`} style={{ width: `${staff.workloadPercent}%` }} />
                         </div>
                         <span className="text-xs text-gray-400">{staff.workloadPercent}%</span>
                       </div>
+                      {staff.needsMoreWork && (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-700">
+                          <AlertTriangle className="h-3 w-3" /> Needs more work
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-4">
                       <p className="flex items-center gap-1 font-semibold text-gray-900">

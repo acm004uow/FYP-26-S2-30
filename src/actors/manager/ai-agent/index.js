@@ -77,7 +77,7 @@ export default function ManagerAiAgent() {
 
     const { data: staff } = await supabase
       .from('staff_profiles')
-      .select('id,user_id,staff_name,availability,current_workload,performance_rating,status,is_suspended')
+      .select('id,user_id,staff_name,availability,current_workload,weekly_working_hours,performance_rating,status,is_suspended')
       .eq('host_admin_id', resolvedHostAdminId)
       .eq('status', 'active')
       .order('staff_name')
@@ -87,6 +87,7 @@ export default function ManagerAiAgent() {
       userId: row.user_id,
       name: row.staff_name,
       tasks: row.current_workload || 0,
+      hours: row.weekly_working_hours || 0,
       canAssign: !row.is_suspended && row.status === 'active' && row.availability === 'available',
       availabilityStatus: row.availability,
     })))
@@ -164,7 +165,7 @@ export default function ManagerAiAgent() {
     }
 
     const result = await updateBookingAssignment({
-      booking: { id: editingBooking.id, status: editingBooking.status },
+      booking: { id: editingBooking.id, status: editingBooking.status, estimated_hours: editingBooking.estimated_hours },
       staff,
       scheduledDate: editDate,
       scheduledTime: editTime,
@@ -248,7 +249,7 @@ export default function ManagerAiAgent() {
 
     updateRow(row.booking_id, { uiStatus: 'assigning', errorMessage: null })
     const result = await assignStaffToBooking({
-      booking: { id: row.booking_id, status: row.status, assigned_staff_id: null, service_type: row.service_type },
+      booking: { id: row.booking_id, status: row.status, assigned_staff_id: null, service_type: row.service_type, estimated_hours: row.estimated_hours },
       staff,
       managerUserId: manager.id,
       action: 'assign_booking_ai_agent',
@@ -260,7 +261,9 @@ export default function ManagerAiAgent() {
       // server — keeps subsequent recommendations roughly in sync without a network round trip
       // on every single approval. Functional form so concurrent approvals (see approveAll below)
       // still compound correctly against each other in the UI.
-      setStaffRows(prev => prev.map(item => item.id === staff.id ? { ...item, tasks: (item.tasks || 0) + 1 } : item))
+      setStaffRows(prev => prev.map(item => item.id === staff.id
+        ? { ...item, tasks: (item.tasks || 0) + 1, hours: (item.hours || 0) + Number(row.estimated_hours || 0) }
+        : item))
     } else {
       updateRow(row.booking_id, { uiStatus: 'error', errorMessage: result.message })
     }

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle, XCircle, Bell, MapPin, UserCheck, Calendar, Sparkles, RefreshCw, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, Trash2, Eye } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
-import { assignStaffToBooking } from '../../../../lib/assignBooking'
+import { assignStaffToBooking, adjustStaffWorkload } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
+import { fetchAssignedBookingsForDate, getConflictingStaffIds } from '../../../../lib/staffAvailability'
+import { formatBookingPrice } from '../../../../lib/bookingPricing'
 
 const BOOKINGS_PAGE_SIZE = 8
 
@@ -144,6 +146,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
   // showing its "Confirm Delete / Cancel" prompt.
   const [deletingId, setDeletingId] = useState(null)
   const [rerunningId, setRerunningId] = useState(null)
+  const [paymentStatusSavingId, setPaymentStatusSavingId] = useState(null)
   const [timeFilter, setTimeFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
   const [hostAdminId, setHostAdminId] = useState(null)
@@ -200,7 +203,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
 
     let bookingsQuery = supabase
       .from('bookings')
-      .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
+      .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,estimated_hours,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,price,payment_status,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
       .eq('host_admin_id', hostAdminIdResolved)
       .in('status', ['pending', 'approved', 'in_progress', 'completed', 'rejected'])
       .order('created_at', { ascending: false })
@@ -212,7 +215,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
       bookingsQuery,
       supabase
         .from('staff_profiles')
-        .select('id,user_id,staff_name,availability,current_workload,performance_rating,status,is_suspended')
+        .select('id,user_id,staff_name,availability,current_workload,weekly_working_hours,performance_rating,status,is_suspended')
         .eq('host_admin_id', hostAdminIdResolved)
         .eq('status', 'active')
         .order('staff_name'),
@@ -228,6 +231,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
         : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
       canAssign: !row.is_suspended && row.status === 'active' && row.availability === 'available',
       tasks: row.current_workload || 0,
+      hours: row.weekly_working_hours || 0,
       rating: row.performance_rating || 0,
     })))
     await loadApprovedTimeOff(hostAdminIdResolved)
@@ -303,6 +307,32 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
     return user
   }
 
+  // No actual payment is processed here — the customer pays via the owner's payment_link_url
+  // (see MarketingPanel.js), and this just records that the owner has received it.
+  const handleTogglePaymentStatus = async (booking) => {
+    const user = await getActiveManager()
+    if (!user) return
+
+    const nextStatus = booking.payment_status === 'paid' ? 'unpaid' : 'paid'
+    setPaymentStatusSavingId(booking.id)
+    const { error } = await supabase
+      .from('bookings')
+      .update({ payment_status: nextStatus, updated_at: new Date().toISOString() })
+      .eq('id', booking.id)
+
+    if (!error) {
+      await supabase.from('audit_logs').insert({
+        user_id: user.id,
+        action: 'update_booking_payment_status',
+        details: `${booking.service_type} marked ${nextStatus}`,
+      })
+    }
+
+    setPaymentStatusSavingId(null)
+    showNotification(error ? error.message : `Booking marked ${nextStatus}.`)
+    await loadBookings()
+  }
+
   const handleReview = async (id, decision) => {
     const status = decision === 'Approved' ? 'approved' : 'rejected'
     const user = await getActiveManager()
@@ -313,7 +343,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
       .update({ status, reviewed_by: user.id, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('status', 'pending')
-      .select('id,customer_id,service_type,assigned_staff_id')
+      .select('id,customer_id,service_type,assigned_staff_id,estimated_hours')
       .maybeSingle()
 
     if (!error && reviewedBooking?.customer_id) {
@@ -327,10 +357,13 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
     if (!error && reviewedBooking && status === 'approved' && reviewedBooking.assigned_staff_id) {
       const staff = staffRows.find(item => item.id === reviewedBooking.assigned_staff_id)
       if (staff) {
-        await supabase
-          .from('staff_profiles')
-          .update({ current_workload: Number(staff.tasks || 0) + 1, updated_at: new Date().toISOString() })
-          .eq('id', staff.id)
+        await adjustStaffWorkload({
+          staffId: staff.id,
+          currentWorkload: staff.tasks,
+          currentHours: staff.hours,
+          workloadDelta: 1,
+          hoursDelta: Number(reviewedBooking.estimated_hours || 0),
+        })
 
         if (staff.userId) {
           await supabase.from('notifications').insert({
@@ -477,7 +510,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
       .single()
     const hostAdminId = managerProfile?.host_admin_id
 
-    const [{ data: freshStaff }, { data: systemParams }] = await Promise.all([
+    const [{ data: freshStaff }, { data: systemParams }, existingAssignments] = await Promise.all([
       supabase
         .from('staff_profiles')
         .select('id,staff_name,availability,performance_rating,current_workload,assigned_region,latitude,longitude,weekly_working_hours,max_weekly_hours,is_suspended,status')
@@ -485,6 +518,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
         .eq('is_suspended', false)
         .eq('status', 'active'),
       supabase.from('system_parameters').select('*').eq('id', 1).single(),
+      booking.scheduled_date ? fetchAssignedBookingsForDate(supabase, hostAdminId, booking.scheduled_date, { excludeBookingId: booking.id }) : Promise.resolve([]),
     ])
 
     const recommendations = generateRecommendations(
@@ -493,11 +527,14 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
         location: booking.location,
         latitude: booking.latitude,
         longitude: booking.longitude,
+        scheduled_date: booking.scheduled_date,
+        scheduled_time: booking.scheduled_time,
         estimated_hours: booking.estimated_hours,
         requested_text: `${booking.description || ''} ${booking.notes || ''}`,
       },
       systemParams || {},
-      getExcludedStaffIdsForDate(booking.scheduled_date, approvedTimeOff)
+      getExcludedStaffIdsForDate(booking.scheduled_date, approvedTimeOff),
+      existingAssignments
     )
     const topMatch = recommendations[0]
 
@@ -905,7 +942,28 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
                     <p className="text-[11px] uppercase text-gray-400">Source</p>
                     <p className="font-semibold text-gray-900">{getSourceMeta(booking.source).label}</p>
                   </div>
+                  {Number.isFinite(booking.price) && (
+                    <div>
+                      <p className="text-[11px] uppercase text-gray-400">Price</p>
+                      <p className="font-semibold text-gray-900">{formatBookingPrice(booking.price)}</p>
+                    </div>
+                  )}
                 </div>
+                {Number.isFinite(booking.price) && (
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                    <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${booking.payment_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                      {booking.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePaymentStatus(booking)}
+                      disabled={paymentStatusSavingId === booking.id}
+                      className="text-xs font-medium text-accent-600 hover:underline disabled:opacity-50"
+                    >
+                      {paymentStatusSavingId === booking.id ? 'Saving...' : booking.payment_status === 'paid' ? 'Mark as unpaid' : 'Mark as paid'}
+                    </button>
+                  </div>
+                )}
                 <div className="border-t border-gray-100" />
                 {booking.status === 'pending' && booking.staff_profiles?.staff_name && (
                   <div className="flex items-start justify-between gap-2 rounded-lg border border-accent-200 bg-accent-100 px-3 py-2">
@@ -964,10 +1022,18 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
                         <option value="">Choose staff...</option>
                         {staffRows.map(staff => {
                           const offOnDate = isStaffOffOnDate(staff.id, booking.scheduled_date, approvedTimeOff)
+                          // Best-effort warning, not a hard block — a manager can still knowingly
+                          // double-book someone (e.g. two very short jobs), but shouldn't do it by
+                          // accident. Checked against every other booking currently loaded in this tab.
+                          const doubleBooked = getConflictingStaffIds(
+                            { scheduled_date: booking.scheduled_date, scheduled_time: booking.scheduled_time, estimated_hours: booking.estimated_hours },
+                            bookings,
+                            { excludeBookingId: booking.id }
+                          ).has(staff.id)
                           const assignable = staff.canAssign && !offOnDate
                           return (
                             <option key={staff.id} value={staff.id} disabled={!assignable}>
-                              {staff.name}{assignable ? '' : offOnDate ? ' (Off that day)' : ` (${staff.status})`}
+                              {staff.name}{assignable ? '' : offOnDate ? ' (Off that day)' : ` (${staff.status})`}{assignable && doubleBooked ? ' (⚠ Already booked at this time)' : ''}
                             </option>
                           )
                         })}

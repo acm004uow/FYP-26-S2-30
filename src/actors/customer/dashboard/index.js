@@ -9,6 +9,7 @@ import {
 import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
+import { formatBookingPrice } from '../../../../lib/bookingPricing'
 
 const PAGE_SIZE = 3
 
@@ -67,6 +68,7 @@ export default function CustomerDashboard() {
     shortId: `#${booking.id.slice(0, 8).toUpperCase()}`,
     serviceType: booking.service_type,
     companyName: booking.company?.business_name || 'Unknown company',
+    companyPaymentLink: booking.company?.payment_link_url || null,
     hostAdminId: booking.host_admin_id,
     location: booking.location,
     description: booking.description || '',
@@ -81,13 +83,15 @@ export default function CustomerDashboard() {
     assignedStaffId: booking.assigned_staff_id || null,
     assignedStaff: booking.staff_profiles?.staff_name || 'Unassigned',
     feedback: booking.booking_feedback?.[0] || null,
+    price: booking.price,
+    paymentStatus: booking.payment_status || 'unpaid',
   })
 
   const loadBookings = async () => {
     if (!user) return
     const { data } = await supabase
       .from('bookings')
-      .select('id,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,host_admin_id,assigned_staff_id,staff_profiles(staff_name),company:profiles!bookings_host_admin_id_fkey(business_name),booking_feedback(id,rating,comment,image_url)')
+      .select('id,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,host_admin_id,assigned_staff_id,price,payment_status,staff_profiles(staff_name),company:profiles!bookings_host_admin_id_fkey(business_name,payment_link_url),booking_feedback(id,rating,comment,image_url)')
       .eq('customer_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -142,6 +146,9 @@ export default function CustomerDashboard() {
 
   const LATE_CANCEL_WINDOW_HOURS = 24
   const LATE_CANCEL_LOCK_THRESHOLD = 2
+  // Modifying a booking needs 1 day's notice — separate rule from the late-cancellation strike
+  // system below (which only fires on Cancel, and only for already-approved bookings).
+  const MODIFY_WINDOW_HOURS = 24
 
   const isLastMinuteCancellation = (booking) => {
     if (!booking.scheduledDate) return false
@@ -149,6 +156,15 @@ export default function CustomerDashboard() {
     if (Number.isNaN(scheduledAt.getTime())) return false
     const hoursUntil = (scheduledAt.getTime() - Date.now()) / (1000 * 60 * 60)
     return hoursUntil < LATE_CANCEL_WINDOW_HOURS
+  }
+
+  const canModify = (booking) => {
+    if (booking.rawStatus !== 'pending') return false
+    if (!booking.scheduledDate) return true
+    const scheduledAt = new Date(`${booking.scheduledDate}T${booking.scheduledTime || '00:00'}:00`)
+    if (Number.isNaN(scheduledAt.getTime())) return true
+    const hoursUntil = (scheduledAt.getTime() - Date.now()) / (1000 * 60 * 60)
+    return hoursUntil >= MODIFY_WINDOW_HOURS
   }
 
   const handleCancelClick = (booking) => {
@@ -203,7 +219,12 @@ export default function CustomerDashboard() {
 
   const handleUpdate = async (event) => {
     event.preventDefault()
-    if (!editBooking || editBooking.rawStatus !== 'pending') return
+    if (!editBooking || !canModify(editBooking)) {
+      setNotification('This booking can no longer be modified — it starts within 24 hours. Cancel and create a new booking instead.')
+      setTimeout(() => setNotification(null), 4000)
+      setEditBooking(null)
+      return
+    }
     const { error } = await supabase.from('bookings').update({
       service_type: editBooking.serviceType,
       description: editBooking.description,
@@ -440,6 +461,25 @@ export default function CustomerDashboard() {
                     <button type="button" onClick={() => setViewBooking(booking)} className="mt-1 text-xs text-accent-600 hover:underline">View details</button>
                   )}
 
+                  {Number.isFinite(booking.price) && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-semibold text-gray-700">{formatBookingPrice(booking.price)}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${booking.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {booking.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                      </span>
+                      {booking.paymentStatus !== 'paid' && booking.companyPaymentLink && ['pending', 'approved'].includes(booking.rawStatus) && (
+                        <a
+                          href={booking.companyPaymentLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-accent-600 hover:underline"
+                        >
+                          Pay now →
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   {booking.rawStatus === 'pending' && booking.assignedStaff !== 'Unassigned' && (
                     <div className="mt-2 flex items-start gap-1.5 bg-amber-50 text-amber-700 text-xs px-2 py-1.5 rounded-lg">
                       <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Suggested staff (pending manager approval): {booking.assignedStaff}
@@ -524,8 +564,11 @@ export default function CustomerDashboard() {
                   <span className={`text-xs px-2 py-1 rounded-full ${STATUS_STYLES[booking.status] || 'bg-gray-100 text-gray-500'}`}>{booking.status}</span>
                   {['Pending', 'Approved'].includes(booking.status) && (
                     <div className="mt-2 flex justify-end gap-3">
-                      {booking.status === 'Pending' && (
+                      {booking.status === 'Pending' && canModify(booking) && (
                         <button onClick={() => setEditBooking(booking)} className="inline-flex items-center gap-1 text-xs text-accent-600 hover:underline"><Edit3 className="h-3 w-3" /> Edit</button>
+                      )}
+                      {booking.status === 'Pending' && !canModify(booking) && (
+                        <span className="text-xs text-gray-400" title="Modifying a booking needs at least 1 day's notice">Locked (&lt;24h)</span>
                       )}
                       <button onClick={() => handleCancelClick(booking)} className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline"><Trash2 className="h-3 w-3" /> Cancel</button>
                     </div>
@@ -633,6 +676,12 @@ export default function CustomerDashboard() {
                   ? 'This booking is scheduled within 24 hours. Cancelling now counts as a last-minute cancellation, and repeated last-minute cancellations can lock your account.'
                   : 'Are you sure you want to cancel this booking? This cannot be undone.'}
               </p>
+              {cancelConfirmBooking.paymentStatus === 'paid' && (
+                <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                  This booking is marked paid. Cancelling does not refund the payment — you&apos;ll need to create a new booking if you still want the service.
+                </p>
+              )}
               <div className="mt-6 flex gap-2">
                 <button
                   type="button"

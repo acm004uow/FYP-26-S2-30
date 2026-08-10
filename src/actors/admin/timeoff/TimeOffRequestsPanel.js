@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Calendar, CalendarClock, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
-  Clock, Filter, Plus, Users, X, XCircle,
+  Clock, Filter, Users, X, XCircle,
 } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 
@@ -68,11 +68,6 @@ export default function TimeOffRequestsPanel() {
   const [rejectReason, setRejectReason] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [page, setPage] = useState(1)
-  const [managers, setManagers] = useState([])
-  const [staffOptions, setStaffOptions] = useState([])
-  const [modal, setModal] = useState(false)
-  const [form, setForm] = useState({ person: '', requestType: 'weekly_day_off', dayOfWeek: '1', startDate: '', endDate: '', reason: '' })
-  const [saving, setSaving] = useState(false)
 
   const resolveHostAdminId = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -97,15 +92,11 @@ export default function TimeOffRequestsPanel() {
       return
     }
 
-    const [{ data, error }, { data: managerRows }, { data: staffRows }] = await Promise.all([
-      supabase
-        .from('staff_time_off_requests')
-        .select('id,staff_profile_id,request_type,day_of_week,start_date,end_date,reason,status,rejection_reason,created_at,requested_by(id,full_name,email,role),staff_profiles(id,staff_name)')
-        .eq('host_admin_id', resolvedHostAdminId)
-        .order('created_at', { ascending: false }),
-      supabase.from('profiles').select('id,full_name').eq('host_admin_id', resolvedHostAdminId).eq('role', 'manager').eq('status', 'active').order('full_name'),
-      supabase.from('staff_profiles').select('id,staff_name,user_id').eq('host_admin_id', resolvedHostAdminId).eq('status', 'active').order('staff_name'),
-    ])
+    const { data, error } = await supabase
+      .from('staff_time_off_requests')
+      .select('id,staff_profile_id,request_type,day_of_week,start_date,end_date,reason,document_url,document_name,status,rejection_reason,created_at,requested_by(id,full_name,email,role),staff_profiles(id,staff_name)')
+      .eq('host_admin_id', resolvedHostAdminId)
+      .order('created_at', { ascending: false })
 
     if (error) {
       setMessage(error.message)
@@ -113,8 +104,6 @@ export default function TimeOffRequestsPanel() {
     } else {
       setRequests(data || [])
     }
-    setManagers(managerRows || [])
-    setStaffOptions(staffRows || [])
     setLoading(false)
   }
 
@@ -164,52 +153,6 @@ export default function TimeOffRequestsPanel() {
     setRejectingId(null)
     setRejectReason('')
     setMessage(error ? error.message : reviewed ? `Time-off request ${action}.` : 'This request is no longer pending.')
-    await loadRequests()
-  }
-
-  const handleCreateRequest = async (event) => {
-    event.preventDefault()
-    if (!form.person) {
-      setMessage('Choose a manager or staff member.')
-      return
-    }
-    if (form.requestType === 'leave' && (!form.startDate || !form.endDate)) {
-      setMessage('Pick a start and end date for leave.')
-      return
-    }
-
-    const [personType, personId] = form.person.split(':')
-    const staffMember = personType === 'staff' ? staffOptions.find(s => s.id === personId) : null
-
-    const { data: { user } } = await supabase.auth.getUser()
-    setSaving(true)
-    const { error } = await supabase.from('staff_time_off_requests').insert({
-      host_admin_id: hostAdminId,
-      staff_profile_id: staffMember?.id || null,
-      requested_by: staffMember ? staffMember.user_id : personId,
-      request_type: form.requestType,
-      day_of_week: form.requestType === 'weekly_day_off' ? Number(form.dayOfWeek) : null,
-      start_date: form.requestType === 'weekly_day_off' ? new Date().toISOString().slice(0, 10) : form.startDate,
-      end_date: form.requestType === 'leave' ? form.endDate : null,
-      reason: form.reason.trim() || null,
-      status: 'approved',
-      reviewed_by: user?.id,
-    })
-    setSaving(false)
-
-    if (error) {
-      setMessage(error.message)
-      return
-    }
-
-    await supabase.from('audit_logs').insert({
-      user_id: user?.id,
-      action: 'create_time_off_request',
-      details: `Logged time-off for ${personType === 'staff' ? staffMember?.staff_name : managers.find(m => m.id === personId)?.full_name}`,
-    })
-    setModal(false)
-    setForm({ person: '', requestType: 'weekly_day_off', dayOfWeek: '1', startDate: '', endDate: '', reason: '' })
-    setMessage('Time-off request logged and approved.')
     await loadRequests()
   }
 
@@ -302,7 +245,7 @@ export default function TimeOffRequestsPanel() {
 
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-700 whitespace-nowrap">
-                      {request.request_type === 'weekly_day_off' ? 'Weekly Day Off' : 'Leave'}
+                      {request.request_type === 'weekly_day_off' ? 'Weekly Day Off' : request.request_type === 'mc' ? 'Medical Certificate' : 'Leave'}
                     </span>
                     <span className="hidden h-6 w-px bg-gray-200 sm:block" />
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${statusMeta.badge}`}>
@@ -331,6 +274,16 @@ export default function TimeOffRequestsPanel() {
                 </div>
 
                 {request.reason && <p className="mt-2 pl-[52px] text-xs text-gray-500">Reason: {request.reason}</p>}
+                {request.document_url && (
+                  <a
+                    href={request.document_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex items-center gap-1 pl-[52px] text-xs font-medium text-accent-600 hover:underline"
+                  >
+                    View {request.document_name || 'certificate'}
+                  </a>
+                )}
                 {request.status === 'rejected' && request.rejection_reason && (
                   <p className="mt-1 pl-[52px] text-xs text-red-500">Rejected: {request.rejection_reason}</p>
                 )}
@@ -404,123 +357,6 @@ export default function TimeOffRequestsPanel() {
           </div>
         )}
       </div>
-
-      {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setModal(false)}>
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" onClick={event => event.stopPropagation()}>
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent-100 text-accent-600">
-                  <CalendarClock className="h-6 w-6" />
-                </span>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">New Request</h3>
-                  <p className="mt-0.5 text-sm text-gray-500">Log a time-off request on behalf of a manager or staff member. It&apos;s saved as approved.</p>
-                </div>
-              </div>
-              <button onClick={() => setModal(false)} className="shrink-0 rounded-lg p-1 hover:bg-gray-100">
-                <X className="h-5 w-5 text-gray-500" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateRequest} className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-800">Person</label>
-                <select
-                  value={form.person}
-                  onChange={event => setForm(f => ({ ...f, person: event.target.value }))}
-                  required
-                  className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
-                >
-                  <option value="">Select a person...</option>
-                  {managers.length > 0 && (
-                    <optgroup label="Managers">
-                      {managers.map(manager => <option key={manager.id} value={`manager:${manager.id}`}>{manager.full_name}</option>)}
-                    </optgroup>
-                  )}
-                  {staffOptions.length > 0 && (
-                    <optgroup label="Staff">
-                      {staffOptions.map(staff => <option key={staff.id} value={`staff:${staff.id}`}>{staff.staff_name}</option>)}
-                    </optgroup>
-                  )}
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-800">Request Type</label>
-                <div className="inline-flex w-full rounded-xl bg-gray-100 p-1">
-                  {[{ value: 'weekly_day_off', label: 'Weekly Day Off' }, { value: 'leave', label: 'One-off Leave' }].map(option => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setForm(f => ({ ...f, requestType: option.value }))}
-                      className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${form.requestType === option.value ? 'bg-white text-accent-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {form.requestType === 'weekly_day_off' ? (
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-800">Day of Week</label>
-                  <select
-                    value={form.dayOfWeek}
-                    onChange={event => setForm(f => ({ ...f, dayOfWeek: event.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
-                  >
-                    {WEEKDAY_LABELS.map((label, value) => <option key={label} value={value}>{label}</option>)}
-                  </select>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-800">Start Date</label>
-                    <input
-                      type="date"
-                      value={form.startDate}
-                      onChange={event => setForm(f => ({ ...f, startDate: event.target.value }))}
-                      required
-                      className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-800">End Date</label>
-                    <input
-                      type="date"
-                      value={form.endDate}
-                      min={form.startDate || undefined}
-                      onChange={event => setForm(f => ({ ...f, endDate: event.target.value }))}
-                      required
-                      className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
-                    />
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-800">Reason <span className="font-normal text-gray-400">(Optional)</span></label>
-                <textarea
-                  value={form.reason}
-                  onChange={event => setForm(f => ({ ...f, reason: event.target.value }))}
-                  rows={3}
-                  className="w-full resize-none rounded-lg border border-gray-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
-                />
-              </div>
-
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setModal(false)} className="flex-1 rounded-lg border border-gray-200 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50">
-                  Cancel
-                </button>
-                <button type="submit" disabled={saving} className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-accent hover:bg-accent-600 py-3 text-sm font-semibold text-white transition disabled:opacity-60">
-                  <Plus className="h-4 w-4" /> {saving ? 'Saving...' : 'Create Request'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
