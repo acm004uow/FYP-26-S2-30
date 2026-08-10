@@ -2,7 +2,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ArrowRight, Building2, CalendarCheck, Headphones, LayoutDashboard, MapPin, Search, ShieldCheck, Sparkles, Star,
+  ArrowRight, Building2, CalendarCheck, Headphones, LayoutDashboard, MapPin, Plus, Search, ShieldCheck, Sparkles, Star,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import { supabase } from '../../lib/supabaseClient'
@@ -79,28 +79,28 @@ function StarRating({ rating, count }) {
   return (
     <span className="inline-flex items-center gap-1">
       <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-      <span className="font-semibold text-gray-700">{value > 0 ? value.toFixed(1) : 'New'}</span>
-      {count > 0 && <span className="text-gray-400">({count} review{count === 1 ? '' : 's'})</span>}
+      <span className="font-bold text-slate-800">{value > 0 ? value.toFixed(1) : 'New'}</span>
+      {count > 0 && <span className="text-slate-400">({count} review{count === 1 ? '' : 's'})</span>}
     </span>
   )
 }
 
 function MarketplaceControls({ search, setSearch, serviceFilter, setServiceFilter, sortBy, setSortBy, availableServices }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/60 sm:flex-row sm:items-center">
       <div className="relative flex-1">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
           value={search}
           onChange={event => setSearch(event.target.value)}
           placeholder="Search company or service..."
-          className="w-full rounded-xl border border-gray-200 py-2.5 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
+          className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
         />
       </div>
       <select
         value={serviceFilter}
         onChange={event => setServiceFilter(event.target.value)}
-        className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
+        className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       >
         <option value="all">All Services</option>
         {availableServices.map(type => <option key={type} value={type}>{type}</option>)}
@@ -108,7 +108,7 @@ function MarketplaceControls({ search, setSearch, serviceFilter, setServiceFilte
       <select
         value={sortBy}
         onChange={event => setSortBy(event.target.value)}
-        className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
+        className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
       >
         {SORT_OPTIONS.map(option => <option key={option.value} value={option.value}>Sort: {option.label}</option>)}
       </select>
@@ -116,24 +116,53 @@ function MarketplaceControls({ search, setSearch, serviceFilter, setServiceFilte
   )
 }
 
-function MarketplaceHero() {
+function MarketplaceHero({ stats }) {
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-green-100 bg-gradient-to-br from-sky-50 via-white to-green-50">
-      <div className="relative z-10 max-w-xl px-6 py-8 sm:px-10 sm:py-10">
-        <h1 className="flex items-center gap-2 text-3xl font-extrabold text-slate-950 sm:text-4xl">
-          Marketplace <Sparkles className="h-6 w-6 text-green-500" aria-hidden="true" />
-        </h1>
-        <p className="mt-3 max-w-md text-slate-600">
-          Browse trusted cleaning companies, compare services and prices, then book a slot that works for you.
-        </p>
+    <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(79,70,229,0.35),transparent_38%),radial-gradient(circle_at_85%_75%,rgba(34,197,94,0.28),transparent_36%)]" />
+      <div className="relative z-10 grid gap-8 px-6 py-10 sm:px-10 sm:py-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <div>
+          <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+            <Sparkles className="h-3.5 w-3.5" /> AI-matched cleaning companies
+          </span>
+          <h1 className="mt-5 max-w-lg text-4xl font-black leading-[1.05] tracking-tight sm:text-5xl">
+            Find your best-fit cleaner, not just a list of ads.
+          </h1>
+          <p className="mt-4 max-w-md text-base font-medium leading-7 text-slate-400">
+            Compare verified companies, real ratings, and transparent pricing, then book a slot that works for you.
+          </p>
+
+          {stats.loaded && stats.companies > 0 && (
+            <div className="mt-8 flex max-w-md flex-wrap gap-6">
+              <div className="border-l border-white/10 pl-4">
+                <div className="text-2xl font-black">{stats.companies}</div>
+                <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-500">Verified companies</div>
+              </div>
+              <div className="border-l border-white/10 pl-4">
+                <div className="text-2xl font-black">{stats.reviews}</div>
+                <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-500">Customer reviews</div>
+              </div>
+              <div className="border-l border-white/10 pl-4">
+                <div className="flex items-center gap-1 text-2xl font-black">
+                  {stats.avgRating !== null && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />}
+                  {stats.avgRating !== null ? stats.avgRating.toFixed(1) : 'New'}
+                </div>
+                <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-500">Average rating</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="relative hidden lg:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/marketing.png"
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none ml-auto w-full max-w-md rounded-2xl object-cover"
+          />
+        </div>
       </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/marketing.png"
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-y-0 right-0 hidden w-1/2 object-cover object-right sm:block"
-      />
     </div>
   )
 }
@@ -147,16 +176,16 @@ const WHY_BOOK_ITEMS = [
 
 function WhyBookSection() {
   return (
-    <div className="rounded-2xl border border-green-100 bg-gradient-to-br from-green-50 to-amber-50 p-6">
-      <h2 className="text-center text-lg font-bold text-gray-900">Why book through our marketplace?</h2>
-      <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 sm:p-8">
+      <h2 className="text-center text-lg font-extrabold text-slate-950">Why book through our marketplace?</h2>
+      <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
         {WHY_BOOK_ITEMS.map(item => (
           <div key={item.title} className="flex flex-col items-center text-center">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-green-600 shadow-sm">
+            <span className="grid h-12 w-12 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-indigo-600 shadow-sm">
               <item.icon className="h-5 w-5" />
             </span>
-            <p className="mt-3 text-sm font-semibold text-gray-900">{item.title}</p>
-            <p className="mt-1 text-xs text-gray-500">{item.description}</p>
+            <p className="mt-3 text-sm font-extrabold text-slate-950">{item.title}</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p>
           </div>
         ))}
       </div>
@@ -171,37 +200,37 @@ function CompanyCard({ company }) {
     .slice(0, 4)
 
   return (
-    <div className="flex flex-col rounded-2xl border border-gray-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <div className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/60 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/80">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent-100">
-            <Building2 className="h-5 w-5 text-accent-600" />
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-sm">
+            <Building2 className="h-5 w-5" />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate font-semibold text-gray-900">{(company.business_name || '').trim()}</h2>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500">
+            <h2 className="truncate text-base font-extrabold text-slate-950">{(company.business_name || '').trim()}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
               <StarRating rating={company.avg_rating} count={company.review_count} />
-              <span aria-hidden="true">&middot;</span>
-              <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> Singapore</span>
+              <span aria-hidden="true" className="text-slate-300">&middot;</span>
+              <span className="inline-flex items-center gap-1 text-slate-500"><MapPin className="h-3 w-3" /> Singapore</span>
             </div>
           </div>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
           <ShieldCheck className="h-3.5 w-3.5" /> Verified
         </span>
       </div>
 
       {company.marketing_description && (
-        <p className="text-sm leading-6 text-gray-600">{company.marketing_description}</p>
+        <p className="text-sm leading-6 text-slate-600">{company.marketing_description}</p>
       )}
 
       {rateEntries.length > 0 && (
-        <div className="mt-4 space-y-1.5 border-t border-gray-100 pt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Popular Services</p>
+        <div className="mt-4 space-y-1.5 border-t border-slate-100 pt-4">
+          <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">Popular Services</p>
           {rateEntries.map(([type, price]) => (
             <div key={type} className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">{type}</span>
-              <span className="font-semibold text-gray-900">${Number(price).toFixed(2)}</span>
+              <span className="text-slate-500">{type}</span>
+              <span className="font-bold text-slate-900">${Number(price).toFixed(2)}</span>
             </div>
           ))}
         </div>
@@ -209,13 +238,13 @@ function CompanyCard({ company }) {
 
       <Link
         href={`/customer-book?companyId=${company.id}`}
-        className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-600 to-green-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-md"
+        className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-green-500 px-4 py-3 text-sm font-bold text-white shadow-md shadow-blue-200/60 transition hover:-translate-y-0.5 hover:shadow-lg"
       >
         Book a slot
         <ArrowRight className="h-4 w-4" />
       </Link>
 
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] text-gray-400">
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] font-medium text-slate-400">
         <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Background-checked staff</span>
         <span className="inline-flex items-center gap-1"><CalendarCheck className="h-3 w-3" /> Easy online booking</span>
         <span className="inline-flex items-center gap-1"><Headphones className="h-3 w-3" /> Customer support</span>
@@ -224,16 +253,52 @@ function CompanyCard({ company }) {
   )
 }
 
+// Fills the empty grid space (and doubles as a lead-gen nudge) when the marketplace only has a
+// handful of listings so far — a sparse grid otherwise reads as broken rather than early-stage.
+function JoinMarketplaceCard() {
+  return (
+    <Link
+      href="/login"
+      className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-6 text-center transition hover:border-indigo-300 hover:bg-indigo-50/40"
+    >
+      <span className="grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-white text-indigo-600 shadow-sm">
+        <Plus className="h-5 w-5" />
+      </span>
+      <p className="mt-4 text-sm font-extrabold text-slate-900">Run a cleaning business?</p>
+      <p className="mt-1 max-w-[16rem] text-xs leading-5 text-slate-500">
+        List your company here with an AI-written description and start getting bookings.
+      </p>
+      <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600">
+        Get started <ArrowRight className="h-3.5 w-3.5" />
+      </span>
+    </Link>
+  )
+}
+
+function useMarketStats(companies) {
+  return useMemo(() => {
+    const reviews = companies.reduce((sum, c) => sum + (Number(c.review_count) || 0), 0)
+    const weightedSum = companies.reduce((sum, c) => sum + (Number(c.avg_rating) || 0) * (Number(c.review_count) || 0), 0)
+    return {
+      loaded: true,
+      companies: companies.length,
+      reviews,
+      avgRating: reviews > 0 ? weightedSum / reviews : null,
+    }
+  }, [companies])
+}
+
 function CustomerMarketplace() {
   const { companies, loading } = useCompanies()
   const {
     filtered, search, setSearch, serviceFilter, setServiceFilter, sortBy, setSortBy, availableServices,
   } = useFilteredCompanies(companies)
+  const stats = useMarketStats(companies)
 
   return (
     <Layout role="customer">
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-8">
-        <MarketplaceHero />
+      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+        <MarketplaceHero stats={stats} />
 
         <MarketplaceControls
           search={search} setSearch={setSearch}
@@ -243,12 +308,13 @@ function CustomerMarketplace() {
         />
 
         {loading ? (
-          <p className="text-gray-400">Loading companies...</p>
+          <p className="text-slate-400">Loading companies...</p>
         ) : filtered.length === 0 ? (
-          <p className="text-gray-400">No companies match your search.</p>
+          <p className="text-slate-400">No companies match your search.</p>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map(company => <CompanyCard key={company.id} company={company} />)}
+            {filtered.length < 3 && <JoinMarketplaceCard />}
           </div>
         )}
 
@@ -263,6 +329,7 @@ function PublicMarketplace() {
   const {
     filtered, search, setSearch, serviceFilter, setServiceFilter, sortBy, setSortBy, availableServices,
   } = useFilteredCompanies(companies)
+  const stats = useMarketStats(companies)
 
   return (
     <>
@@ -293,8 +360,8 @@ function PublicMarketplace() {
           </nav>
         </header>
 
-        <section className="mx-auto max-w-6xl space-y-6 px-5 py-8 sm:px-8 sm:py-10">
-          <MarketplaceHero />
+        <section className="mx-auto max-w-7xl space-y-6 px-5 py-8 sm:px-8 sm:py-10">
+          <MarketplaceHero stats={stats} />
 
           <MarketplaceControls
             search={search} setSearch={setSearch}
@@ -310,6 +377,7 @@ function PublicMarketplace() {
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filtered.map(company => <CompanyCard key={company.id} company={company} />)}
+              {filtered.length < 3 && <JoinMarketplaceCard />}
             </div>
           )}
 
