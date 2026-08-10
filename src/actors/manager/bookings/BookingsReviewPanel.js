@@ -15,13 +15,23 @@ const TIME_FILTERS = [
   { value: 'overdue', label: 'Overdue' },
 ]
 
-const SOURCE_FILTERS = [
-  { value: 'all', label: 'All Sources' },
-  { value: 'manager', label: 'Manager Created' },
-  { value: 'customer', label: 'Customer Booked' },
-  { value: 'department', label: 'Department Requests' },
-  { value: 'ai', label: 'AI Recommended' },
-]
+// The 'tasks' scope only ever loads manager/department-sourced rows (see loadBookings), so a
+// "Customer Booked" tab there would always read 0 — and the 'customer' scope's rows are all
+// already customer-sourced, so "Manager Created"/"Department Requests" would too. Each scope only
+// gets the tabs that can actually match something.
+function getSourceFilters(scope) {
+  return scope === 'tasks'
+    ? [
+      { value: 'all', label: 'All Sources' },
+      { value: 'manager', label: 'Manager Created' },
+      { value: 'department', label: 'Department Requests' },
+      { value: 'ai', label: 'AI Recommended' },
+    ]
+    : [
+      { value: 'all', label: 'All Sources' },
+      { value: 'ai', label: 'AI Recommended' },
+    ]
+}
 
 const SERVICE_ICONS = {
   'Home Cleaning': Home,
@@ -120,7 +130,10 @@ const getScheduleBadge = (booking) => {
   return { label: time ? `${dayLabel} · ${time}` : dayLabel, tone }
 }
 
-export default function BookingsReviewPanel() {
+// sourceScope splits the unified `bookings` table into two manager-facing pages: 'customer'
+// (the default Bookings page — real customer bookings only) and 'tasks' (manager/department
+// tasks created straight from the New Task form, with their Source visible per row).
+export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
   const [bookings, setBookings] = useState([])
   const [staffRows, setStaffRows] = useState([])
   const [notification, setNotification] = useState(null)
@@ -185,13 +198,18 @@ export default function BookingsReviewPanel() {
       return null
     }
 
+    let bookingsQuery = supabase
+      .from('bookings')
+      .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
+      .eq('host_admin_id', hostAdminIdResolved)
+      .in('status', ['pending', 'approved', 'in_progress', 'completed', 'rejected'])
+      .order('created_at', { ascending: false })
+    bookingsQuery = sourceScope === 'tasks'
+      ? bookingsQuery.in('source', ['manager', 'department'])
+      : bookingsQuery.eq('source', 'customer')
+
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
-      supabase
-        .from('bookings')
-        .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
-        .eq('host_admin_id', hostAdminIdResolved)
-        .in('status', ['pending', 'approved', 'in_progress', 'completed', 'rejected'])
-        .order('created_at', { ascending: false }),
+      bookingsQuery,
       supabase
         .from('staff_profiles')
         .select('id,user_id,staff_name,availability,current_workload,performance_rating,status,is_suspended')
@@ -224,7 +242,6 @@ export default function BookingsReviewPanel() {
 
     loadBookings().then(resolvedHostAdminId => {
       if (cancelled || !resolvedHostAdminId) return
-      loadRecurringBookings(resolvedHostAdminId)
       bookingsChannel = supabase
         .channel(`bookings-review-${resolvedHostAdminId}-${Date.now()}`)
         .on(
@@ -233,14 +250,17 @@ export default function BookingsReviewPanel() {
           () => { if (!cancelled) loadBookings() }
         )
         .subscribe()
-      recurringChannel = supabase
-        .channel(`recurring-bookings-review-${resolvedHostAdminId}-${Date.now()}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'recurring_bookings', filter: `host_admin_id=eq.${resolvedHostAdminId}` },
-          () => { if (!cancelled) loadRecurringBookings(resolvedHostAdminId) }
-        )
-        .subscribe()
+      if (sourceScope === 'customer') {
+        loadRecurringBookings(resolvedHostAdminId)
+        recurringChannel = supabase
+          .channel(`recurring-bookings-review-${resolvedHostAdminId}-${Date.now()}`)
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'recurring_bookings', filter: `host_admin_id=eq.${resolvedHostAdminId}` },
+            () => { if (!cancelled) loadRecurringBookings(resolvedHostAdminId) }
+          )
+          .subscribe()
+      }
       timeOffChannel = supabase
         .channel(`bookings-review-time-off-${resolvedHostAdminId}-${Date.now()}`)
         .on(
@@ -538,19 +558,24 @@ export default function BookingsReviewPanel() {
     && matchesBookingSearch(booking, bookingSearch)
   )
   const bookingServiceTypes = Array.from(new Set(bookings.map(b => b.service_type).filter(Boolean))).sort()
+  const sourceFilters = getSourceFilters(sourceScope)
   const timeFilterCounts = Object.fromEntries(TIME_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesTimeFilter(b, tab.value)).length]))
-  const sourceFilterCounts = Object.fromEntries(SOURCE_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesSourceFilter(b, tab.value)).length]))
+  const sourceFilterCounts = Object.fromEntries(sourceFilters.map(tab => [tab.value, bookings.filter(b => matchesSourceFilter(b, tab.value)).length]))
   const totalPages = Math.max(1, Math.ceil(visibleBookings.length / BOOKINGS_PAGE_SIZE))
   const safePage = Math.min(currentPage, totalPages)
   const pageBookings = visibleBookings.slice((safePage - 1) * BOOKINGS_PAGE_SIZE, safePage * BOOKINGS_PAGE_SIZE)
+  const pageTitle = sourceScope === 'tasks' ? 'Tasks' : 'Bookings for Review'
+  const pageSubtitle = sourceScope === 'tasks'
+    ? 'Tasks created directly by managers and departments, outside customer bookings. AI recommends the best-matched staff — approve to confirm, or override the pick below.'
+    : 'AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.'
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div>
-            <h1 className="text-2xl font-bold">Bookings for Review</h1>
-            <p className="text-gray-500 mt-1">AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.</p>
+            <h1 className="text-2xl font-bold">{pageTitle}</h1>
+            <p className="text-gray-500 mt-1">{pageSubtitle}</p>
           </div>
         </div>
       </div>
@@ -598,7 +623,7 @@ export default function BookingsReviewPanel() {
                 </button>
               ))}
               <p className="border-t px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Source</p>
-              {SOURCE_FILTERS.map(tab => (
+              {sourceFilters.map(tab => (
                 <button
                   key={tab.value}
                   type="button"
@@ -714,19 +739,21 @@ export default function BookingsReviewPanel() {
           <div className="overflow-x-auto">
             <table className="w-full table-fixed text-sm">
               <colgroup>
-                <col className="w-[20%]" />
-                <col className="w-[15%]" />
-                <col className="w-[15%]" />
-                <col className="w-[16%]" />
-                <col className="w-[13%]" />
-                <col className="w-[11%]" />
-                <col className="w-[10%]" />
+                <col className="w-[18%]" />
+                <col className="w-[14%]" />
+                <col className="w-[14%]" />
+                {sourceScope === 'tasks' && <col className="w-[11%]" />}
+                <col className={sourceScope === 'tasks' ? 'w-[14%]' : 'w-[16%]'} />
+                <col className={sourceScope === 'tasks' ? 'w-[12%]' : 'w-[13%]'} />
+                <col className={sourceScope === 'tasks' ? 'w-[9%]' : 'w-[11%]'} />
+                <col className={sourceScope === 'tasks' ? 'w-[8%]' : 'w-[10%]'} />
               </colgroup>
               <thead>
                 <tr className="border-b bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <th className="px-3 py-2.5">Service</th>
                   <th className="px-3 py-2.5">Customer</th>
                   <th className="px-3 py-2.5">Location</th>
+                  {sourceScope === 'tasks' && <th className="px-3 py-2.5">Source</th>}
                   <th className="px-3 py-2.5">Assignee</th>
                   <th className="px-3 py-2.5">Date</th>
                   <th className="px-3 py-2.5">Status</th>
@@ -757,6 +784,13 @@ export default function BookingsReviewPanel() {
                       </td>
                       <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{customerLabel}</span></td>
                       <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{booking.location}</span></td>
+                      {sourceScope === 'tasks' && (
+                        <td className="px-3 py-2.5">
+                          <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${getSourceMeta(booking.source).badge}`}>
+                            {getSourceMeta(booking.source).label}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-3 py-2.5">
                         {booking.staff_profiles?.staff_name ? (
                           <div className="flex min-w-0 items-center gap-2">
@@ -834,7 +868,7 @@ export default function BookingsReviewPanel() {
             <div className="fixed inset-0 z-40 bg-gray-900/40" onClick={closeDrawer} />
             <div className="fixed right-0 top-0 bottom-0 z-50 flex w-full max-w-[420px] flex-col bg-white shadow-lg">
               <div className="flex items-center justify-between border-b p-5">
-                <h4 className="font-semibold text-gray-900">Booking detail</h4>
+                <h4 className="font-semibold text-gray-900">{sourceScope === 'tasks' ? 'Task detail' : 'Booking detail'}</h4>
                 <button type="button" onClick={closeDrawer} aria-label="Close" className="text-gray-400 hover:text-gray-600">
                   <X className="w-5 h-5" />
                 </button>
