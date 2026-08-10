@@ -565,11 +565,22 @@ exception when duplicate_object then null; end $$;
 
 -- Security-definer view: exposes only the public-safe columns of published company
 -- marketing listings to anonymous visitors, without granting anon any broader access
--- to `profiles` (which also holds emails, QR secrets, host_admin_id, etc).
+-- to `profiles` (which also holds emails, QR secrets, host_admin_id, etc). avg_rating/
+-- review_count are aggregated here (not stored columns) from booking_feedback — real customer
+-- ratings, not a fabricated number — so the public marketplace (src/pages/marketplace.js) and
+-- the landing page's live stats (src/pages/index.js) both show genuine, current data.
 create or replace view public_marketing_listings as
-select id, business_name, marketing_description, service_rates
-from profiles
-where role = 'system_admin' and marketing_published = true;
+select
+  p.id,
+  p.business_name,
+  p.marketing_description,
+  p.service_rates,
+  coalesce(round(avg(bf.rating)::numeric, 2), 0) as avg_rating,
+  count(bf.id) as review_count
+from profiles p
+left join booking_feedback bf on bf.host_admin_id = p.id
+where p.role = 'system_admin' and p.marketing_published = true
+group by p.id, p.business_name, p.marketing_description, p.service_rates;
 
 grant select on public_marketing_listings to anon, authenticated;
 

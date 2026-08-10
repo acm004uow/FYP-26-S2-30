@@ -4,27 +4,23 @@ import { useEffect, useState } from 'react'
 import {
   ArrowRight,
   BarChart3,
-  CalendarCheck,
+  Building2,
   CheckCircle2,
   Clock3,
   FileCheck2,
   LayoutDashboard,
   LockKeyhole,
   MapPin,
+  Megaphone,
   Menu,
   MessageSquareText,
-  ShieldCheck,
   Sparkles,
+  Star,
   UserRound,
   UsersRound,
   X,
 } from 'lucide-react'
-
-const metrics = [
-  { label: 'Active staff', value: '42', tone: 'bg-blue-50 text-blue-700' },
-  { label: 'Open requests', value: '18', tone: 'bg-amber-50 text-amber-700' },
-  { label: 'Completed today', value: '31', tone: 'bg-green-50 text-green-700' },
-]
+import { supabase } from '../../lib/supabaseClient'
 
 const heroScenarios = [
   {
@@ -95,26 +91,29 @@ const heroScenarios = [
   },
 ]
 
+// Every item here maps to a real, working AI feature (verified against the actual implementation,
+// not aspirational copy): the weighted recommendation engine, the Azure-OpenAI-backed scheduling
+// agent chat, the AI-generated report insights, and the AI marketing copywriter.
 const features = [
   {
     icon: Sparkles,
-    title: 'Smart recommendations',
-    text: 'Match requests with staff based on availability, workload, proximity, skill fit, and priority, all weighted automatically.',
+    title: 'Smart matching, everywhere',
+    text: 'The same weighted scoring engine matches staff to tasks by availability, proximity, workload, rating, and continuity — and matches customers to the best-fit company for the exact service they pick.',
   },
   {
-    icon: CalendarCheck,
-    title: 'Live availability',
-    text: 'Give managers a clear view of who is available, unavailable, or on time off before confirming any work assignment.',
+    icon: MessageSquareText,
+    title: 'AI Scheduling Agent',
+    text: 'Tell it "build next week\'s schedule" or "ABC Office signed a contract, daily cleaning, 3 staff" in plain English. It drafts the staffing plan for a manager to review and approve.',
   },
   {
-    icon: FileCheck2,
-    title: 'Proof and feedback',
-    text: 'Staff update task status, upload completion proof, and receive feedback. Managers close the loop with structured reports.',
+    icon: BarChart3,
+    title: 'AI-written business insights',
+    text: 'Every report ships with a handful of AI-generated insights pointing at what actually changed, not just a wall of numbers to interpret yourself.',
   },
   {
-    icon: ShieldCheck,
-    title: 'Admin governance',
-    text: 'Manage users, roles, password resets, security logs, audit trails, and allocation parameters from a single admin panel.',
+    icon: Megaphone,
+    title: 'AI marketing assistant',
+    text: 'Generate and refine your public company description with AI, tailored to the services you actually price, then publish it to the marketplace in one click.',
   },
 ]
 
@@ -123,43 +122,43 @@ const roles = [
     title: 'Managers',
     icon: LayoutDashboard,
     accent: 'from-blue-500 to-green-500',
-    summary: 'Coordinate task approvals, staff matching, and operational reporting from one dashboard.',
-    points: ['Approve task requests', 'Review recommended staff', 'Generate operational reports'],
+    summary: 'Coordinate task approvals, staff matching, and scheduling with an AI agent doing the drafting.',
+    points: ['Chat with the AI Scheduling Agent', 'Review AI-recommended staff', 'Approve tasks and bookings'],
   },
   {
     title: 'Customers',
     icon: UserRound,
     accent: 'from-green-500 to-emerald-500',
-    summary: 'Book cleaning services online and track booking status from request to completion.',
-    points: ['Book a service', 'Track booking status', 'View booking history'],
+    summary: 'Pick a service and get an AI-recommended company for it, then track your booking to completion.',
+    points: ['Get AI company recommendations', 'Book a service', 'Track booking status'],
   },
   {
     title: 'Staff Members',
     icon: UsersRound,
     accent: 'from-blue-500 to-cyan-500',
-    summary: 'Stay updated on assigned tasks, availability, task status, and proof of completion.',
-    points: ['Update availability', 'View assignments', 'Upload completion proof'],
+    summary: 'Stay updated on assigned tasks and see real worked-hours analytics, not just a task list.',
+    points: ['View worked-hours analytics', 'Update availability', 'Upload completion proof'],
   },
   {
     title: 'Owners',
     icon: LockKeyhole,
     accent: 'from-green-500 to-blue-500',
-    summary: 'Govern accounts, permissions, security activity, audit trails, and allocation rules.',
-    points: ['Create accounts', 'Configure thresholds', 'Monitor audit activity'],
+    summary: 'Set the business rules and pricing, then let AI handle the marketing copy and report analysis.',
+    points: ['Publish an AI-written marketing page', 'Set pay rates & service pricing', 'Review AI-generated business insights'],
   },
 ]
 
 const steps = [
   'Customers book a service or managers create a task with priority, timing, and location.',
-  'The system ranks available staff using workload, proximity, skills, and policy weights.',
-  'Managers approve, assign, monitor progress, and close the loop with reports.',
+  'The AI recommendation engine ranks available staff using workload, proximity, skills, and policy weights — or a manager just asks the Scheduling Agent to draft the whole week.',
+  'Managers approve, assign, monitor progress, and close the loop with AI-annotated reports.',
 ]
 
 const navItems = [
-  { label: 'Features', href: '#features' },
+  { label: 'Smart Features', href: '#features' },
   { label: 'Workflow', href: '#workflow' },
   { label: 'Roles', href: '#roles' },
-  { label: 'Security', href: '#security' },
+  { label: 'Operations', href: '#security' },
 ]
 
 export default function MarketingHome() {
@@ -167,6 +166,34 @@ export default function MarketingHome() {
   const [activeNav, setActiveNav] = useState('#features')
   const [activeStep, setActiveStep] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [liveStats, setLiveStats] = useState({ loaded: false, companies: 0, reviews: 0, avgRating: null, names: [] })
+
+  // Real, current marketplace numbers — not placeholder figures — pulled from the same
+  // anon-readable view the public marketplace page uses (public_marketing_listings), so this
+  // page never claims activity the platform doesn't actually have.
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('public_marketing_listings')
+        .select('business_name,avg_rating,review_count')
+      const rows = data || []
+      const reviews = rows.reduce((sum, row) => sum + (Number(row.review_count) || 0), 0)
+      const weightedSum = rows.reduce((sum, row) => sum + (Number(row.avg_rating) || 0) * (Number(row.review_count) || 0), 0)
+      setLiveStats({
+        loaded: true,
+        companies: rows.length,
+        reviews,
+        avgRating: reviews > 0 ? weightedSum / reviews : null,
+        names: rows.map((row) => (row.business_name || '').trim()).filter(Boolean),
+      })
+    })()
+  }, [])
+
+  const metrics = [
+    { label: 'Verified companies', value: liveStats.loaded ? String(liveStats.companies) : '—', tone: 'bg-blue-50 text-blue-700' },
+    { label: 'Customer reviews', value: liveStats.loaded ? String(liveStats.reviews) : '—', tone: 'bg-amber-50 text-amber-700' },
+    { label: 'Average rating', value: liveStats.loaded ? (liveStats.avgRating !== null ? liveStats.avgRating.toFixed(1) : 'New') : '—', tone: 'bg-green-50 text-green-700' },
+  ]
 
   useEffect(() => {
     const syncActiveNav = () => {
@@ -381,9 +408,14 @@ export default function MarketingHome() {
               </div>
 
               <div className="mt-9 grid max-w-lg grid-cols-3 gap-3">
-                {metrics.map((metric) => (
+                {metrics.map((metric, index) => (
                   <div key={metric.label} className="border-l border-white/10 pl-5 first:border-l-0 first:pl-0">
-                    <div className="text-3xl font-black text-white">{metric.value}</div>
+                    <div className="flex items-center gap-1.5 text-3xl font-black text-white">
+                      {index === 2 && metric.value !== '—' && metric.value !== 'New' && (
+                        <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
+                      )}
+                      {metric.value}
+                    </div>
                     <div className="mt-1 font-mono text-xs font-bold text-slate-500">{metric.label}</div>
                   </div>
                 ))}
@@ -453,7 +485,7 @@ export default function MarketingHome() {
             {[
               ['One shared workspace', 'Requests, schedules, assignments, proof, and reports stay connected.'],
               ['Decisions with context', 'Availability, workload, distance, and priority inform every match.'],
-              ['Built for accountability', 'Role permissions and audit history make every action traceable.'],
+              ['Built for accountability', 'Role-based permissions keep every account seeing only what it should.'],
             ].map(([title, text]) => (
               <div key={title} className="flex gap-3">
                 <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
@@ -463,11 +495,32 @@ export default function MarketingHome() {
           </div>
         </section>
 
+        {liveStats.loaded && liveStats.names.length > 0 && (
+          <section className="border-b border-slate-200 bg-slate-50">
+            <div className="mx-auto flex max-w-7xl flex-col items-center gap-4 px-5 py-8 sm:px-8">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                Trusted by companies already on the marketplace
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                {liveStats.names.slice(0, 8).map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-sm"
+                  >
+                    <Building2 className="h-3.5 w-3.5 text-indigo-500" />
+                    {name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
         <section id="features" className="mx-auto max-w-7xl scroll-mt-32 px-5 py-16 sm:px-8">
           <div className="max-w-2xl">
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-indigo-600">Core capabilities</p>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-indigo-600">Smart features, not busywork</p>
             <h2 className="mt-4 text-3xl font-extrabold leading-tight text-slate-950 sm:text-4xl">
-              Built for busy teams that need clarity, not extra admin work.
+              AI does the matching, drafting, and reporting. Your team just reviews and approves.
             </h2>
           </div>
 
@@ -565,22 +618,23 @@ export default function MarketingHome() {
         <section id="security" className="scroll-mt-32 bg-slate-950 text-white">
           <div className="mx-auto grid max-w-7xl gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[1fr_0.95fr]">
             <div>
-              <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-300">Governance included</p>
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-emerald-300">Operations, handled</p>
               <h2 className="mt-4 text-3xl font-extrabold leading-tight sm:text-4xl">
-                Admin controls for real workplace accountability.
+                Everything an owner needs to run the business day to day.
               </h2>
               <p className="mt-5 max-w-xl leading-8 text-slate-400">
-                Owners can create accounts, manage permissions, reset passwords, configure allocation
-                parameters, and review security or audit activity, all in one place.
+                Owners create manager and staff accounts, set pay rates and service pricing, configure
+                allocation parameters, and keep every report flowing to the right people — with AI
+                doing the first draft of the marketing copy and the report analysis.
               </p>
             </div>
 
             <div className="grid gap-4">
               {[
-                [BarChart3, 'Daily, weekly, and monthly reports'],
-                [MessageSquareText, 'Built-in chatbot support for quick operational questions'],
+                [BarChart3, 'Daily, weekly, and monthly reports with AI-written insights'],
+                [MessageSquareText, 'Built-in chatbot support for every role'],
                 [Clock3, 'Availability and task status updates in near real time'],
-                [ShieldCheck, 'Security logs and audit logs for admin review'],
+                [FileCheck2, 'Completion proof and structured customer feedback'],
               ].map(([Icon, label]) => (
                 <div key={label} className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 p-5 transition hover:bg-white/10">
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-emerald-400/10 text-emerald-300">
