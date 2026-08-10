@@ -1,8 +1,13 @@
 import Layout from '../../../components/Layout'
+import TimeInput from '../../../components/TimeInput'
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, ChevronLeft, ChevronRight, Lock, MoreVertical, Printer } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight, Lock, MoreVertical, Pencil, Plus, Printer, Sparkles, Wand2, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
+import { createManualBooking, updateBookingAssignment } from '../../../../lib/assignBooking'
+import { fetchApprovedTimeOffClient, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
+import { loadServiceTypes, SERVICE_TYPES } from '../../../../lib/serviceTypes'
+import TaskCreationForm from '../../../components/TaskCreationForm'
 
 // Dates are kept entirely in UTC arithmetic (parse with a "Z" suffix, use getUTC*/setUTC*).
 // Mixing local-time parsing with .toISOString() (always UTC) would silently shift every
@@ -57,6 +62,201 @@ function escapeHtml(value) {
   }[char]))
 }
 
+// The "AI Agent" tab of the Add Task modal: a free-text hint (e.g. "Cus Name - Saung, Location -
+// 123456 #05-01, tomorrow 2pm") goes to /api/agent/parse-task, which returns structured fields for
+// the manager to review/edit before creating the booking via createManualBooking. Kept as its own
+// compact panel here rather than reusing the full ManagerNewTask form, per the intended "specific
+// UI" for a quick single-task AI add (the full form's own AI assist only drafts a description for
+// fields the manager already filled in manually).
+function AiTaskPanel({ hostAdminId, staffRows, approvedTimeOff, serviceTypes, defaultDate, getActiveManager, onCreated }) {
+  const [hint, setHint] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [parseError, setParseError] = useState('')
+  const [extracted, setExtracted] = useState(null)
+  const [selectedStaffId, setSelectedStaffId] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+
+  const updateField = (field, value) => setExtracted(prev => ({ ...prev, [field]: value }))
+
+  const handleParse = async () => {
+    if (!hint.trim()) {
+      setParseError('Describe the task first.')
+      return
+    }
+    setParsing(true)
+    setParseError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('/api/agent/parse-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ hint }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(result?.error || 'Could not parse the task.')
+
+      setExtracted({
+        customerName: result.customerName || '',
+        location: result.location || '',
+        serviceType: serviceTypes.includes(result.serviceType) ? result.serviceType : serviceTypes[0],
+        scheduledDate: result.scheduledDate || defaultDate || '',
+        scheduledTime: result.scheduledTime || '',
+        estimatedHours: result.estimatedHours || 2,
+        description: result.description || '',
+      })
+      setSelectedStaffId('')
+      setCreateError('')
+    } catch (error) {
+      setParseError(error.message)
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  const handleCreate = async () => {
+    if (!extracted) return
+    if (!extracted.location.trim()) {
+      setCreateError('Location is required.')
+      return
+    }
+    const staff = staffRows.find(row => row.id === selectedStaffId)
+    if (!staff) {
+      setCreateError('Select a staff member to assign.')
+      return
+    }
+    const manager = await getActiveManager()
+    if (!manager) {
+      setCreateError('Only an active manager can create tasks.')
+      return
+    }
+
+    setCreating(true)
+    setCreateError('')
+    const result = await createManualBooking({
+      hostAdminId,
+      serviceType: extracted.serviceType,
+      location: extracted.location,
+      description: extracted.description,
+      estimatedHours: extracted.estimatedHours,
+      scheduledDate: extracted.scheduledDate,
+      scheduledTime: extracted.scheduledTime,
+      staff,
+      managerUserId: manager.id,
+      guestName: extracted.customerName,
+      creationMethod: 'ai',
+    })
+    setCreating(false)
+
+    if (!result.success) {
+      setCreateError(result.message)
+      return
+    }
+    onCreated()
+  }
+
+  return (
+    <div className="p-6 space-y-5">
+      <div className="flex items-start gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+          <Sparkles className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Add task with AI</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Describe the job in your own words — the AI fills in the details for you to review.</p>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium text-gray-700">Describe the task</label>
+        <textarea
+          value={hint}
+          onChange={e => setHint(e.target.value)}
+          placeholder="e.g. Cus Name - Saung, Location - postal code and floor, date and time"
+          rows={3}
+          className="mt-1 w-full rounded-lg border border-gray-200 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500"
+        />
+        {parseError && <p className="mt-1 text-xs text-red-500">{parseError}</p>}
+        <button
+          type="button"
+          onClick={handleParse}
+          disabled={parsing}
+          className="mt-2 flex items-center gap-1.5 rounded-full bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-600 hover:bg-purple-100 disabled:opacity-60"
+        >
+          <Wand2 className="w-3.5 h-3.5" /> {parsing ? 'Reading...' : extracted ? 'Re-generate' : 'Generate details'}
+        </button>
+      </div>
+
+      {extracted && (
+        <div className="space-y-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Review before creating</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600">Customer Name</label>
+              <input value={extracted.customerName} onChange={e => updateField('customerName', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Service Type</label>
+              <select value={extracted.serviceType} onChange={e => updateField('serviceType', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500">
+                {serviceTypes.map(type => <option key={type} value={type}>{type}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Location</label>
+            <input value={extracted.location} onChange={e => updateField('location', e.target.value)} placeholder="Postal code and floor/unit" className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs font-medium text-gray-600">Date</label>
+              <input type="date" value={extracted.scheduledDate} onChange={e => updateField('scheduledDate', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Time</label>
+              <TimeInput className="mt-1" value={extracted.scheduledTime} onChange={value => updateField('scheduledTime', value)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Est. Hours</label>
+              <input type="number" min="1" step="0.5" value={extracted.estimatedHours} onChange={e => updateField('estimatedHours', Number(e.target.value))} className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Description</label>
+            <textarea value={extracted.description} onChange={e => updateField('description', e.target.value)} rows={2} className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600">Assign Staff <span className="text-red-500">*</span></label>
+            <select value={selectedStaffId} onChange={e => setSelectedStaffId(e.target.value)} className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500">
+              <option value="">Choose staff...</option>
+              {staffRows.map(staff => {
+                const offOnDate = extracted.scheduledDate && isStaffOffOnDate(staff.id, extracted.scheduledDate, approvedTimeOff)
+                const assignable = staff.canAssign && !offOnDate
+                return (
+                  <option key={staff.id} value={staff.id} disabled={!assignable}>
+                    {staff.name}{assignable ? '' : offOnDate ? ' (Off that day)' : ' (Unavailable)'}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+          {createError && <p className="text-sm text-red-500">{createError}</p>}
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={creating}
+            className="flex items-center gap-1.5 rounded-lg bg-accent-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#00243d] disabled:opacity-60"
+          >
+            <Sparkles className="w-4 h-4" /> {creating ? 'Creating...' : 'Create Task'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ManagerSchedule() {
   const { user } = useAuthUser()
   const [staffRows, setStaffRows] = useState([])
@@ -66,6 +266,13 @@ export default function ManagerSchedule() {
   const [pastSnapshot, setPastSnapshot] = useState(null)
   const [finalizing, setFinalizing] = useState(false)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [approvedTimeOff, setApprovedTimeOff] = useState([])
+  const [savingBookingId, setSavingBookingId] = useState(null)
+  const [editError, setEditError] = useState('')
+  const [taskModalDate, setTaskModalDate] = useState(null)
+  const [addTaskTab, setAddTaskTab] = useState('manual')
+  const [serviceTypes, setServiceTypes] = useState(SERVICE_TYPES)
   const jumpDateRef = useRef(null)
 
   useEffect(() => {
@@ -92,13 +299,33 @@ export default function ManagerSchedule() {
 
     const { data: staff } = await supabase
       .from('staff_profiles')
-      .select('id,user_id,staff_name')
+      .select('id,user_id,staff_name,availability,current_workload,is_suspended,status')
       .eq('host_admin_id', resolvedHostAdminId)
       .eq('status', 'active')
       .order('staff_name')
 
-    setStaffRows((staff || []).map(row => ({ id: row.id, userId: row.user_id, name: row.staff_name })))
+    setStaffRows((staff || []).map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      name: row.staff_name,
+      canAssign: !row.is_suspended && row.status === 'active' && row.availability === 'available',
+      tasks: row.current_workload || 0,
+    })))
+    await loadApprovedTimeOff(resolvedHostAdminId)
+    setServiceTypes(await loadServiceTypes(supabase, resolvedHostAdminId))
     return resolvedHostAdminId
+  }
+
+  const loadApprovedTimeOff = async (hostAdminIdParam) => {
+    if (!hostAdminIdParam) {
+      setApprovedTimeOff([])
+      return
+    }
+    try {
+      setApprovedTimeOff(await fetchApprovedTimeOffClient(supabase, hostAdminIdParam))
+    } catch {
+      setApprovedTimeOff([])
+    }
   }
 
   const loadWeeklyGrid = async (hostAdminIdParam, anchorIso) => {
@@ -137,13 +364,50 @@ export default function ManagerSchedule() {
   const goToWeek = async (days) => {
     const newAnchor = shiftWeek(weekAnchor, days)
     setWeekAnchor(newAnchor)
+    setEditError('')
     await loadWeeklyGrid(hostAdminId, newAnchor)
   }
 
   const jumpToDate = async (dateIso) => {
     if (!dateIso) return
     setWeekAnchor(dateIso)
+    setEditError('')
     await loadWeeklyGrid(hostAdminId, dateIso)
+  }
+
+  const openAddTask = (date) => {
+    setTaskModalDate(date)
+    setAddTaskTab('manual')
+  }
+
+  const closeAddTask = async () => {
+    setTaskModalDate(null)
+    await loadWeeklyGrid(hostAdminId, weekAnchor)
+  }
+
+  const handleReassign = async (booking, staffId) => {
+    const manager = await getActiveManager()
+    if (!manager) return
+    setEditError('')
+    const staff = staffId ? staffRows.find(row => row.id === staffId) : null
+    const previousStaff = booking.assigned_staff_id ? staffRows.find(row => row.id === booking.assigned_staff_id) : null
+
+    setSavingBookingId(booking.id)
+    const result = await updateBookingAssignment({
+      booking,
+      staff,
+      scheduledDate: booking.scheduled_date,
+      scheduledTime: booking.scheduled_time,
+      managerUserId: manager.id,
+      previousStaff,
+    })
+    setSavingBookingId(null)
+
+    if (!result.success) {
+      setEditError(result.message)
+      return
+    }
+    await loadWeeklyGrid(hostAdminId, weekAnchor)
   }
 
   const getActiveManager = async () => {
@@ -315,6 +579,18 @@ export default function ManagerSchedule() {
               className="sr-only"
               tabIndex={-1}
             />
+            <button
+              type="button"
+              onClick={() => { setEditMode(v => !v); setEditError('') }}
+              disabled={!!pastSnapshot}
+              aria-pressed={editMode}
+              title={pastSnapshot ? 'This week is finalized and read-only' : editMode ? 'Done editing' : 'Edit schedule'}
+              className={`flex h-10 w-10 items-center justify-center rounded-full border transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                editMode ? 'border-accent bg-accent text-white hover:bg-accent-600' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
             <div className="relative">
               <button
                 type="button"
@@ -349,6 +625,15 @@ export default function ManagerSchedule() {
           </div>
         </div>
 
+        {editMode && (
+          <div className="mt-4 rounded-lg border border-accent-200 bg-accent-100 px-4 py-2 text-sm text-accent-800">
+            Edit mode: pick a staff member on any job to reassign it, or click + on a day to add a new task. Changes save immediately.
+          </div>
+        )}
+        {editMode && editError && (
+          <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{editError}</div>
+        )}
+
         <div className="mt-6 grid grid-cols-7 overflow-hidden rounded-xl border border-gray-200 bg-white">
           {weekDates.map(date => {
             const dayBookings = weekBookings
@@ -362,12 +647,49 @@ export default function ManagerSchedule() {
                 <div className={`min-h-[160px] p-3 ${date === today ? 'bg-accent-100/40' : ''}`}>
                   <p className="text-sm font-bold text-gray-900">{Number(date.slice(8, 10))}</p>
                   <div className="mt-2 space-y-1.5">
-                    {dayBookings.map(b => (
-                      <div key={b.id} className="truncate rounded-md bg-accent-100 px-2 py-1 text-xs text-accent-800">
-                        {b.scheduled_time ? `${formatTime12h(b.scheduled_time)} ` : ''}{b.service_type}
-                      </div>
-                    ))}
+                    {dayBookings.map(b => {
+                      const assignedStaff = staffRows.find(row => row.id === b.assigned_staff_id)
+                      const canReassign = editMode && ['pending', 'approved'].includes(b.status)
+                      return (
+                        <div key={b.id} className="rounded-md bg-accent-100 px-2 py-1 text-xs text-accent-800">
+                          <p className="truncate">
+                            {b.scheduled_time ? `${formatTime12h(b.scheduled_time)} ` : ''}{b.service_type}
+                          </p>
+                          {canReassign ? (
+                            <select
+                              value={b.assigned_staff_id || ''}
+                              disabled={savingBookingId === b.id}
+                              onChange={e => handleReassign(b, e.target.value || null)}
+                              className="mt-1 w-full rounded border border-accent-200 bg-white px-1 py-0.5 text-[10px] text-gray-700 disabled:opacity-50"
+                            >
+                              <option value="">Unassigned</option>
+                              {staffRows.map(staff => {
+                                const offOnDate = isStaffOffOnDate(staff.id, b.scheduled_date, approvedTimeOff)
+                                const assignable = staff.canAssign && !offOnDate
+                                return (
+                                  <option key={staff.id} value={staff.id} disabled={!assignable && staff.id !== b.assigned_staff_id}>
+                                    {staff.name}{assignable ? '' : offOnDate ? ' (Off)' : ' (Unavailable)'}
+                                  </option>
+                                )
+                              })}
+                            </select>
+                          ) : (
+                            assignedStaff && <p className="truncate text-[10px] text-accent-600">{assignedStaff.name}</p>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
+                  {editMode && (
+                    <button
+                      type="button"
+                      onClick={() => openAddTask(date)}
+                      title="Add a task for this day"
+                      className="mt-2 flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-accent-300 py-1 text-[11px] font-medium text-accent-600 hover:bg-accent-100"
+                    >
+                      <Plus className="w-3 h-3" /> Add
+                    </button>
+                  )}
                 </div>
               </div>
             )
@@ -412,6 +734,56 @@ export default function ManagerSchedule() {
           </div>
         </div>
       </div>
+
+      {taskModalDate && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center">
+          <div className="relative w-full max-w-3xl">
+            <button
+              type="button"
+              onClick={closeAddTask}
+              aria-label="Close"
+              className="absolute -top-3 -right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-md transition hover:bg-gray-50"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="max-h-[90vh] overflow-y-auto rounded-2xl bg-white">
+              <div className="flex gap-1 border-b bg-white px-6 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setAddTaskTab('manual')}
+                  className={`rounded-t-lg px-4 py-2 text-sm font-semibold transition ${
+                    addTaskTab === 'manual' ? 'border-b-2 border-accent text-accent-600' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  Manual
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAddTaskTab('ai')}
+                  className={`flex items-center gap-1 rounded-t-lg px-4 py-2 text-sm font-semibold transition ${
+                    addTaskTab === 'ai' ? 'border-b-2 border-accent text-accent-600' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> AI Agent
+                </button>
+              </div>
+              {addTaskTab === 'manual' ? (
+                <TaskCreationForm actorRole="manager" source="manager" backHref="/manager-schedule" initialDate={taskModalDate} />
+              ) : (
+                <AiTaskPanel
+                  hostAdminId={hostAdminId}
+                  staffRows={staffRows}
+                  approvedTimeOff={approvedTimeOff}
+                  serviceTypes={serviceTypes}
+                  defaultDate={taskModalDate}
+                  getActiveManager={getActiveManager}
+                  onCreated={closeAddTask}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   )
 }

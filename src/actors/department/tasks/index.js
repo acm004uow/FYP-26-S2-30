@@ -3,7 +3,7 @@ import AddressFields from '../../../components/AddressFields'
 import TimeInput from '../../../components/TimeInput'
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
-import { Bell, Briefcase, ChevronDown, ChevronRight, ChevronUp, ClipboardList, Clock, Filter, Home, Layers, Lightbulb, Search, Sparkles, Trash2, Truck, User, UserCheck } from 'lucide-react'
+import { Bell, Briefcase, ChevronDown, ChevronRight, ChevronUp, ClipboardList, Clock, Filter, Home, Layers, Lightbulb, Search, Sparkles, Trash2, Truck, User, UserCheck, Wand2 } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
 import { fetchApprovedTimeOffClient, getExcludedStaffIdsForDate, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
@@ -91,6 +91,10 @@ export default function DepartmentTasks() {
   const [staffFilterOpen, setStaffFilterOpen] = useState(false)
   const [staffSearch, setStaffSearch] = useState('')
   const [staffStatusFilter, setStaffStatusFilter] = useState('All')
+  const [createMode, setCreateMode] = useState('manual')
+  const [aiHint, setAiHint] = useState('')
+  const [aiParsing, setAiParsing] = useState(false)
+  const [aiParseError, setAiParseError] = useState('')
   const urgencyRef = useRef(null)
   const staffPickerRef = useRef(null)
 
@@ -224,7 +228,55 @@ export default function DepartmentTasks() {
     setForm(prev => ({ ...emptyForm, serviceType: serviceTypes.includes(emptyForm.serviceType) ? emptyForm.serviceType : serviceTypes[0] }))
     setCoordinates(null)
     setSelectedStaffId('')
+    setAiHint('')
+    setAiParseError('')
     setFormResetKey(key => key + 1)
+  }
+
+  // "AI Agent" tab: turns a shorthand note into the same form fields the Manual tab uses, so the
+  // existing AI staff recommendation (the useEffect above, keyed off form.location/estimatedHours/
+  // etc.) and staff picker keep working unchanged — staff are still recommended, this just fills
+  // the fields faster than typing into each one by hand. Department bookings have no customer-name
+  // field of their own, so an extracted name is folded into the description instead of dropped.
+  const handleParseAi = async () => {
+    if (!aiHint.trim()) {
+      setAiParseError('Describe the task first.')
+      return
+    }
+    setAiParsing(true)
+    setAiParseError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('/api/agent/parse-task', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ hint: aiHint }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(result?.error || 'Could not parse the task.')
+
+      const description = result.customerName
+        ? `Customer: ${result.customerName}.${result.description ? ` ${result.description}` : ''}`
+        : result.description
+
+      setForm(prev => ({
+        ...prev,
+        serviceType: serviceTypes.includes(result.serviceType) ? result.serviceType : prev.serviceType,
+        location: result.location || prev.location,
+        scheduledDate: result.scheduledDate || prev.scheduledDate,
+        scheduledTime: result.scheduledTime || prev.scheduledTime,
+        estimatedHours: result.estimatedHours || prev.estimatedHours,
+        description: description || prev.description,
+      }))
+      setCoordinates(null)
+    } catch (error) {
+      setAiParseError(error.message)
+    } finally {
+      setAiParsing(false)
+    }
   }
 
   const handleCreateTask = async (event) => {
@@ -335,6 +387,46 @@ export default function DepartmentTasks() {
             </div>
           </div>
 
+          <div className="flex gap-1 border-b">
+            <button
+              type="button"
+              onClick={() => setCreateMode('manual')}
+              className={`px-4 py-2 text-sm font-semibold transition ${createMode === 'manual' ? 'border-b-2 border-[#005252] text-[#005252]' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              Manual
+            </button>
+            <button
+              type="button"
+              onClick={() => setCreateMode('ai')}
+              className={`flex items-center gap-1 px-4 py-2 text-sm font-semibold transition ${createMode === 'ai' ? 'border-b-2 border-[#005252] text-[#005252]' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              <Sparkles className="w-3.5 h-3.5" /> AI Agent
+            </button>
+          </div>
+
+          {createMode === 'ai' && (
+            <div className="rounded-lg border border-purple-100 bg-purple-50 p-3">
+              <label className="text-sm font-medium text-gray-700">Describe the task</label>
+              <textarea
+                value={aiHint}
+                onChange={e => setAiHint(e.target.value)}
+                placeholder="e.g. Cus Name - Saung, Location - postal code and floor, date and time"
+                rows={2}
+                className="mt-1 w-full rounded-lg border border-gray-200 bg-white p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
+              />
+              {aiParseError && <p className="mt-1 text-xs text-red-500">{aiParseError}</p>}
+              <button
+                type="button"
+                onClick={handleParseAi}
+                disabled={aiParsing}
+                className="mt-2 flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-200 disabled:opacity-60"
+              >
+                <Wand2 className="w-3.5 h-3.5" /> {aiParsing ? 'Reading...' : 'Fill fields with AI'}
+              </button>
+              <p className="mt-2 text-xs text-purple-700">Fields below are filled in for you to review — staff are still recommended the same way as Manual.</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium text-gray-700">Service Type <span className="text-red-500">*</span></label>
@@ -383,12 +475,25 @@ export default function DepartmentTasks() {
             </div>
           </div>
 
-          <AddressFields
-            key={formResetKey}
-            onLocationChange={location => setForm(prev => ({ ...prev, location }))}
-            onCoordinatesChange={setCoordinates}
-            compact
-          />
+          {createMode === 'manual' ? (
+            <AddressFields
+              key={formResetKey}
+              onLocationChange={location => setForm(prev => ({ ...prev, location }))}
+              onCoordinatesChange={setCoordinates}
+              compact
+            />
+          ) : (
+            <div>
+              <label className="text-sm font-medium text-gray-700">Location <span className="text-red-500">*</span></label>
+              <input
+                required
+                value={form.location}
+                onChange={e => setForm(prev => ({ ...prev, location: e.target.value }))}
+                placeholder="Postal code and floor/unit"
+                className="mt-1 w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#005252]"
+              />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
