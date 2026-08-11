@@ -192,11 +192,13 @@ export async function POST(request) {
       if (contracts.length === 0) return NextResponse.json({ error: 'No contract details were provided.' }, { status: 400 })
 
       const created = []
+      const createdContracts = []
       const failed = []
       for (const contract of contracts) {
         try {
           await createManagerRecurringBooking(managerProfile.host_admin_id, managerProfile.id, contract)
           created.push(contract.customer_name || 'Unnamed customer')
+          createdContracts.push(contract)
         } catch (error) {
           failed.push(`${contract.customer_name || 'Unnamed customer'}: ${error.message}`)
         }
@@ -218,7 +220,7 @@ export async function POST(request) {
       const createdSummary = `Created ${created.length} recurring contract${created.length === 1 ? '' : 's'}: ${created.join(', ')}.`
       const failedSummary = failed.length ? ` Could not create: ${failed.join('; ')}.` : ''
       const reply = `${createdSummary}${failedSummary} ${summarizeProposal(proposal, range)}`
-      return NextResponse.json({ reply, proposal, range })
+      return NextResponse.json({ reply, proposal, range, contracts: createdContracts })
     }
 
     if (scheduleCall) {
