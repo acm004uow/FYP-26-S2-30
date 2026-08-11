@@ -10,12 +10,15 @@ const roleNames = {
 
 const CHATBOT_ROLE_THEME = {
   manager: {
-    main: 'bg-blue-600',
-    hover: 'hover:bg-blue-700',
-    text: 'text-blue-600',
-    lightBg: 'hover:bg-blue-50',
-    border: 'hover:border-blue-300',
-    ring: 'focus:ring-blue-300',
+    // Matches the manager sidebar's own navy background (SIDEBAR_ROLE_COLORS.manager in
+    // Layout.js) rather than a generic Tailwind blue, so the chatbot reads as part of the same
+    // manager color system instead of a separate palette.
+    main: 'bg-[#003152]',
+    hover: 'hover:bg-[#00263f]',
+    text: 'text-[#003152]',
+    lightBg: 'hover:bg-[#eef3f8]',
+    border: 'hover:border-[#5c7c96]',
+    ring: 'focus:ring-[#003152]/30',
   },
 
   staffMember: {
