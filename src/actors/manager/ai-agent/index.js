@@ -29,6 +29,8 @@ export default function ManagerAiAgent() {
   const [editError, setEditError] = useState('')
   const [approvedTimeOff, setApprovedTimeOff] = useState([])
   const [showHowItWorks, setShowHowItWorks] = useState(false)
+  const [proposalFilter, setProposalFilter] = useState('all')
+  const [proposalSearch, setProposalSearch] = useState('')
   // Verified once per page visit and reused by every approve/reassign click below, instead of
   // re-fetching auth.getUser()+profiles on every single row — that's what made bulk approval of
   // a large proposal slow (2 extra round trips x every booking).
@@ -319,10 +321,19 @@ export default function ManagerAiAgent() {
   }
 
   const pendingCount = proposal.filter(row => row.uiStatus === 'pending').length
+  const conflictCount = proposal.filter(row => row.uiStatus === 'error' || !row.recommended_staff_id).length
+  const visibleProposal = proposal.filter(row => {
+    const matchesFilter = proposalFilter === 'all'
+      || (proposalFilter === 'pending' && row.uiStatus === 'pending')
+      || (proposalFilter === 'conflicts' && (row.uiStatus === 'error' || !row.recommended_staff_id))
+    const haystack = `${row.service_type || ''} ${row.location || ''} ${row.recommended_staff_name || ''}`.toLowerCase()
+    return matchesFilter && haystack.includes(proposalSearch.trim().toLowerCase())
+  })
+  const scheduleDays = [...new Set(proposal.map(row => row.scheduled_date).filter(Boolean))].sort().slice(0, 7)
 
   return (
     <Layout role="manager">
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="mx-auto max-w-[1600px] px-4 py-6 lg:px-6">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2"><Sparkles className="w-6 h-6 text-accent" /> AI Scheduling Agent</h1>
@@ -346,7 +357,8 @@ export default function ManagerAiAgent() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border flex flex-col mb-6" style={{ height: '30rem' }}>
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
+        <div className="flex min-w-0 flex-col rounded-2xl border bg-white shadow-sm" style={{ height: 'calc(100vh - 11rem)', minHeight: '34rem' }}>
           <div className="flex items-center gap-2 px-5 py-4 border-b flex-shrink-0">
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-white text-xs font-semibold flex-shrink-0">1</span>
             <h2 className="font-semibold text-gray-900">Your request</h2>
@@ -430,24 +442,31 @@ export default function ManagerAiAgent() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border bg-white shadow-sm xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)]">
             <div className="p-5 border-b flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-purple-600 text-white text-xs font-semibold flex-shrink-0">2</span>
-                  <h2 className="font-semibold text-gray-900">Proposed Schedule</h2>
+                  <h2 className="font-semibold text-gray-900">Proposed Bookings ({proposal.length})</h2>
                 </div>
                 <p className="text-xs text-gray-400 mt-1 ml-8">
                   {proposal.length === 0 ? 'AI generated · Review and approve' : `${proposal.length} booking${proposal.length === 1 ? '' : 's'} this week — ${pendingCount} pending review`}
                 </p>
               </div>
+              <input
+                value={proposalSearch}
+                onChange={event => setProposalSearch(event.target.value)}
+                placeholder="Search"
+                aria-label="Search proposed bookings"
+                className="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-purple-200"
+              />
               <button
                 type="button"
-                disabled
-                title="Coming soon"
-                className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-400 cursor-not-allowed"
+                onClick={() => setProposalFilter(value => value === 'all' ? 'pending' : value === 'pending' ? 'conflicts' : 'all')}
+                title="Cycle booking filters"
+                className="flex-shrink-0 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
               >
-                <Filter className="w-4 h-4" /> Filters
+                <Filter className="w-4 h-4" /> {proposalFilter === 'all' ? 'All' : proposalFilter === 'pending' ? `Pending (${pendingCount})` : `Conflicts (${conflictCount})`}
               </button>
             </div>
             {proposal.length > 0 && (
@@ -468,9 +487,9 @@ export default function ManagerAiAgent() {
                 </button>
               </div>
             )}
-            <div className="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
-              {proposal.map(row => (
-                <div key={row.booking_id} className="p-5">
+            <div className="max-h-[calc(100vh-15rem)] space-y-3 overflow-y-auto bg-gray-50/60 p-3">
+              {visibleProposal.map(row => (
+                <div key={row.booking_id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition hover:border-blue-200 hover:shadow-md">
                   <div className="flex justify-between items-start gap-4">
                     <div className="min-w-0">
                       <h3 className="font-semibold text-gray-900 flex items-center gap-2">
@@ -577,6 +596,7 @@ export default function ManagerAiAgent() {
               <Info className="w-3.5 h-3.5 flex-shrink-0" /> Nothing is saved until you approve the schedule.
             </div>
           </div>
+        </div>
       </div>
 
       {editingBooking && (

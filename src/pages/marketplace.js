@@ -94,13 +94,13 @@ function MarketplaceControls({ search, setSearch, serviceFilter, setServiceFilte
           value={search}
           onChange={event => setSearch(event.target.value)}
           placeholder="Search company or service..."
-          className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent"
         />
       </div>
       <select
         value={serviceFilter}
         onChange={event => setServiceFilter(event.target.value)}
-        className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
       >
         <option value="all">All Services</option>
         {availableServices.map(type => <option key={type} value={type}>{type}</option>)}
@@ -108,7 +108,7 @@ function MarketplaceControls({ search, setSearch, serviceFilter, setServiceFilte
       <select
         value={sortBy}
         onChange={event => setSortBy(event.target.value)}
-        className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-accent-500"
       >
         {SORT_OPTIONS.map(option => <option key={option.value} value={option.value}>Sort: {option.label}</option>)}
       </select>
@@ -118,7 +118,7 @@ function MarketplaceControls({ search, setSearch, serviceFilter, setServiceFilte
 
 function MarketplaceHero({ stats }) {
   return (
-    <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 text-white">
+    <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-accent2 text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,rgba(79,70,229,0.35),transparent_38%),radial-gradient(circle_at_85%_75%,rgba(34,197,94,0.28),transparent_36%)]" />
       <div className="relative z-10 grid gap-8 px-6 py-10 sm:px-10 sm:py-14 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div>
@@ -181,7 +181,7 @@ function WhyBookSection() {
       <div className="mt-8 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
         {WHY_BOOK_ITEMS.map(item => (
           <div key={item.title} className="flex flex-col items-center text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-indigo-600 shadow-sm">
+            <span className="grid h-12 w-12 place-items-center rounded-xl border border-slate-200 bg-slate-50 text-accent-600 shadow-sm">
               <item.icon className="h-5 w-5" />
             </span>
             <p className="mt-3 text-sm font-extrabold text-slate-950">{item.title}</p>
@@ -203,7 +203,7 @@ function CompanyCard({ company }) {
     <div className="flex flex-col rounded-3xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/60 transition duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-slate-200/80">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-sm">
+          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent to-emerald-500 text-white shadow-sm">
             <Building2 className="h-5 w-5" />
           </span>
           <div className="min-w-0">
@@ -238,7 +238,7 @@ function CompanyCard({ company }) {
 
       <Link
         href={`/customer-book?companyId=${company.id}`}
-        className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-green-500 px-4 py-3 text-sm font-bold text-white shadow-md shadow-blue-200/60 transition hover:-translate-y-0.5 hover:shadow-lg"
+        className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent-600 to-emerald-500 px-4 py-3 text-sm font-bold text-white shadow-md shadow-accent-200/60 transition hover:-translate-y-0.5 hover:shadow-lg"
       >
         Book a slot
         <ArrowRight className="h-4 w-4" />
@@ -259,16 +259,16 @@ function JoinMarketplaceCard() {
   return (
     <Link
       href="/login"
-      className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-6 text-center transition hover:border-indigo-300 hover:bg-indigo-50/40"
+      className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/60 p-6 text-center transition hover:border-accent-300 hover:bg-accent-100/40"
     >
-      <span className="grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-white text-indigo-600 shadow-sm">
+      <span className="grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-white text-accent-600 shadow-sm">
         <Plus className="h-5 w-5" />
       </span>
       <p className="mt-4 text-sm font-extrabold text-slate-900">Run a cleaning business?</p>
       <p className="mt-1 max-w-[16rem] text-xs leading-5 text-slate-500">
         List your company here with an AI-written description and start getting bookings.
       </p>
-      <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600">
+      <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-accent-600">
         Get started <ArrowRight className="h-3.5 w-3.5" />
       </span>
     </Link>
@@ -342,7 +342,7 @@ function PublicMarketplace() {
         <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
           <nav className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
             <Link href="/" className="flex min-w-0 items-center gap-3">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-green-500 text-white shadow-lg">
+              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent to-emerald-500 text-white shadow-lg">
                 <LayoutDashboard className="h-7 w-7" />
               </span>
               <span className="min-w-0">
@@ -352,7 +352,7 @@ function PublicMarketplace() {
             </Link>
             <Link
               href="/login"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-500 to-green-500 px-5 text-sm font-bold text-white shadow-lg shadow-green-200/70 transition hover:-translate-y-0.5 hover:from-blue-600 hover:to-green-600"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-accent to-emerald-500 px-5 text-sm font-bold text-white shadow-lg shadow-accent-200/70 transition hover:-translate-y-0.5 hover:from-accent-600 hover:to-emerald-600"
             >
               Sign in
               <ArrowRight className="h-4 w-4" />
