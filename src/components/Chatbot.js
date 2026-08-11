@@ -4,6 +4,7 @@ import { Bot, MessageCircle, Send, Sparkles, User, X as XIcon } from 'lucide-rea
 const roleNames = {
   manager: 'Manager',
   staffMember: 'Staff Member',
+  departmentStaff: 'Department Staff',
   admin: 'Owner',
   customer: 'Customer',
 }
@@ -30,13 +31,24 @@ const CHATBOT_ROLE_THEME = {
     ring: 'focus:ring-emerald-300',
   },
 
+  // Matches SIDEBAR_ROLE_COLORS.departmentStaff ('#003333') in Layout.js.
+  departmentStaff: {
+    main: 'bg-[#003333]',
+    hover: 'hover:bg-[#002626]',
+    text: 'text-[#003333]',
+    lightBg: 'hover:bg-[#e9f5f5]',
+    border: 'hover:border-[#4d8080]',
+    ring: 'focus:ring-[#003333]/30',
+  },
+
+  // Matches SIDEBAR_ROLE_COLORS.admin ('#2564A8') in Layout.js.
   admin: {
-    main: 'bg-purple-600',
-    hover: 'hover:bg-purple-700',
-    text: 'text-purple-600',
-    lightBg: 'hover:bg-purple-50',
-    border: 'hover:border-purple-300',
-    ring: 'focus:ring-purple-300',
+    main: 'bg-[#2564A8]',
+    hover: 'hover:bg-[#1e5086]',
+    text: 'text-[#2564A8]',
+    lightBg: 'hover:bg-[#eaf1fb]',
+    border: 'hover:border-[#6fa0d0]',
+    ring: 'focus:ring-[#2564A8]/30',
   },
 
   customer: {
@@ -52,7 +64,8 @@ const CHATBOT_ROLE_THEME = {
 const assistantSuggestions = {
   manager: ['Generate quick report', 'Check allocation status', 'Show availability'],
   staffMember: ['Update availability', 'Start a task', 'Upload proof'],
-  admin: ['Reset a password', 'Review security logs', 'Explain audit logs'],
+  departmentStaff: ['Check today\'s attendance', 'Create a task', 'Review work history'],
+  admin: ['Reset a password', 'Generate a report', 'Manage pay rates'],
   customer: ['Check my booking status', 'How do I book a cleaning?', 'How do I cancel a booking?'],
 }
 

@@ -547,7 +547,7 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
 
       <main className={isCustomerNav ? 'pb-24' : 'lg:pl-64'}>{children}</main>
       {isCustomerNav && <CustomerBottomNav />}
-      {(role === 'customer' || role === 'staffMember' || role === 'manager') && <Chatbot role={role} addNotification={addNotification} />}
+      {(role === 'customer' || role === 'staffMember' || role === 'manager' || role === 'departmentStaff' || role === 'admin') && <Chatbot role={role} addNotification={addNotification} />}
 
       {editingProfile && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

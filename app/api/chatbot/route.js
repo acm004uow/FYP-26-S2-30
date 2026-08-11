@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 const roleNames = {
   manager: 'Manager',
   staffMember: 'Staff Member',
+  departmentStaff: 'Department Staff',
   admin: 'Owner',
   customer: 'Customer',
 }
@@ -10,7 +11,8 @@ const roleNames = {
 const roleContext = {
   manager: 'Managers review customer bookings, assign staff, view staff profiles, manage user accounts, monitor availability, and generate operational reports.',
   staffMember: 'Staff members view assigned tasks, update availability, start work, complete tasks, upload proof, and check feedback.',
-  admin: 'Owners manage accounts, reset passwords, monitor security logs, review audit logs, and tune global allocation parameters.',
+  departmentStaff: 'Department staff track their department\'s daily attendance, create and assign tasks, review work history, and browse the department staff directory.',
+  admin: 'Owners manage employees, departments, and staff, reset passwords, run reports, set pay rates, handle leave applications and business closures, manage marketing, and tune global allocation parameters.',
   customer: 'Customers book cleaning services, track the status of their own bookings, edit or cancel a booking while it is Pending or Approved, and leave a rating and comment after a booking is completed.',
 }
 
