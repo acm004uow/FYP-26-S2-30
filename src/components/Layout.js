@@ -116,7 +116,6 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
   const [mobileOpen, setMobileOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
-  const [pendingBookingsCount, setPendingBookingsCount] = useState(0)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [businessName, setBusinessName] = useState('Smart Task Allocation')
   const [profileInfo, setProfileInfo] = useState(null)
@@ -140,7 +139,6 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
 
   useEffect(() => {
     let notificationChannel = null
-    let bookingsChannel = null
     let cancelled = false
 
     async function loadSessionData() {
@@ -254,29 +252,6 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
           }
         )
         .subscribe()
-
-      if (role === 'manager' && resolvedProfile.host_admin_id) {
-        const hostAdminId = resolvedProfile.host_admin_id
-        const refreshPendingCount = async () => {
-          const { count } = await supabase
-            .from('bookings')
-            .select('id', { count: 'exact', head: true })
-            .eq('host_admin_id', hostAdminId)
-            .eq('status', 'pending')
-          if (!cancelled) setPendingBookingsCount(count || 0)
-        }
-
-        await refreshPendingCount()
-
-        bookingsChannel = supabase
-          .channel(`bookings-badge-${hostAdminId}-${Date.now()}`)
-          .on(
-            'postgres_changes',
-            { event: '*', schema: 'public', table: 'bookings', filter: `host_admin_id=eq.${hostAdminId}` },
-            refreshPendingCount
-          )
-          .subscribe()
-      }
     }
 
     loadSessionData()
@@ -295,7 +270,6 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
       cancelled = true
       document.removeEventListener('mousedown', handleClickOutside)
       if (notificationChannel) supabase.removeChannel(notificationChannel)
-      if (bookingsChannel) supabase.removeChannel(bookingsChannel)
     }
   }, [role, router, user, initializing])
 
@@ -321,7 +295,6 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
     const isActive = itemQuery
       ? router.pathname === itemPath && router.asPath.includes(itemQuery)
       : router.pathname === itemPath && !(itemPath === '/admin' && router.asPath.includes('section='))
-    const badgeCount = itemPath === '/manager-bookings' ? pendingBookingsCount : 0
     const theme = NAV_ICON_THEME[itemPath] || DEFAULT_NAV_ICON_THEME
     const roleLinkTheme = NAV_LINK_ROLE_THEME[role] || NAV_LINK_ROLE_THEME.manager
     return (
@@ -332,11 +305,6 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
           <item.icon className={`h-4 w-4 ${theme.icon}`} />
         </span>
         <span className="flex-1">{item.name}</span>
-        {badgeCount > 0 && (
-          <span className="flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
-            {badgeCount > 9 ? '9+' : badgeCount}
-          </span>
-        )}
       </Link>
     )
   }

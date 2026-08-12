@@ -74,14 +74,19 @@ const statusColor = {
   rejected: 'bg-red-100 text-red-700',
 }
 
-const BOOKING_STATUS_FILTERS = [
-  { value: 'all', label: 'All' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'rejected', label: 'Rejected' },
-]
+// Tasks never loads pending/rejected rows (see loadBookings) — a manager/department booking only
+// becomes a task once approved — so those tabs are dropped there rather than always reading empty.
+function getStatusFilters(scope) {
+  const all = [
+    { value: 'all', label: 'All' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'approved', label: 'Approved' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'rejected', label: 'Rejected' },
+  ]
+  return scope === 'tasks' ? all.filter(option => option.value !== 'pending' && option.value !== 'rejected') : all
+}
 
 const dateToneColor = {
   overdue: 'bg-red-50 text-red-700',
@@ -202,11 +207,13 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
       .from('bookings')
       .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
       .eq('host_admin_id', hostAdminIdResolved)
-      .in('status', ['pending', 'approved', 'in_progress', 'completed', 'rejected'])
       .order('created_at', { ascending: false })
     bookingsQuery = sourceScope === 'tasks'
-      ? bookingsQuery.in('source', ['manager', 'department'])
-      : bookingsQuery.eq('source', 'customer')
+      // Tasks is work the manager/department has already decided on — a booking that's still
+      // pending (not yet approved) or was rejected outright isn't a task yet, so it's excluded
+      // here rather than sharing the 'customer' scope's full review-queue status list below.
+      ? bookingsQuery.in('source', ['manager', 'department']).in('status', ['approved', 'in_progress', 'completed'])
+      : bookingsQuery.eq('source', 'customer').in('status', ['pending', 'approved', 'in_progress', 'completed', 'rejected'])
 
     const [{ data: bookingRows }, { data: staff }] = await Promise.all([
       bookingsQuery,
@@ -559,6 +566,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
   )
   const bookingServiceTypes = Array.from(new Set(bookings.map(b => b.service_type).filter(Boolean))).sort()
   const sourceFilters = getSourceFilters(sourceScope)
+  const statusFilters = getStatusFilters(sourceScope)
   const timeFilterCounts = Object.fromEntries(TIME_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesTimeFilter(b, tab.value)).length]))
   const sourceFilterCounts = Object.fromEntries(sourceFilters.map(tab => [tab.value, bookings.filter(b => matchesSourceFilter(b, tab.value)).length]))
   const totalPages = Math.max(1, Math.ceil(visibleBookings.length / BOOKINGS_PAGE_SIZE))
@@ -590,7 +598,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
           />
         </div>
         <div className="inline-flex flex-wrap overflow-hidden rounded-lg border border-gray-200">
-          {BOOKING_STATUS_FILTERS.map(option => (
+          {statusFilters.map(option => (
             <button
               key={option.value}
               type="button"
