@@ -62,7 +62,7 @@ export async function POST(request) {
       `Today is ${todayWeekday}, ${todayIso}. Resolve any relative date ("tomorrow", "next Monday", "this Friday") against that. "Morning" means 09:00, "afternoon" means 13:00, "evening" means 17:00, unless a more specific time is given.`,
       `Valid service types: ${serviceTypes.join(", ")}. Pick the closest match to what the customer described, or "${serviceTypes[0]}" if the text gives no hint.`,
       'Priority must be one of "low", "normal", "high", "urgent" — read urgency from words like "urgent", "ASAP", "ideally today" (urgent/high) vs. no time pressure mentioned (normal).',
-      "Respond with ONLY a JSON object with keys: service_type (one of the valid service types), priority (one of low/normal/high/urgent, default normal), scheduled_date (YYYY-MM-DD, empty string if no date was given), scheduled_time (24-hour HH:MM, empty string if no time was given), estimated_hours (number, default 2 if not given), description (one short natural sentence summarizing the job for internal notes, do not include any person's name in it).",
+      "Respond with ONLY a JSON object with keys: service_type (one of the valid service types), priority (one of low/normal/high/urgent, default normal), scheduled_date (YYYY-MM-DD, empty string if no date was given), scheduled_time (24-hour HH:MM, empty string if no time was given), estimated_hours (number, default 1 if not given), description (one short natural sentence summarizing the job for internal notes, do not include any person's name in it).",
     ].join(" ");
 
     const controller = new AbortController();
@@ -105,7 +105,7 @@ export async function POST(request) {
       priority: VALID_PRIORITIES.includes(parsed.priority) ? parsed.priority : "normal",
       scheduledDate: isValidIsoDate(parsed.scheduled_date) ? parsed.scheduled_date : "",
       scheduledTime: isValidTime(parsed.scheduled_time) ? parsed.scheduled_time : "",
-      estimatedHours: Number.isFinite(Number(parsed.estimated_hours)) && Number(parsed.estimated_hours) > 0 ? Number(parsed.estimated_hours) : 2,
+      estimatedHours: Number.isFinite(Number(parsed.estimated_hours)) && Number(parsed.estimated_hours) > 0 ? Number(parsed.estimated_hours) : 1,
       description: String(parsed.description || "").trim(),
     });
   } catch (err) {

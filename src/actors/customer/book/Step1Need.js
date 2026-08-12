@@ -162,7 +162,7 @@ export default function Step1Need({ description, setDescription, onProceed }) {
                 </p>
                 {card.description && <p className="mt-1 text-xs text-gray-500 line-clamp-2">{card.description}</p>}
                 <p className="mt-2 text-xs text-gray-400">
-                  {card.durationHours}h{card.fromPrice != null ? ` · from $${card.fromPrice.toFixed(0)}` : ''}
+                  {card.durationHours}h{card.fromPrice != null ? ` · from $${card.fromPrice.toFixed(0)}/hr` : ''}
                 </p>
               </button>
             ))}

@@ -16,7 +16,7 @@ import Step3Schedule from './Step3Schedule'
 
 const INITIAL_FORM = {
   serviceType: '', priority: 'normal', description: '', additionalRequirements: '',
-  scheduledDate: '', scheduledTime: '', estimatedHours: 2,
+  scheduledDate: '', scheduledTime: '', estimatedHours: 1,
   startDate: '', endDate: '', daysOfWeek: [],
   postalCode: '', composedLocation: '',
 }
@@ -117,7 +117,7 @@ export default function CustomerBooking() {
           description: [form.description, form.additionalRequirements].filter(Boolean).join(' — '),
           days_of_week: form.daysOfWeek,
           scheduled_time: form.scheduledTime || null,
-          estimated_hours: form.estimatedHours || 2,
+          estimated_hours: form.estimatedHours || 1,
           start_date: form.startDate,
           end_date: form.endDate,
         })
@@ -177,9 +177,11 @@ export default function CustomerBooking() {
       longitude: coordinates?.longitude ?? null,
       scheduled_date: form.scheduledDate,
       scheduled_time: form.scheduledTime,
-      estimated_hours: form.estimatedHours || 2,
+      estimated_hours: form.estimatedHours || 1,
       urgency: form.priority,
-      price: selectedCompany.price ?? null,
+      // selectedCompany.price is the company's hourly rate for this service; the stored booking
+      // price is the computed total (rate x estimated hours), matching what Step 3's summary shows.
+      price: selectedCompany.price != null ? selectedCompany.price * Number(form.estimatedHours || 0) : null,
       requested_staff_name: requestedStaff?.staff_name || null,
       status: 'pending',
     }).select('id').single()

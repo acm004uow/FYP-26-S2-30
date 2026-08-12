@@ -44,7 +44,7 @@ export const navMap = {
     { name: 'Reports', path: '/admin?section=reports', icon: TrendingUp },
     { name: 'Pay Rates', path: '/admin?section=payrates', icon: DollarSign },
     { name: 'Leave Application', path: '/admin?section=timeoff', icon: CalendarClock },
-    { name: 'Closures', path: '/admin?section=closures', icon: CalendarOff },
+    // { name: 'Closures', path: '/admin?section=closures', icon: CalendarOff },
     { name: 'Marketing', path: '/admin?section=marketing', icon: Megaphone },
     { name: 'Global Parameters', path: '/admin?section=parameters', icon: Settings },
   ],

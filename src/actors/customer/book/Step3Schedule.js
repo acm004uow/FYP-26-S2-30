@@ -48,9 +48,10 @@ export default function Step3Schedule({
   }
 
   const finishTime = form.scheduledTime ? addHoursToTime(form.scheduledTime, form.estimatedHours) : null
-  // The company's service_rates entry is a flat quoted price for the service, not an hourly rate,
-  // so it isn't scaled by the chosen duration — same as how Step 2's card shows it.
-  const price = selectedCompany?.price ?? null
+  // The company's service_rates entry is an hourly rate (shown as "$X/hr" in Step 2), so the
+  // estimated total scales with the chosen duration.
+  const hourlyRate = selectedCompany?.price ?? null
+  const price = hourlyRate != null ? hourlyRate * Number(form.estimatedHours || 0) : null
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 items-start">
@@ -195,7 +196,9 @@ export default function Step3Schedule({
         <div className="mt-4 pt-4 border-t border-gray-100 flex items-baseline justify-between">
           <div>
             <p className="text-sm font-semibold text-gray-700">Estimated total</p>
-            <p className="text-xs text-gray-400">{price != null ? 'Final price confirmed after site assessment' : 'Priced after site assessment'}</p>
+            <p className="text-xs text-gray-400">
+              {price != null ? `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours — final price confirmed after site assessment` : 'Priced after site assessment'}
+            </p>
           </div>
           <p className="text-xl font-bold text-gray-900">{price != null ? `$${price.toFixed(2)}` : '—'}</p>
         </div>

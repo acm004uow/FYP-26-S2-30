@@ -51,7 +51,7 @@ function PreviewCard({ businessName, description, ratedEntries }) {
           {ratedEntries.slice(0, 4).map(([type, price]) => (
             <div key={type} className="flex items-center justify-between text-sm">
               <span className="text-gray-500">{type}</span>
-              <span className="font-semibold text-gray-900">${Number(price).toFixed(2)}</span>
+              <span className="font-semibold text-gray-900">${Number(price).toFixed(2)}/hr</span>
             </div>
           ))}
         </div>
@@ -343,7 +343,7 @@ export default function MarketingPanel() {
                 {pricedCount} of {serviceTypes.length} priced
               </span>
             </div>
-            <p className="mb-3 text-xs text-gray-400">Leave a service blank if you don&apos;t offer it.</p>
+            <p className="mb-3 text-xs text-gray-400">Rates are per hour — customers are charged rate &times; estimated hours. Leave a service blank if you don&apos;t offer it.</p>
             <div className="grid gap-3 sm:grid-cols-2">
               {serviceTypes.map(type => {
                 const Icon = serviceIcon(type)
@@ -370,6 +370,7 @@ export default function MarketingPanel() {
                           placeholder="Not offered"
                           className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent-500 disabled:bg-gray-50 disabled:text-gray-400"
                         />
+                        <span className="shrink-0 text-xs text-gray-400">/hr</span>
                       </div>
                     </div>
                   </div>

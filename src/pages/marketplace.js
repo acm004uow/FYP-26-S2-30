@@ -230,7 +230,7 @@ function CompanyCard({ company }) {
           {rateEntries.map(([type, price]) => (
             <div key={type} className="flex items-center justify-between text-sm">
               <span className="text-slate-500">{type}</span>
-              <span className="font-bold text-slate-900">${Number(price).toFixed(2)}</span>
+              <span className="font-bold text-slate-900">${Number(price).toFixed(2)}/hr</span>
             </div>
           ))}
         </div>

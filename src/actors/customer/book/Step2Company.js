@@ -211,7 +211,7 @@ function CompanyCard({ company, isBestMatch, requestedStaffName, onSelect }) {
           </p>
           <p className="text-xs text-gray-400">{company.rating ? `${company.rating.count} reviews` : 'No reviews yet'}</p>
           <p className="text-xs text-gray-400">weighted {company.score.toFixed(2)}</p>
-          <p className="mt-2 text-base font-bold text-gray-900">{company.price != null ? `$${company.price.toFixed(2)}` : 'Quote on request'}</p>
+          <p className="mt-2 text-base font-bold text-gray-900">{company.price != null ? `$${company.price.toFixed(2)}/hr` : 'Quote on request'}</p>
           <button
             type="button"
             onClick={onSelect}
