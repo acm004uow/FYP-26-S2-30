@@ -108,7 +108,7 @@ export default function Step1Need({ description, setDescription, onProceed }) {
           rows={6}
           value={description}
           onChange={e => setDescription(e.target.value)}
-          placeholder="e.g. I want to clean toilet and I want Nan, urgent tomorrow morning"
+          placeholder="e.g. home cleaning, deep cleaning, carpet shampoo, window cleaning, etc. Include any special requests or preferences."
           className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50 resize-none"
         />
 

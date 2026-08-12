@@ -363,81 +363,88 @@ export default function CustomerDashboard() {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2 mb-4">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by service, reference, or address..." className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm" />
-          </div>
+        <div className="bg-white rounded-xl shadow-sm border p-4 mb-6">
+          <div className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by service, reference, or address..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent-500 focus:bg-white transition"
+              />
+            </div>
 
-          <div className="relative" ref={filterRef}>
-            <button
-              onClick={() => { setShowFilterMenu(v => !v); setShowSortMenu(false) }}
-              className="h-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 bg-white hover:bg-gray-50"
-            >
-              <Filter className="w-4 h-4" /> Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-            </button>
-            {showFilterMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 z-20 p-3">
-                <p className="text-xs font-semibold text-gray-500 mb-2">Service type</p>
-                {serviceOptions.length === 0 && <p className="text-xs text-gray-400">No bookings yet.</p>}
-                {serviceOptions.map(option => (
-                  <label key={option} className="flex items-center gap-2 py-1 text-sm text-gray-700 cursor-pointer">
-                    <input type="checkbox" checked={filterServices.includes(option)} onChange={() => toggleServiceFilter(option)} className="rounded border-gray-300" />
-                    {option}
-                  </label>
-                ))}
-                <p className="text-xs font-semibold text-gray-500 mb-2 mt-3">Scheduled date</p>
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-[11px] text-gray-400 mb-1">From</label>
-                    <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
+            <div className="relative" ref={filterRef}>
+              <button
+                onClick={() => { setShowFilterMenu(v => !v); setShowSortMenu(false) }}
+                className={`h-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${activeFilterCount > 0 ? 'border border-accent-300 bg-accent-100 text-accent-700' : 'border border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
+              >
+                <Filter className="w-4 h-4" /> Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+              </button>
+              {showFilterMenu && (
+                <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-100 z-20 p-3">
+                  <p className="text-xs font-semibold text-gray-500 mb-2">Service type</p>
+                  {serviceOptions.length === 0 && <p className="text-xs text-gray-400">No bookings yet.</p>}
+                  {serviceOptions.map(option => (
+                    <label key={option} className="flex items-center gap-2 py-1 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" checked={filterServices.includes(option)} onChange={() => toggleServiceFilter(option)} className="rounded border-gray-300 text-accent-600 focus:ring-accent-500" />
+                      {option}
+                    </label>
+                  ))}
+                  <p className="text-xs font-semibold text-gray-500 mb-2 mt-3">Scheduled date</p>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[11px] text-gray-400 mb-1">From</label>
+                      <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent-500" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] text-gray-400 mb-1">To</label>
+                      <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent-500" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] text-gray-400 mb-1">To</label>
-                    <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs" />
-                  </div>
+                  {activeFilterCount > 0 && (
+                    <button onClick={() => { setFilterServices([]); setFilterDateFrom(''); setFilterDateTo('') }} className="mt-3 text-xs font-medium text-accent-600 hover:underline">Clear filters</button>
+                  )}
                 </div>
-                {activeFilterCount > 0 && (
-                  <button onClick={() => { setFilterServices([]); setFilterDateFrom(''); setFilterDateTo('') }} className="mt-3 text-xs text-accent-600 hover:underline">Clear filters</button>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+
+            <div className="relative" ref={sortRef}>
+              <button
+                onClick={() => { setShowSortMenu(v => !v); setShowFilterMenu(false) }}
+                className="h-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 bg-gray-50 hover:bg-gray-100 transition"
+              >
+                <ArrowUpDown className="w-4 h-4" /> Sort: {sortOrder === 'newest' ? 'Newest' : 'Oldest'} <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              {showSortMenu && (
+                <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden">
+                  {['newest', 'oldest'].map(option => (
+                    <button
+                      key={option}
+                      onClick={() => { setSortOrder(option); setShowSortMenu(false) }}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${sortOrder === option ? 'text-accent-600 font-semibold' : 'text-gray-600'}`}
+                    >
+                      {option === 'newest' ? 'Newest' : 'Oldest'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="relative" ref={sortRef}>
-            <button
-              onClick={() => { setShowSortMenu(v => !v); setShowFilterMenu(false) }}
-              className="h-full flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 bg-white hover:bg-gray-50"
-            >
-              <ArrowUpDown className="w-4 h-4" /> Sort: {sortOrder === 'newest' ? 'Newest' : 'Oldest'} <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-            {showSortMenu && (
-              <div className="absolute right-0 mt-2 w-40 bg-white rounded-xl shadow-lg border border-gray-100 z-20 overflow-hidden">
-                {['newest', 'oldest'].map(option => (
-                  <button
-                    key={option}
-                    onClick={() => { setSortOrder(option); setShowSortMenu(false) }}
-                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${sortOrder === option ? 'text-accent-600 font-medium' : 'text-gray-600'}`}
-                  >
-                    {option === 'newest' ? 'Newest' : 'Oldest'}
-                  </button>
-                ))}
-              </div>
-            )}
+          <div className="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-gray-100">
+            {STATUS_PILLS.map(pill => (
+              <button
+                key={pill.key}
+                onClick={() => setActivePill(pill.key)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition ${activePill === pill.key ? 'bg-[#003152] text-white shadow-sm' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+              >
+                {pill.label}
+                <span className={`text-xs rounded-full px-1.5 py-px font-semibold ${activePill === pill.key ? 'bg-white/20 text-white' : 'bg-white text-gray-500'}`}>{counts[pill.key] ?? 0}</span>
+              </button>
+            ))}
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-1 mb-4">
-          {STATUS_PILLS.map(pill => (
-            <button
-              key={pill.key}
-              onClick={() => setActivePill(pill.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition ${activePill === pill.key ? 'bg-[#003152] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-            >
-              {pill.label}
-              <span className={`text-xs rounded-full px-1.5 ${activePill === pill.key ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>{counts[pill.key] ?? 0}</span>
-            </button>
-          ))}
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-6">

@@ -339,6 +339,12 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
               </div>
             </div>
 
+            {isCustomerNav && (
+              <div className="flex-1 flex justify-center px-2 min-w-0">
+                <CustomerBottomNav />
+              </div>
+            )}
+
             <div className="flex items-center gap-4">
               <div className="relative" ref={notificationRef}>
                 <button
@@ -513,8 +519,7 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
         </div>
       )}
 
-      <main className={isCustomerNav ? 'pb-24' : 'lg:pl-64'}>{children}</main>
-      {isCustomerNav && <CustomerBottomNav />}
+      <main className={isCustomerNav ? '' : 'lg:pl-64'}>{children}</main>
       {(role === 'customer' || role === 'staffMember' || role === 'manager' || role === 'departmentStaff' || role === 'admin') && <Chatbot role={role} addNotification={addNotification} />}
 
       {editingProfile && (

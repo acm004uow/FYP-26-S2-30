@@ -397,16 +397,28 @@ function PublicMarketplace() {
 }
 
 export default function Marketplace() {
-  const [isCustomer, setIsCustomer] = useState(false)
+  // Three states, not a boolean defaulting to "public" — that used to render (and briefly commit
+  // to) the logged-out PublicMarketplace for every visitor, including already-signed-in customers,
+  // until the role check resolved. PublicMarketplace has no nav back to "My Bookings"/"New
+  // Booking", so a slow or failed check stranded a logged-in customer with no way back. getSession()
+  // reads the locally cached session instead of getUser()'s network round-trip, so the check
+  // resolves almost immediately in the common case.
+  const [viewer, setViewer] = useState('checking')
 
   useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      if (profile?.role === 'customer') setIsCustomer(true)
+    let cancelled = false
+    ;(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
+        if (!cancelled) setViewer('public')
+        return
+      }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
+      if (!cancelled) setViewer(profile?.role === 'customer' ? 'customer' : 'public')
     })()
+    return () => { cancelled = true }
   }, [])
 
-  return isCustomer ? <CustomerMarketplace /> : <PublicMarketplace />
+  if (viewer === 'checking') return null
+  return viewer === 'customer' ? <CustomerMarketplace /> : <PublicMarketplace />
 }
