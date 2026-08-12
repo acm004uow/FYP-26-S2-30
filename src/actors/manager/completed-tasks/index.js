@@ -1,8 +1,20 @@
 import Layout from '../../../components/Layout'
 import { Fragment, useEffect, useState } from 'react'
-import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
+import { AlertTriangle, Calendar, CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, FileText, MapPin, Save, Star, X } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { useAuthUser } from '../../../context/AuthUserContext'
+
+// attendance_status is only 'present'/'late'/null (see lib/attendance.js) — null means the task
+// was never checked into via the staff check-in flow, so there's nothing to show a badge for.
+function AttendanceBadge({ status }) {
+  if (status !== 'present' && status !== 'late') return null
+  const isLate = status === 'late'
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${isLate ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+      <Clock className="h-3 w-3" /> {isLate ? 'Late' : 'Present'}
+    </span>
+  )
+}
 
 const PAGE_SIZE = 5
 
@@ -58,7 +70,7 @@ export default function ManagerCompletedTasks() {
 
     const { data: tasks, error } = await supabase
       .from('bookings')
-      .select('id,service_type,location,status,updated_at,assigned_staff_id,issue_status,issue_description,issue_reported_at,issue_reported_by,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id),booking_feedback(rating,comment,image_url)')
+      .select('id,service_type,location,status,updated_at,assigned_staff_id,attendance_status,issue_status,issue_description,issue_reported_at,issue_reported_by,staff_profiles(staff_name),task_proofs(file_url,file_name,created_at),performance_reviews(id,rating,feedback,manager_id),booking_feedback(rating,comment,image_url)')
       .eq('host_admin_id', managerProfile?.host_admin_id)
       .or('status.eq.completed,issue_status.eq.open')
       .order('updated_at', { ascending: false })
@@ -209,6 +221,7 @@ export default function ManagerCompletedTasks() {
                             <CheckCircle2 className="h-4 w-4" />
                           </span>
                           <span className="font-semibold text-gray-900">{task.service_type}</span>
+                          <AttendanceBadge status={task.attendance_status} />
                           {task.status !== 'completed' && (
                             <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">Reopened for rework</span>
                           )}
@@ -338,7 +351,10 @@ export default function ManagerCompletedTasks() {
                   <CheckCircle2 className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
-                  <h3 className="text-lg font-semibold text-gray-900">{activeTask.service_type}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900">{activeTask.service_type}</h3>
+                    <AttendanceBadge status={activeTask.attendance_status} />
+                  </div>
                   <p className="text-sm text-gray-500 mt-0.5 flex items-start gap-1"><MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-gray-400" /> {activeTask.location}</p>
                 </div>
               </div>

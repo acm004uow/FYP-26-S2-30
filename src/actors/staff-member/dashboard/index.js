@@ -3,7 +3,7 @@ import BookingMessagesPanel from '../../../components/BookingMessagesPanel'
 import { useEffect, useMemo, useState } from 'react'
 import { MapPin, Clock, CheckCircle, Star, X, Eye, Bell, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Calendar, FileUp, AlertCircle, AlertTriangle, ClipboardList, Sparkles, FileText, User, LogIn, LogOut, MessageCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
-import { formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
+import { CHECK_IN_LEAD_MINUTES, formatBookingAsTask, getTaskAssignedDate, isSameLocalDay, isTaskAssignedToday, isTaskCheckInOpen, isTaskPastDue, statusColor } from '../../../../lib/staffTasks'
 import { formatDuration, getAttendanceStatusFromDateTime } from '../../../../lib/attendance'
 import { CHECK_IN_RADIUS_METERS, getCurrentPosition, getDistanceMeters } from '../../../../lib/geolocation'
 import { useAuthUser } from '../../../context/AuthUserContext'
@@ -479,6 +479,8 @@ export default function StaffMemberDashboard() {
 
   const renderTaskCard = (task) => {
     const canStartToday = isTaskAssignedToday(task)
+    const checkInOpen = canStartToday && isTaskCheckInOpen(task)
+    const checkInOpensAt = getDateTimeParts(task.scheduledStartRaw)?.timePart
     const isExpanded = selectedTask?.id === task.id
     const displayStatus = getTaskDisplayStatus(task)
     const StatusIcon = statusIcon[displayStatus] || CheckCircle
@@ -549,7 +551,7 @@ export default function StaffMemberDashboard() {
                 <Calendar className="h-5 w-5 shrink-0 text-emerald-600" />
                 <div>
                   <p className="text-xs text-gray-500">Assigned day</p>
-                  <p className="text-sm font-bold text-gray-900">{task.assignedDate}</p>
+                  <p className="text-sm font-bold text-gray-900">{formatTaskDateTime(task)}</p>
                 </div>
               </div>
 
@@ -610,12 +612,22 @@ export default function StaffMemberDashboard() {
                   <button
                     type="button"
                     onClick={() => handleStartTask(task.id)}
-                    disabled={!canStartToday || checkingInTaskId === task.id}
-                    title={canStartToday ? 'Check in and start this task' : 'This task can only be started on its assigned day'}
+                    disabled={!checkInOpen || checkingInTaskId === task.id}
+                    title={
+                      !canStartToday ? 'This task can only be started on its assigned day'
+                        : !checkInOpen ? `Check-in opens ${CHECK_IN_LEAD_MINUTES} minutes before the scheduled start${checkInOpensAt ? ` (${checkInOpensAt})` : ''}`
+                          : 'Check in and start this task'
+                    }
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-base font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
                   >
                     <Calendar className="h-5 w-5" />
-                    {checkingInTaskId === task.id ? 'Checking location...' : canStartToday ? 'Check In' : 'Check In on Assigned Day'}
+                    {checkingInTaskId === task.id
+                      ? 'Checking location...'
+                      : !canStartToday
+                        ? 'Check In on Assigned Day'
+                        : !checkInOpen
+                          ? `Check-in opens at ${checkInOpensAt}`
+                          : 'Check In'}
                   </button>
                 )}
 
