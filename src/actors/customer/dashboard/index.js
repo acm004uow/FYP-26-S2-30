@@ -2,40 +2,43 @@ import Layout from '../../../components/Layout'
 import TimeInput from '../../../components/TimeInput'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, ArrowUpDown, Bell, Building, Building2, Calendar, CheckCircle2, ChevronDown, ChevronLeft,
-  ChevronRight, ClipboardList, Edit3, Filter, Home, HelpCircle, ImagePlus, Lightbulb, Layers, MapPin, Search,
-  Sparkles, Trash2, X,
+  AlertTriangle, ArrowUpDown, Bell, CheckCircle2, ChevronDown, ChevronLeft,
+  ChevronRight, Circle, Edit3, Filter, HelpCircle, ImagePlus, Lightbulb, Search,
+  Trash2, X, XCircle,
 } from 'lucide-react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../../../lib/supabaseClient'
+import { loadCompanyRatings } from '../../../../lib/companyDirectory'
 import { useAuthUser } from '../../../context/AuthUserContext'
 
-const PAGE_SIZE = 3
-
-const SERVICE_VISUALS = {
-  'home cleaning': { icon: Home, bg: 'bg-green-50', text: 'text-green-600', pill: 'bg-green-100 text-green-700' },
-  'office cleaning': { icon: Building2, bg: 'bg-purple-50', text: 'text-purple-600', pill: 'bg-purple-100 text-purple-700' },
-  'move-out cleaning': { icon: Building, bg: 'bg-blue-50', text: 'text-blue-600', pill: 'bg-blue-100 text-blue-700' },
-  'deep cleaning': { icon: Sparkles, bg: 'bg-amber-50', text: 'text-amber-600', pill: 'bg-amber-100 text-amber-700' },
-  'carpet cleaning': { icon: Layers, bg: 'bg-pink-50', text: 'text-pink-600', pill: 'bg-pink-100 text-pink-700' },
-}
-const DEFAULT_SERVICE_VISUAL = { icon: ClipboardList, bg: 'bg-gray-50', text: 'text-gray-500', pill: 'bg-gray-100 text-gray-700' }
-const getServiceVisual = (serviceType) => SERVICE_VISUALS[String(serviceType || '').toLowerCase()] || DEFAULT_SERVICE_VISUAL
+const PAGE_SIZE = 8
 
 const STATUS_STYLES = {
   Pending: 'bg-yellow-100 text-yellow-700',
-  Approved: 'bg-blue-100 text-blue-700',
-  'In progress': 'bg-indigo-100 text-indigo-700',
+  Assigned: 'bg-blue-100 text-blue-700',
+  'In Progress': 'bg-indigo-100 text-indigo-700',
   Completed: 'bg-green-100 text-green-700',
   Rejected: 'bg-red-100 text-red-700',
   Cancelled: 'bg-gray-100 text-gray-500',
 }
 
-const TABS = [
-  { key: 'all', label: 'All Bookings' },
-  { key: 'active', label: 'Active' },
-  { key: 'completed', label: 'Completed' },
-  { key: 'cancelled', label: 'Cancelled' },
+// approved -> "Assigned": customer-facing wording. Internally the status is still "approved" —
+// a manager approving a booking is, from the customer's point of view, the cleaner being assigned.
+const STATUS_LABELS = {
+  pending: 'Pending', approved: 'Assigned', in_progress: 'In Progress',
+  completed: 'Completed', rejected: 'Rejected', cancelled: 'Cancelled',
+}
+
+// Filter pills group "rejected" under "cancelled" (both mean "this booking didn't happen" from the
+// customer's side) rather than adding a 7th pill — the table's own Status badge still shows the
+// true "Rejected" label, this only affects which pill catches it.
+const STATUS_PILLS = [
+  { key: 'all', label: 'All', matches: null },
+  { key: 'pending', label: 'pending', matches: ['pending'] },
+  { key: 'assigned', label: 'assigned', matches: ['approved'] },
+  { key: 'in_progress', label: 'in progress', matches: ['in_progress'] },
+  { key: 'completed', label: 'completed', matches: ['completed'] },
+  { key: 'cancelled', label: 'cancelled', matches: ['cancelled', 'rejected'] },
 ]
 
 export default function CustomerDashboard() {
@@ -45,9 +48,9 @@ export default function CustomerDashboard() {
   const [search, setSearch] = useState('')
   const [notification, setNotification] = useState(null)
   const [editBooking, setEditBooking] = useState(null)
-  const [viewBooking, setViewBooking] = useState(null)
   const [cancelConfirmBooking, setCancelConfirmBooking] = useState(null)
-  const [activeTab, setActiveTab] = useState('all')
+  const [selectedBookingId, setSelectedBookingId] = useState(null)
+  const [activePill, setActivePill] = useState('all')
   const [sortOrder, setSortOrder] = useState('newest')
   const [filterServices, setFilterServices] = useState([])
   const [filterDateFrom, setFilterDateFrom] = useState('')
@@ -64,9 +67,10 @@ export default function CustomerDashboard() {
 
   const formatBooking = (booking) => ({
     id: booking.id,
-    shortId: `#${booking.id.slice(0, 8).toUpperCase()}`,
+    reference: `BK-${booking.reference_no}`,
     serviceType: booking.service_type,
     companyName: booking.company?.business_name || 'Unknown company',
+    companyPhone: booking.company?.phone || null,
     hostAdminId: booking.host_admin_id,
     location: booking.location,
     description: booking.description || '',
@@ -74,12 +78,20 @@ export default function CustomerDashboard() {
     scheduledTime: booking.scheduled_time || '',
     estimatedHours: booking.estimated_hours,
     notes: booking.notes || '',
-    status: titleCase(booking.status),
+    status: STATUS_LABELS[booking.status] || titleCase(booking.status),
     rawStatus: booking.status,
-    createdAt: new Date(booking.created_at).toISOString().slice(0, 10),
+    createdAt: booking.created_at,
     createdAtMs: new Date(booking.created_at).getTime(),
+    updatedAt: booking.updated_at,
+    checkedInAt: booking.checked_in_at,
+    checkedOutAt: booking.checked_out_at,
+    cancelledAt: booking.cancelled_at,
+    rejectionReason: booking.rejection_reason || null,
     assignedStaffId: booking.assigned_staff_id || null,
     assignedStaff: booking.staff_profiles?.staff_name || 'Unassigned',
+    staffPhone: booking.staff_profiles?.phone || null,
+    requestedStaffName: booking.requested_staff_name || null,
+    price: booking.price,
     feedback: booking.booking_feedback?.[0] || null,
   })
 
@@ -87,12 +99,21 @@ export default function CustomerDashboard() {
     if (!user) return
     const { data } = await supabase
       .from('bookings')
-      .select('id,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,host_admin_id,assigned_staff_id,staff_profiles(staff_name),company:profiles!bookings_host_admin_id_fkey(business_name),booking_feedback(id,rating,comment,image_url)')
+      .select('id,reference_no,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,updated_at,checked_in_at,checked_out_at,cancelled_at,rejection_reason,host_admin_id,assigned_staff_id,requested_staff_name,price,staff_profiles(staff_name,phone),company:profiles!bookings_host_admin_id_fkey(business_name,phone),booking_feedback(id,rating,comment,image_url)')
       .eq('customer_id', user.id)
       .order('created_at', { ascending: false })
 
-    setBookings((data || []).map(formatBooking))
+    const formatted = (data || []).map(formatBooking)
+    setBookings(formatted)
+
+    const hostIds = [...new Set(formatted.map(b => b.hostAdminId).filter(Boolean))]
+    if (hostIds.length) {
+      const ratings = await loadCompanyRatings(supabase, hostIds, null)
+      setCompanyRatings(ratings)
+    }
   }
+
+  const [companyRatings, setCompanyRatings] = useState(new Map())
 
   useEffect(() => {
     let channel = null
@@ -111,7 +132,7 @@ export default function CustomerDashboard() {
             const oldStatus = payload.old?.status
             const nextStatus = payload.new?.status
             if (oldStatus !== nextStatus && ['approved', 'rejected', 'completed', 'cancelled'].includes(nextStatus)) {
-              setNotification(`Your ${payload.new.service_type || 'booking'} is now ${titleCase(nextStatus)}.`)
+              setNotification(`Your ${payload.new.service_type || 'booking'} is now ${STATUS_LABELS[nextStatus] || titleCase(nextStatus)}.`)
               setTimeout(() => setNotification(null), 4000)
             }
             loadBookings()
@@ -125,6 +146,7 @@ export default function CustomerDashboard() {
     return () => {
       if (channel) supabase.removeChannel(channel)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   useEffect(() => {
@@ -138,7 +160,7 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [activeTab, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
+  }, [activePill, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
 
   const LATE_CANCEL_WINDOW_HOURS = 24
   const LATE_CANCEL_LOCK_THRESHOLD = 2
@@ -270,12 +292,21 @@ export default function CustomerDashboard() {
     return `${dateStr} (${parsed.toLocaleDateString('en-US', { weekday: 'short' })})`
   }
 
-  const counts = useMemo(() => ({
-    all: bookings.length,
-    active: bookings.filter(b => !['Completed', 'Cancelled'].includes(b.status)).length,
-    completed: bookings.filter(b => b.status === 'Completed').length,
-    cancelled: bookings.filter(b => b.status === 'Cancelled').length,
-  }), [bookings])
+  const formatDateTime = (iso) => {
+    if (!iso) return ''
+    const date = new Date(iso)
+    if (Number.isNaN(date.getTime())) return ''
+    return `${date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}, ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+  }
+
+  const counts = useMemo(() => {
+    const result = { all: bookings.length }
+    for (const pill of STATUS_PILLS) {
+      if (!pill.matches) continue
+      result[pill.key] = bookings.filter(b => pill.matches.includes(b.rawStatus)).length
+    }
+    return result
+  }, [bookings])
 
   const serviceOptions = useMemo(
     () => Array.from(new Set(bookings.map(b => b.serviceType).filter(Boolean))).sort(),
@@ -284,13 +315,12 @@ export default function CustomerDashboard() {
 
   const visibleBookings = useMemo(() => {
     let list = bookings
-    if (activeTab === 'active') list = list.filter(b => !['Completed', 'Cancelled'].includes(b.status))
-    else if (activeTab === 'completed') list = list.filter(b => b.status === 'Completed')
-    else if (activeTab === 'cancelled') list = list.filter(b => b.status === 'Cancelled')
+    const pill = STATUS_PILLS.find(p => p.key === activePill)
+    if (pill?.matches) list = list.filter(b => pill.matches.includes(b.rawStatus))
 
     if (search.trim()) {
       const query = search.toLowerCase()
-      list = list.filter(b => [b.serviceType, b.id, b.shortId, b.location, b.status, b.assignedStaff]
+      list = list.filter(b => [b.serviceType, b.reference, b.location, b.status, b.assignedStaff]
         .some(value => String(value || '').toLowerCase().includes(query)))
     }
 
@@ -306,12 +336,12 @@ export default function CustomerDashboard() {
     }
 
     return [...list].sort((a, b) => sortOrder === 'newest' ? b.createdAtMs - a.createdAtMs : a.createdAtMs - b.createdAtMs)
-  }, [bookings, activeTab, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
+  }, [bookings, activePill, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
 
   const totalPages = Math.max(1, Math.ceil(visibleBookings.length / PAGE_SIZE))
   const pageBookings = visibleBookings.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
-  const sectionLabel = TABS.find(t => t.key === activeTab)?.label || 'All Bookings'
+  const selectedBooking = bookings.find(b => b.id === selectedBookingId) || pageBookings[0] || null
 
   const activeFilterCount = filterServices.length + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0)
 
@@ -321,7 +351,7 @@ export default function CustomerDashboard() {
 
   return (
     <Layout role="customer">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">My Bookings</h1>
           <p className="text-gray-500 text-sm">Book a cleaning service and track its status</p>
@@ -336,7 +366,7 @@ export default function CustomerDashboard() {
         <div className="flex flex-wrap gap-2 mb-4">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by service, ID, or address..." className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by service, reference, or address..." className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm" />
           </div>
 
           <div className="relative" ref={filterRef}>
@@ -397,146 +427,67 @@ export default function CustomerDashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border p-1.5 mb-4 flex flex-wrap gap-1">
-          {TABS.map(tab => (
+        <div className="flex flex-wrap gap-1 mb-4">
+          {STATUS_PILLS.map(pill => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition ${activeTab === tab.key ? 'bg-accent-100 text-accent-800' : 'text-gray-500 hover:bg-gray-50'}`}
+              key={pill.key}
+              onClick={() => setActivePill(pill.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold transition ${activePill === pill.key ? 'bg-[#003152] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
             >
-              {tab.label}
-              <span className={`text-xs rounded-full px-1.5 ${activeTab === tab.key ? 'bg-accent-200 text-accent-800' : 'bg-gray-100 text-gray-500'}`}>{counts[tab.key]}</span>
+              {pill.label}
+              <span className={`text-xs rounded-full px-1.5 ${activePill === pill.key ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>{counts[pill.key] ?? 0}</span>
             </button>
           ))}
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-8">
-          <div className="p-4 font-semibold border-b bg-gray-50 flex items-center gap-2">
-            <span className="w-1 h-4 bg-accent rounded-full inline-block" /> {sectionLabel}
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-6">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 border-b text-left text-xs font-semibold uppercase text-gray-500">
+                  <th className="px-4 py-3">Reference</th>
+                  <th className="px-4 py-3">Service</th>
+                  <th className="px-4 py-3">Company</th>
+                  <th className="px-4 py-3">Scheduled</th>
+                  <th className="px-4 py-3">Cleaner</th>
+                  <th className="px-4 py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageBookings.length === 0 && (
+                  <tr><td colSpan={6} className="p-8 text-center text-gray-400">No bookings found.</td></tr>
+                )}
+                {pageBookings.map(booking => {
+                  const rating = companyRatings.get(booking.hostAdminId)
+                  const isConfirmedAssignment = ['approved', 'in_progress', 'completed'].includes(booking.rawStatus)
+                  return (
+                    <tr
+                      key={booking.id}
+                      onClick={() => setSelectedBookingId(booking.id)}
+                      className={`border-b last:border-b-0 cursor-pointer hover:bg-gray-50 ${selectedBooking?.id === booking.id ? 'bg-accent-100/40' : ''}`}
+                    >
+                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{booking.reference}</td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{booking.serviceType}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {booking.companyName}
+                        {rating && <span className="ml-1.5 text-xs text-gray-400">· {rating.average.toFixed(1)}/5</span>}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                        {booking.scheduledDate ? `${booking.scheduledDate.slice(5).replace('-', ' ').split(' ').reverse().join(' ')}${booking.scheduledTime ? `, ${booking.scheduledTime}` : ''}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{isConfirmedAssignment ? booking.assignedStaff : 'Awaiting assignment'}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_STYLES[booking.status] || 'bg-gray-100 text-gray-500'}`}>{booking.status}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
-          {pageBookings.length === 0 && <div className="p-8 text-center text-gray-400">No bookings found.</div>}
-          {pageBookings.map(booking => {
-            const visual = getServiceVisual(booking.serviceType)
-            const Icon = visual.icon
-            return (
-              <div key={booking.id} className="p-4 border-b hover:bg-gray-50 flex justify-between items-start gap-4">
-                <div className={`shrink-0 w-12 h-12 rounded-xl flex items-center justify-center ${visual.bg} ${visual.text}`}>
-                  <Icon className="w-6 h-6" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-mono text-gray-400">{booking.shortId}</span>
-                  </div>
-                  <p className="font-medium text-gray-800">{booking.serviceType}</p>
-                  <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${visual.pill}`}>{booking.companyName}</span>
-                  <p className="text-xs text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3" /> {booking.location}</p>
-                  {booking.scheduledDate && (
-                    <p className="text-xs text-gray-500 flex flex-wrap items-center gap-1 mt-1">
-                      <Calendar className="w-3 h-3" /> {formatScheduled(booking.scheduledDate)} {booking.scheduledTime && `• ${booking.scheduledTime}`}
-                      <button type="button" onClick={() => setViewBooking(booking)} className="ml-1 text-accent-600 hover:underline">View details</button>
-                    </p>
-                  )}
-                  {!booking.scheduledDate && (
-                    <button type="button" onClick={() => setViewBooking(booking)} className="mt-1 text-xs text-accent-600 hover:underline">View details</button>
-                  )}
-
-                  {booking.rawStatus === 'pending' && booking.assignedStaff !== 'Unassigned' && (
-                    <div className="mt-2 flex items-start gap-1.5 bg-amber-50 text-amber-700 text-xs px-2 py-1.5 rounded-lg">
-                      <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Suggested staff (pending manager approval): {booking.assignedStaff}
-                    </div>
-                  )}
-                  {['approved', 'in_progress', 'completed'].includes(booking.rawStatus) && (
-                    <div className="mt-2 flex items-start gap-1.5 bg-green-50 text-green-700 text-xs px-2 py-1.5 rounded-lg">
-                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Assigned staff: {booking.assignedStaff}
-                    </div>
-                  )}
-
-                  {booking.status === 'Completed' && (
-                    booking.feedback ? (
-                      <div className="mt-2 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                          <span className="text-yellow-500 tracking-tight">{'★'.repeat(booking.feedback.rating)}{'☆'.repeat(5 - booking.feedback.rating)}</span>
-                          {booking.feedback.comment && <span className="italic text-gray-500">&ldquo;{booking.feedback.comment}&rdquo;</span>}
-                        </div>
-                        {booking.feedback.image_url && (
-                          <a href={booking.feedback.image_url} target="_blank" rel="noreferrer">
-                            <img src={booking.feedback.image_url} alt="Feedback attachment" className="h-16 w-16 rounded-lg object-cover border" />
-                          </a>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mt-2 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="flex items-center gap-0.5">
-                            {[1, 2, 3, 4, 5].map(value => (
-                              <button
-                                key={value}
-                                type="button"
-                                onClick={() => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], rating: value } }))}
-                                className={`text-lg leading-none ${Number(feedbackDrafts[booking.id]?.rating || 0) >= value ? 'text-yellow-500' : 'text-gray-300'}`}
-                                aria-label={`Rate ${value} star${value > 1 ? 's' : ''}`}
-                              >★</button>
-                            ))}
-                          </div>
-                          <input
-                            value={feedbackDrafts[booking.id]?.comment || ''}
-                            onChange={e => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], comment: e.target.value } }))}
-                            placeholder="Leave a comment (optional)"
-                            className="flex-1 min-w-[140px] border rounded-lg px-2 py-1 text-xs"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleSubmitFeedback(booking)}
-                            disabled={savingFeedbackId === booking.id}
-                            className="text-xs text-accent-600 hover:underline disabled:opacity-50"
-                          >
-                            {savingFeedbackId === booking.id ? 'Saving...' : 'Submit feedback'}
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <label className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-accent-600 cursor-pointer">
-                            <ImagePlus className="h-3.5 w-3.5" /> {feedbackDrafts[booking.id]?.imageFile ? 'Change photo' : 'Add photo'}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              className="hidden"
-                              onChange={e => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], imageFile: e.target.files?.[0] || null } }))}
-                            />
-                          </label>
-                          {feedbackDrafts[booking.id]?.imageFile && (
-                            <>
-                              <span className="text-xs text-gray-400 truncate max-w-[140px]">{feedbackDrafts[booking.id].imageFile.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => setFeedbackDrafts(prev => ({ ...prev, [booking.id]: { ...prev[booking.id], imageFile: null } }))}
-                                className="text-xs text-red-500 hover:underline"
-                              >
-                                Remove
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-                <div className="text-right shrink-0">
-                  <span className={`text-xs px-2 py-1 rounded-full ${STATUS_STYLES[booking.status] || 'bg-gray-100 text-gray-500'}`}>{booking.status}</span>
-                  {['Pending', 'Approved'].includes(booking.status) && (
-                    <div className="mt-2 flex justify-end gap-3">
-                      {booking.status === 'Pending' && (
-                        <button onClick={() => setEditBooking(booking)} className="inline-flex items-center gap-1 text-xs text-accent-600 hover:underline"><Edit3 className="h-3 w-3" /> Edit</button>
-                      )}
-                      <button onClick={() => handleCancelClick(booking)} className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline"><Trash2 className="h-3 w-3" /> Cancel</button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )
-          })}
 
           {visibleBookings.length > PAGE_SIZE && (
-            <div className="flex items-center justify-center gap-1 p-4">
+            <div className="flex items-center justify-center gap-1 p-4 border-t">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
@@ -561,6 +512,21 @@ export default function CustomerDashboard() {
             </div>
           )}
         </div>
+
+        {selectedBooking && (
+          <BookingDetailPanel
+            booking={selectedBooking}
+            rating={companyRatings.get(selectedBooking.hostAdminId)}
+            formatScheduled={formatScheduled}
+            formatDateTime={formatDateTime}
+            onEdit={() => setEditBooking(selectedBooking)}
+            onCancel={() => handleCancelClick(selectedBooking)}
+            feedbackDraft={feedbackDrafts[selectedBooking.id]}
+            onFeedbackChange={(patch) => setFeedbackDrafts(prev => ({ ...prev, [selectedBooking.id]: { ...prev[selectedBooking.id], ...patch } }))}
+            onSubmitFeedback={() => handleSubmitFeedback(selectedBooking)}
+            savingFeedback={savingFeedbackId === selectedBooking.id}
+          />
+        )}
       </div>
 
       {editBooking && (
@@ -587,30 +553,6 @@ export default function CustomerDashboard() {
               <button type="submit" className="w-full bg-accent hover:bg-accent-600 text-white py-2 rounded-lg font-semibold transition">Save Changes</button>
             </div>
           </form>
-        </div>
-      )}
-
-      {viewBooking && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-lg w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Booking Details</h3>
-              <button type="button" onClick={() => setViewBooking(null)} aria-label="Close"><X /></button>
-            </div>
-            <div className="space-y-2 text-sm">
-              <p className="text-xs font-mono text-gray-400">{viewBooking.shortId}</p>
-              <p><span className="text-gray-500">Service:</span> {viewBooking.serviceType}</p>
-              <p><span className="text-gray-500">Company:</span> {viewBooking.companyName}</p>
-              <p><span className="text-gray-500">Status:</span> {viewBooking.status}</p>
-              <p><span className="text-gray-500">Location:</span> {viewBooking.location}</p>
-              {viewBooking.scheduledDate && <p><span className="text-gray-500">Scheduled:</span> {formatScheduled(viewBooking.scheduledDate)} {viewBooking.scheduledTime}</p>}
-              <p><span className="text-gray-500">Estimated hours:</span> {viewBooking.estimatedHours}</p>
-              <p><span className="text-gray-500">Assigned staff:</span> {viewBooking.assignedStaff}</p>
-              {viewBooking.description && <p><span className="text-gray-500">Description:</span> {viewBooking.description}</p>}
-              {viewBooking.notes && <p><span className="text-gray-500">Notes:</span> {viewBooking.notes}</p>}
-              <p><span className="text-gray-500">Requested:</span> {viewBooking.createdAt}</p>
-            </div>
-          </div>
         </div>
       )}
 
@@ -648,5 +590,160 @@ export default function CustomerDashboard() {
         )
       })()}
     </Layout>
+  )
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 py-1">
+      <dt className="text-gray-500 shrink-0">{label}</dt>
+      <dd className="text-gray-800 font-medium text-right">{value}</dd>
+    </div>
+  )
+}
+
+// Cancelled/rejected bookings get a short notice instead of the step timeline — showing a stalled
+// "pending" progress bar for a booking that's never going to move forward would be misleading.
+function TimelineStep({ label, done, timestamp }) {
+  return (
+    <div className="flex items-start gap-3">
+      {done ? <CheckCircle2 className="w-4 h-4 text-accent shrink-0 mt-0.5" /> : <Circle className="w-4 h-4 text-gray-300 shrink-0 mt-0.5" />}
+      <div>
+        <p className={`text-sm font-semibold ${done ? 'text-gray-900' : 'text-gray-400'}`}>{label}</p>
+        <p className={`text-xs ${done ? 'text-gray-500' : 'text-gray-400'}`}>{done ? timestamp : 'pending'}</p>
+      </div>
+    </div>
+  )
+}
+
+function BookingDetailPanel({
+  booking, rating, formatScheduled, formatDateTime, onEdit, onCancel,
+  feedbackDraft, onFeedbackChange, onSubmitFeedback, savingFeedback,
+}) {
+  const isConfirmedAssignment = ['approved', 'in_progress', 'completed'].includes(booking.rawStatus)
+  const isSuggestedOnly = booking.rawStatus === 'pending' && booking.assignedStaff !== 'Unassigned'
+  const isDead = ['cancelled', 'rejected'].includes(booking.rawStatus)
+  const canEdit = booking.rawStatus === 'pending'
+  const canCancel = ['pending', 'approved'].includes(booking.rawStatus)
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <h3 className="font-semibold text-gray-800">Booking detail - {booking.reference}</h3>
+          {(canEdit || canCancel) && (
+            <div className="flex items-center gap-3 shrink-0">
+              {canEdit && <button onClick={onEdit} className="inline-flex items-center gap-1 text-xs text-accent-600 hover:underline"><Edit3 className="h-3 w-3" /> Edit</button>}
+              {canCancel && <button onClick={onCancel} className="inline-flex items-center gap-1 text-xs text-red-500 hover:underline"><Trash2 className="h-3 w-3" /> Cancel</button>}
+            </div>
+          )}
+        </div>
+
+        <dl className="text-sm divide-y divide-gray-50">
+          <DetailRow label="Service" value={booking.serviceType} />
+          <DetailRow label="Company" value={`${booking.companyName}${booking.companyPhone ? ` (${booking.companyPhone})` : ''}${rating ? ` · ${rating.average.toFixed(1)}/5` : ''}`} />
+          <DetailRow label="Address" value={booking.location} />
+          {booking.scheduledDate && <DetailRow label="Scheduled" value={`${formatScheduled(booking.scheduledDate)}${booking.scheduledTime ? `, ${booking.scheduledTime}` : ''}`} />}
+          <DetailRow label="Duration" value={`${booking.estimatedHours} hours`} />
+          <DetailRow label="Assigned cleaner" value={isConfirmedAssignment ? `${booking.assignedStaff}${booking.staffPhone ? ` (${booking.staffPhone})` : ''}` : 'Awaiting assignment'} />
+          <DetailRow label="Amount" value={booking.price != null ? `$${Number(booking.price).toFixed(2)} - payable on completion` : 'Priced after site assessment'} />
+        </dl>
+
+        {isSuggestedOnly && (
+          <div className="mt-3 flex items-start gap-1.5 bg-amber-50 text-amber-700 text-xs px-2 py-1.5 rounded-lg">
+            <Lightbulb className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Suggested staff (pending manager approval): {booking.assignedStaff}
+          </div>
+        )}
+        {isConfirmedAssignment && (
+          <div className="mt-3 flex items-start gap-1.5 bg-green-50 text-green-700 text-xs px-2 py-1.5 rounded-lg">
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" /> Assigned staff: {booking.assignedStaff}
+          </div>
+        )}
+        {booking.requestedStaffName && (
+          <p className="mt-2 text-xs text-gray-400">You requested: {booking.requestedStaffName}</p>
+        )}
+        {booking.description && <p className="mt-3 text-sm text-gray-600"><span className="text-gray-400">Description:</span> {booking.description}</p>}
+        {booking.notes && <p className="mt-1 text-sm text-gray-600"><span className="text-gray-400">Notes:</span> {booking.notes}</p>}
+
+        {booking.status === 'Completed' && (
+          booking.feedback ? (
+            <div className="mt-4 pt-4 border-t space-y-2">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                <span className="text-yellow-500 tracking-tight">{'★'.repeat(booking.feedback.rating)}{'☆'.repeat(5 - booking.feedback.rating)}</span>
+                {booking.feedback.comment && <span className="italic text-gray-500">&ldquo;{booking.feedback.comment}&rdquo;</span>}
+              </div>
+              {booking.feedback.image_url && (
+                <a href={booking.feedback.image_url} target="_blank" rel="noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={booking.feedback.image_url} alt="Feedback attachment" className="h-16 w-16 rounded-lg object-cover border" />
+                </a>
+              )}
+            </div>
+          ) : (
+            <div className="mt-4 pt-4 border-t space-y-2">
+              <p className="text-xs font-semibold text-gray-500">Leave feedback</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-0.5">
+                  {[1, 2, 3, 4, 5].map(value => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => onFeedbackChange({ rating: value })}
+                      className={`text-lg leading-none ${Number(feedbackDraft?.rating || 0) >= value ? 'text-yellow-500' : 'text-gray-300'}`}
+                      aria-label={`Rate ${value} star${value > 1 ? 's' : ''}`}
+                    >★</button>
+                  ))}
+                </div>
+                <input
+                  value={feedbackDraft?.comment || ''}
+                  onChange={e => onFeedbackChange({ comment: e.target.value })}
+                  placeholder="Leave a comment (optional)"
+                  className="flex-1 min-w-[140px] border rounded-lg px-2 py-1 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={onSubmitFeedback}
+                  disabled={savingFeedback}
+                  className="text-xs text-accent-600 hover:underline disabled:opacity-50"
+                >
+                  {savingFeedback ? 'Saving...' : 'Submit feedback'}
+                </button>
+              </div>
+              <label className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-accent-600 cursor-pointer">
+                <ImagePlus className="h-3.5 w-3.5" /> {feedbackDraft?.imageFile ? 'Change photo' : 'Add photo'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={e => onFeedbackChange({ imageFile: e.target.files?.[0] || null })}
+                />
+              </label>
+              {feedbackDraft?.imageFile && (
+                <span className="ml-2 text-xs text-gray-400 truncate max-w-[140px]">{feedbackDraft.imageFile.name}</span>
+              )}
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h3 className="font-semibold text-gray-800 mb-4">Status timeline</h3>
+        {isDead ? (
+          <div className="flex items-start gap-2 text-sm text-gray-600">
+            <XCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            {booking.rawStatus === 'cancelled'
+              ? `This booking was cancelled${booking.cancelledAt ? ` on ${formatDateTime(booking.cancelledAt)}` : ''}.`
+              : `This booking was declined.${booking.rejectionReason ? ` Reason: ${booking.rejectionReason}` : ''}`}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <TimelineStep label="Booking submitted" done timestamp={formatDateTime(booking.createdAt)} />
+            <TimelineStep label="Cleaner assigned" done={isConfirmedAssignment} timestamp={formatDateTime(booking.updatedAt)} />
+            <TimelineStep label="In progress" done={['in_progress', 'completed'].includes(booking.rawStatus)} timestamp={formatDateTime(booking.checkedInAt || booking.updatedAt)} />
+            <TimelineStep label="Completed" done={booking.rawStatus === 'completed'} timestamp={formatDateTime(booking.checkedOutAt || booking.updatedAt)} />
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
