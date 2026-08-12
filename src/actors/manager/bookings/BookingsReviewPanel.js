@@ -205,7 +205,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
 
     let bookingsQuery = supabase
       .from('bookings')
-      .select('id,customer_id,service_type,location,latitude,longitude,description,notes,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
+      .select('id,customer_id,service_type,location,latitude,longitude,description,notes,requested_staff_name,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
       .eq('host_admin_id', hostAdminIdResolved)
       .order('created_at', { ascending: false })
     bookingsQuery = sourceScope === 'tasks'
@@ -915,6 +915,15 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
                   </div>
                 </div>
                 <div className="border-t border-gray-100" />
+                {booking.requested_staff_name && (
+                  <div className="flex items-start gap-2 rounded-lg border border-accent-200 bg-accent-100 px-3 py-2">
+                    <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-accent-600" />
+                    <p className="text-sm text-accent-800">
+                      Customer requested: <span className="font-medium">{booking.requested_staff_name}</span>
+                      <span className="block text-xs text-accent-600 font-normal">Subject to their availability — the allocation engine already weighs this request.</span>
+                    </p>
+                  </div>
+                )}
                 {booking.status === 'pending' && booking.staff_profiles?.staff_name && (
                   <div className="flex items-start justify-between gap-2 rounded-lg border border-accent-200 bg-accent-100 px-3 py-2">
                     <p className="text-sm text-accent-800 flex items-start gap-1">

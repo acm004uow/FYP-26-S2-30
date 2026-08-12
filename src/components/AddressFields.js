@@ -1,54 +1,29 @@
 import { useEffect, useState } from 'react'
+import usePostalLookup from './usePostalLookup'
 
 // Singapore postal code -> block/street/building lookup (OneMap), shared between the
 // customer booking form and the manager's manual "New task" scheduler. Manages its own
 // postal code + address state and reports the composed one-line address via onLocationChange.
-export default function AddressFields({ onLocationChange, onCoordinatesChange, compact = false }) {
-  const [postalCode, setPostalCode] = useState('')
-  const [postalLookupStatus, setPostalLookupStatus] = useState('')
+// `initialPostalCode` lets an earlier step (e.g. the booking wizard's Step 2, which only asks for
+// the postal code to sort companies by distance) hand off its value here without the customer
+// having to retype it.
+export default function AddressFields({ onLocationChange, onCoordinatesChange, compact = false, initialPostalCode = '' }) {
+  const [postalCode, setPostalCode] = useState(initialPostalCode)
   const [address, setAddress] = useState({ blockNo: '', streetName: '', building: '', unitNo: '' })
-  const [coordinates, setCoordinates] = useState(null)
+  const { status: postalLookupStatus, result: lookupResult } = usePostalLookup(postalCode)
 
   useEffect(() => {
-    if (postalCode.length !== 6) {
-      setPostalLookupStatus('')
-      setCoordinates(null)
-      return
+    if (lookupResult) {
+      setAddress(prev => ({
+        ...prev,
+        blockNo: lookupResult.blockNo,
+        streetName: lookupResult.streetName,
+        building: lookupResult.building,
+      }))
     }
+  }, [lookupResult])
 
-    let cancelled = false
-    setPostalLookupStatus('loading')
-
-    fetch(`https://www.onemap.gov.sg/api/common/elastic/search?searchVal=${postalCode}&returnGeom=Y&getAddrDetails=Y&pageNum=1`)
-      .then(res => res.json())
-      .then(data => {
-        if (cancelled) return
-        const result = data?.results?.[0]
-        if (result) {
-          setAddress(prev => ({
-            ...prev,
-            blockNo: result.BLK_NO || '',
-            streetName: result.ROAD_NAME || '',
-            building: result.BUILDING && result.BUILDING !== 'NIL' ? result.BUILDING : '',
-          }))
-          const lat = Number(result.LATITUDE)
-          const lng = Number(result.LONGITUDE)
-          setCoordinates(Number.isFinite(lat) && Number.isFinite(lng) ? { latitude: lat, longitude: lng } : null)
-          setPostalLookupStatus('found')
-        } else {
-          setCoordinates(null)
-          setPostalLookupStatus('not_found')
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCoordinates(null)
-          setPostalLookupStatus('error')
-        }
-      })
-
-    return () => { cancelled = true }
-  }, [postalCode])
+  const coordinates = lookupResult?.coordinates ?? null
 
   useEffect(() => {
     onCoordinatesChange?.(coordinates)

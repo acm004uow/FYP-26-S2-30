@@ -37,26 +37,27 @@ async function fillAddress(page) {
   }
 }
 
+// Step 1 -> Step 2: picking a service card directly (rather than the free-text "Find matching
+// companies" path) keeps the test deterministic and independent of the OpenAI-backed parse API.
+// Two companies share every seeded category, so Step 2's card is targeted by its accessible group
+// name (exact match — "E2E Test Co" is otherwise a substring of "E2E Test Co B").
 async function selectCompanyA(page) {
-  // Two comboboxes on the page in DOM order: Service Type, then Company. The company list loads
-  // async (shows a "Loading companies..." placeholder first), and re-fetches again once a company
-  // is picked (form.companyId is itself a dependency of the loader effect) — selecting before the
-  // first load settles races the option list being replaced mid-action.
-  const companySelect = page.getByRole('combobox').nth(1)
-  await expect(companySelect).toContainText('E2E Test Co')
-  await companySelect.selectOption({ label: 'E2E Test Co' })
+  await page.goto('/customer-book')
+  await page.getByRole('button', { name: 'Home Cleaning' }).click()
+  const companyCard = page.getByRole('group', { name: 'E2E Test Co', exact: true })
+  await companyCard.getByRole('button', { name: 'Select' }).click()
 }
 
 test('CUST-02: customer creates a one-time booking', async ({ page }) => {
-  await page.goto('/customer-book')
   await selectCompanyA(page)
   await fillAddress(page)
 
   const dateInput = page.locator('input[type="date"]').first()
   const minDate = await dateInput.getAttribute('min')
   await dateInput.fill(minDate)
+  await page.getByRole('button', { name: '09:00', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Submit Booking' }).click()
+  await page.getByRole('button', { name: 'CONFIRM BOOKING' }).click()
   await expect(page.getByText('Booking Submitted!')).toBeVisible()
 
   const { data } = await ownerClient.from('bookings').select('id').eq('customer_id', fixtures.companyA.customerId).order('created_at', { ascending: false }).limit(1)
@@ -64,7 +65,6 @@ test('CUST-02: customer creates a one-time booking', async ({ page }) => {
 })
 
 test('CUST-03: customer creates a recurring booking', async ({ page }) => {
-  await page.goto('/customer-book')
   await selectCompanyA(page)
   await fillAddress(page)
 
@@ -83,7 +83,7 @@ test('CUST-03: customer creates a recurring booking', async ({ page }) => {
   await page.getByRole('checkbox').first().check() // Mon
   await page.getByRole('button', { name: /Mon/ }).click() // close the dropdown (same trigger, now labelled "Mon")
 
-  await page.getByRole('button', { name: 'Submit Recurring Booking Request' }).click()
+  await page.getByRole('button', { name: 'CONFIRM BOOKING' }).click()
   await expect(page.getByText('Recurring Booking Requested!')).toBeVisible()
 
   const { data } = await ownerClient
@@ -97,13 +97,13 @@ test('CUST-03: customer creates a recurring booking', async ({ page }) => {
 })
 
 test('CUST-05: booking form blocks a date inside an owner-declared closure', async ({ page }) => {
-  await page.goto('/customer-book')
   await selectCompanyA(page)
   await fillAddress(page)
 
   const dateInput = page.locator('input[type="date"]').first()
   await dateInput.fill(fixtures.companyA.closedDate)
+  await page.getByRole('button', { name: '09:00', exact: true }).click()
 
-  await page.getByRole('button', { name: 'Submit Booking' }).click()
+  await page.getByRole('button', { name: 'CONFIRM BOOKING' }).click()
   await expect(page.getByText(/closed/i)).toBeVisible()
 })
