@@ -96,11 +96,11 @@ export default function Step3Schedule({
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Period start</label>
-                  <input type="date" min={minDate} value={form.startDate} onChange={e => patchForm({ startDate: e.target.value })} className="date-input w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
+                  <input type="date" min={minDate} value={form.startDate} onChange={e => patchForm({ startDate: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Calendar className="w-4 h-4" /> Period end</label>
-                  <input type="date" min={form.startDate || minDate} value={form.endDate} onChange={e => patchForm({ endDate: e.target.value })} className="date-input w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
+                  <input type="date" min={form.startDate || minDate} value={form.endDate} onChange={e => patchForm({ endDate: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-500 text-sm bg-gray-50" />
                 </div>
                 <div className="relative" ref={daysDropdownRef}>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Days of week</label>
