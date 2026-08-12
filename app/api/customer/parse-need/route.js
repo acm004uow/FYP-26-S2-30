@@ -20,7 +20,7 @@ function isValidTime(value) {
 // findRequestedStaffByName against the real staff roster, so the roster never has to be sent here.
 export async function POST(request) {
   try {
-    const { text } = await request.json();
+    const { text, companyId } = await request.json();
     const trimmedText = String(text || "").trim();
     if (!trimmedText) return NextResponse.json({ error: "Describe what you need first." }, { status: 400 });
 
@@ -47,7 +47,23 @@ export async function POST(request) {
       .select("name")
       .eq("status", "active")
       .order("name");
-    const serviceTypes = categoryRows?.length ? [...new Set(categoryRows.map((row) => row.name))] : SERVICE_TYPES;
+    let serviceTypes = categoryRows?.length ? [...new Set(categoryRows.map((row) => row.name))] : SERVICE_TYPES;
+
+    // Deep-linked from a specific company's "Book a slot" card (Step 1's linked-company banner) —
+    // narrow the model's choices to only what that company actually prices, same reasoning as the
+    // "choose a service directly" grid: a category they don't offer would just be a price-less dead end.
+    if (typeof companyId === "string" && companyId) {
+      const { data: companyProfile } = await supabase
+        .from("profiles")
+        .select("service_rates")
+        .eq("id", companyId)
+        .maybeSingle();
+      const pricedNames = Object.entries(companyProfile?.service_rates || {})
+        .filter(([, rate]) => Number(rate) > 0)
+        .map(([name]) => name);
+      const narrowed = serviceTypes.filter((name) => pricedNames.includes(name));
+      if (narrowed.length) serviceTypes = narrowed;
+    }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: "AI request parsing is not configured (missing OPENAI_API_KEY)." }, { status: 500 });

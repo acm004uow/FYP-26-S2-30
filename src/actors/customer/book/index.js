@@ -1,5 +1,5 @@
 import Layout from '../../../components/Layout'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { ArrowLeft, CheckCircle } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
@@ -42,6 +42,19 @@ export default function CustomerBooking() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState('')
+  const [linkedCompany, setLinkedCompany] = useState(null)
+
+  // Deep-linked from a company's "Book a slot" card (e.g. the Marketplace) via ?companyId=... —
+  // that company is pinned through Step 1, and once a service is chosen, Step 2's full ranking is
+  // skipped entirely since the company is already decided; we go straight to Step 3 with it selected.
+  useEffect(() => {
+    if (!router.isReady) return
+    const companyId = typeof router.query.companyId === 'string' ? router.query.companyId : ''
+    if (!companyId) return
+    supabase.from('profiles').select('id,business_name,service_rates').eq('id', companyId).maybeSingle()
+      .then(({ data }) => { if (data) setLinkedCompany(data) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, router.query.companyId])
 
   const patchForm = (patch) => setForm(prev => ({ ...prev, ...patch }))
 
@@ -54,6 +67,16 @@ export default function CustomerBooking() {
     patchForm(patch)
     setRequestedStaff(patch.requestedStaff)
     setSelectedCompany(null)
+
+    if (linkedCompany) {
+      const rate = Number(linkedCompany.service_rates?.[patch.serviceType])
+      handleStep2Select({
+        id: linkedCompany.id,
+        business_name: linkedCompany.business_name,
+        price: Number.isFinite(rate) && rate > 0 ? rate : null,
+      })
+      return
+    }
     goToStep(2)
   }
 
@@ -276,6 +299,7 @@ export default function CustomerBooking() {
             description={rawDescription}
             setDescription={setRawDescription}
             onProceed={handleStep1Proceed}
+            linkedCompany={linkedCompany}
           />
         )}
 

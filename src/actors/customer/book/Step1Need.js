@@ -14,7 +14,7 @@ const QUICK_FILL_EXAMPLES = [
 // Step 1 of the booking wizard: a free-text box the customer describes their need in, plus a grid
 // of real service categories they can pick directly instead. Either path calls onProceed with the
 // same shape so Step 2 doesn't care which one was used.
-export default function Step1Need({ description, setDescription, onProceed }) {
+export default function Step1Need({ description, setDescription, onProceed, linkedCompany }) {
   const [cards, setCards] = useState([])
   const [cardsLoading, setCardsLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -31,6 +31,20 @@ export default function Step1Need({ description, setDescription, onProceed }) {
       }
     })()
   }, [])
+
+  // When a company is pinned (deep-linked via ?companyId=), only show services that company
+  // actually prices — showing every platform category would let the customer pick one this
+  // specific company doesn't offer, landing them on a "priced after site assessment" dead end.
+  const displayCards = (() => {
+    if (!linkedCompany) return cards
+    const priced = cards
+      .map(card => {
+        const rate = Number(linkedCompany.service_rates?.[card.name])
+        return Number.isFinite(rate) && rate > 0 ? { ...card, fromPrice: rate } : null
+      })
+      .filter(Boolean)
+    return priced.length ? priced : cards
+  })()
 
   // Cross-company staff lookup happens locally against the real roster (never sent to the LLM) —
   // same matching function the recommendation engine already uses to honor a name request.
@@ -54,7 +68,7 @@ export default function Step1Need({ description, setDescription, onProceed }) {
         fetch('/api/customer/parse-need', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
-          body: JSON.stringify({ text: description }),
+          body: JSON.stringify({ text: description, companyId: linkedCompany?.id }),
         }),
         resolveRequestedStaff(description),
       ])
@@ -99,6 +113,12 @@ export default function Step1Need({ description, setDescription, onProceed }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {linkedCompany && (
+        <div className="lg:col-span-2 flex items-center gap-2 rounded-xl bg-accent-100 px-4 py-3 text-sm text-accent-800">
+          <Sparkles className="w-4 h-4 shrink-0" />
+          Booking with <strong>{linkedCompany.business_name}</strong> — describe what you need or pick one of their services below, and we&apos;ll take you straight to address and time with them.
+        </div>
+      )}
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-gray-800 mb-1">Tell us what you need</h3>
         <p className="text-sm text-gray-500 mb-4">
@@ -142,14 +162,14 @@ export default function Step1Need({ description, setDescription, onProceed }) {
       </div>
 
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h3 className="font-semibold text-gray-800 mb-4">Or choose a service directly</h3>
+        <h3 className="font-semibold text-gray-800 mb-4">{linkedCompany ? `${linkedCompany.business_name}'s services` : 'Or choose a service directly'}</h3>
         {cardsLoading ? (
           <p className="text-sm text-gray-400">Loading services...</p>
-        ) : cards.length === 0 ? (
+        ) : displayCards.length === 0 ? (
           <p className="text-sm text-gray-400">No service categories are set up yet.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {cards.map(card => (
+            {displayCards.map(card => (
               <button
                 key={card.id}
                 type="button"
@@ -162,7 +182,7 @@ export default function Step1Need({ description, setDescription, onProceed }) {
                 </p>
                 {card.description && <p className="mt-1 text-xs text-gray-500 line-clamp-2">{card.description}</p>}
                 <p className="mt-2 text-xs text-gray-400">
-                  {card.durationHours}h{card.fromPrice != null ? ` · from $${card.fromPrice.toFixed(0)}/hr` : ''}
+                  {card.durationHours}h{card.fromPrice != null ? ` · ${linkedCompany ? '' : 'from '}$${card.fromPrice.toFixed(0)}/hr` : ''}
                 </p>
               </button>
             ))}
