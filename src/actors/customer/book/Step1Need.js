@@ -5,10 +5,10 @@ import { loadServiceCategoryCards } from '../../../../lib/serviceTypes'
 import { findRequestedStaffByName } from '../../../../lib/recommendationEngine'
 
 const QUICK_FILL_EXAMPLES = [
-  'I want to clean the toilet, 2 hours, and I want the same cleaner as last time',
-  'Carpet shampoo for my office, urgent, tomorrow morning',
-  'Window cleaning at 520201, next week afternoon, 3 hours',
-  'My HDB unit is very messy, half day',
+  'Home cleaning, 2 hours, this Saturday morning',
+  'Deep clean my office before a client visit next week',
+  'Move-out cleaning for a 3-room flat, need it done by Friday',
+  'Weekly carpet cleaning for my apartment',
 ]
 
 // Step 1 of the booking wizard: a free-text box the customer describes their need in, plus a grid
