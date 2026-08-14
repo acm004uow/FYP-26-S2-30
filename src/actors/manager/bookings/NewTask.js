@@ -120,11 +120,17 @@ export default function ManagerNewTask({
     if (!user) return
     const { data: myProfile } = await supabase
       .from('profiles')
-      .select('host_admin_id')
+      .select('role,host_admin_id')
       .eq('id', user?.id)
       .single()
 
-    const resolvedHostAdminId = myProfile?.host_admin_id
+    // An owner (system_admin) has no host_admin_id of their own — they ARE the host_admin, so
+    // their own profile id is the business's id. Only a manager's profile actually points at one
+    // via host_admin_id. This form is embedded for owners too (see components/TaskCreationForm.js,
+    // used by the Admin "New Task" section), so without this branch resolvedHostAdminId came back
+    // null for an owner and every staff/service-type/recommendation query below silently returned
+    // nothing — same role-aware resolution already used in StaffDirectoryPage.js#resolveHostAdminId.
+    const resolvedHostAdminId = myProfile?.role === 'system_admin' ? user.id : myProfile?.host_admin_id
     setHostAdminId(resolvedHostAdminId || null)
     if (!resolvedHostAdminId) return
 
@@ -412,8 +418,20 @@ export default function ManagerNewTask({
   }
 
   const SelectedServiceIcon = serviceTypeIcon(form.serviceType)
-  const selectedStaff = staffRows.find(staff => staff.id === selectedStaffId) || null
-  const visibleStaffRows = staffRows.filter(staff => {
+  // Base staffRows.status only reflects each staff member's status right now (suspended /
+  // self-toggled availability) — it has no idea which date this task is actually for. Once a date
+  // is picked, override both the displayed status and canAssign for anyone with approved leave
+  // covering that specific date, so the picker can't be used to assign someone who's confirmed off
+  // that day even though they show "Available" today. Mirrors the submit-time guard further up
+  // (handleCreateTask), which already blocks this — this just surfaces it before the click instead
+  // of after.
+  const staffRowsForSelectedDate = staffRows.map(staff => {
+    if (!form.scheduledDate) return staff
+    const offRequest = isStaffOffOnDate(staff.id, form.scheduledDate, approvedTimeOff)
+    return offRequest ? { ...staff, status: 'On Leave', canAssign: false } : staff
+  })
+  const selectedStaff = staffRowsForSelectedDate.find(staff => staff.id === selectedStaffId) || null
+  const visibleStaffRows = staffRowsForSelectedDate.filter(staff => {
     if (staffSearch.trim() && !staff.name.toLowerCase().includes(staffSearch.trim().toLowerCase())) return false
     if (staffStatusFilter !== 'All' && staff.status !== staffStatusFilter) return false
     return true
@@ -735,7 +753,7 @@ export default function ManagerNewTask({
                           className={`flex w-full items-center gap-3 border-b border-gray-50 px-4 py-3 text-left last:border-0 ${
                             staff.canAssign ? 'hover:bg-gray-50' : 'cursor-not-allowed opacity-50'
                           } ${selectedStaffId === staff.id ? 'bg-accent-100' : ''}`}
-                          title={staff.canAssign ? undefined : 'Only available active staff can be assigned'}
+                          title={staff.canAssign ? undefined : staff.status === 'On Leave' && form.scheduledDate ? `On approved leave on ${form.scheduledDate}` : 'Only available active staff can be assigned'}
                         >
                           <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${avatarColor(staff.name)}`}>
                             {staffInitials(staff.name)}

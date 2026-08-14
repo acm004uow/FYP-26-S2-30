@@ -3,6 +3,7 @@ import { Building2, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Search
 import { supabase } from '../../../../lib/supabaseClient'
 import { formatDuration } from '../../../../lib/attendance'
 import { getPeriodRange } from '../../../../lib/reportPeriods'
+import { fetchApprovedTimeOffClient, isStaffOffOnDate } from '../../../../lib/staffTimeOff'
 
 const staffStatusMeta = {
   Available: { dot: 'bg-green-500', pill: 'bg-green-100 text-green-700', bar: 'bg-green-500' },
@@ -69,12 +70,16 @@ export default function StaffPanel() {
       return
     }
 
-    const { data: staff } = await supabase
-      .from('staff_profiles')
-      .select('id,staff_name,availability,current_workload,performance_rating,status,is_suspended,weekly_working_hours,max_weekly_hours,department_id,departments(name)')
-      .eq('host_admin_id', resolvedHostAdminId)
-      .eq('status', 'active')
-      .order('staff_name')
+    const [{ data: staff }, approvedTimeOff] = await Promise.all([
+      supabase
+        .from('staff_profiles')
+        .select('id,staff_name,availability,current_workload,performance_rating,status,is_suspended,weekly_working_hours,max_weekly_hours,department_id,departments(name)')
+        .eq('host_admin_id', resolvedHostAdminId)
+        .eq('status', 'active')
+        .order('staff_name'),
+      fetchApprovedTimeOffClient(supabase, resolvedHostAdminId).catch(() => []),
+    ])
+    const todayIso = new Date().toISOString().slice(0, 10)
 
     const staffIds = (staff || []).map(row => row.id)
     let reviewCounts = {}
@@ -111,9 +116,15 @@ export default function StaffPanel() {
       id: row.id,
       name: row.staff_name,
       department: row.departments?.name || 'Unassigned',
+      // is_suspended (administrative) takes priority, then an approved time-off request covering
+      // today — a separate system from the availability toggle below (see staff_time_off_requests
+      // in supabase/schema.sql) that a staff member can't self-clear, so it should still show here
+      // even if they never flip their own availability toggle for the day.
       status: row.is_suspended
         ? 'On Leave'
-        : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
+        : isStaffOffOnDate(row.id, todayIso, approvedTimeOff)
+          ? 'On Leave'
+          : row.availability === 'available' ? 'Available' : row.availability === 'time_off' ? 'Time Off' : 'Busy',
       tasks: row.current_workload || 0,
       rating: row.performance_rating || 0,
       reviewCount: reviewCounts[row.id] || 0,
