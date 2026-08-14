@@ -304,6 +304,11 @@ export default function ManagerTracking() {
                       <p className="text-xs text-gray-500 truncate">
                         {entry.location}{entry.serviceType ? ` — ${entry.serviceType}` : ''}
                       </p>
+                      {!(Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)) && (
+                        <p className="mt-0.5 flex items-center gap-1 text-[11px] text-amber-600" title="This job's address never resolved to map coordinates, so it can't be plotted.">
+                          <MapPin className="h-3 w-3" /> Not on map — no location on file
+                        </p>
+                      )}
                     </div>
                     <p className="text-xs text-gray-400 flex-shrink-0">{formatDuration(now - new Date(entry.checkedInAt))}</p>
                   </div>
