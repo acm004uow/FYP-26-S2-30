@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, Bell, MapPin, UserCheck, Calendar, Sparkles, RefreshCw, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, Trash2, Eye } from 'lucide-react'
+import { CheckCircle, XCircle, Bell, MapPin, UserCheck, Calendar, Sparkles, RefreshCw, X, Repeat, Home, Building2, Droplets, Truck, Layers, Search, Filter, ChevronDown, Trash2, Eye, Phone, ArrowRight } from 'lucide-react'
 import { supabase } from '../../../../lib/supabaseClient'
 import { assignStaffToBooking } from '../../../../lib/assignBooking'
 import { generateRecommendations } from '../../../../lib/recommendationEngine'
@@ -43,6 +43,24 @@ const SERVICE_ICONS = {
 
 const serviceIcon = (type) => SERVICE_ICONS[type] || Home
 
+// Keyword match rather than an exact-name lookup like SERVICE_ICONS above — recurring bookings'
+// service_type is free text from the customer form (e.g. "Move in Cleaning", "Move out Cleaning"),
+// which doesn't line up with SERVICE_ICONS's canonical keys ("Home Cleaning", "Move-Out Cleaning"),
+// so an exact match would leave most recurring cards on the same default look.
+const RECURRING_CARD_THEMES = [
+  { keywords: ['office'], accent: 'text-orange-600', btn: 'bg-orange-50 text-orange-700 hover:bg-orange-100' },
+  { keywords: ['deep'], accent: 'text-blue-500', btn: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
+  { keywords: ['move out', 'move-out', 'moveout'], accent: 'text-purple-600', btn: 'bg-purple-50 text-purple-700 hover:bg-purple-100' },
+  { keywords: ['carpet'], accent: 'text-teal-600', btn: 'bg-teal-50 text-teal-700 hover:bg-teal-100' },
+  { keywords: ['move in', 'move-in', 'movein', 'home'], accent: 'text-green-600', btn: 'bg-green-50 text-green-700 hover:bg-green-100' },
+]
+const DEFAULT_RECURRING_THEME = { accent: 'text-gray-600', btn: 'bg-gray-100 text-gray-700 hover:bg-gray-200' }
+
+function getRecurringTheme(serviceType) {
+  const lower = String(serviceType || '').toLowerCase()
+  return RECURRING_CARD_THEMES.find(theme => theme.keywords.some(keyword => lower.includes(keyword))) || DEFAULT_RECURRING_THEME
+}
+
 const sourceMeta = {
   manager: { label: 'Manager Created', badge: 'bg-purple-100 text-purple-700' },
   department: { label: 'Department Request', badge: 'bg-orange-100 text-orange-700' },
@@ -72,6 +90,8 @@ const statusColor = {
   pending: 'bg-yellow-100 text-yellow-700',
   approved: 'bg-green-100 text-green-700',
   rejected: 'bg-red-100 text-red-700',
+  in_progress: 'bg-indigo-100 text-indigo-700',
+  completed: 'bg-emerald-100 text-emerald-700',
 }
 
 const recurringStatusColor = {
@@ -164,13 +184,21 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
   const [recurringActionId, setRecurringActionId] = useState(null)
   const [recurringRejecting, setRecurringRejecting] = useState(null)
   const [recurringRejectReason, setRecurringRejectReason] = useState('')
+  // Holds the AI proposal for a recurring booking's first batch of visits, right after it's
+  // approved — { serviceType, rows: [{ booking_id, scheduled_date, recommended_staff_name, ... }] }
+  // — shown in a drawer so the manager can bulk-approve without leaving this page. Null = closed.
+  const [recurringProposal, setRecurringProposal] = useState(null)
+  const [approvingProposal, setApprovingProposal] = useState(false)
   const [approvedTimeOff, setApprovedTimeOff] = useState([])
   const [bookingSearch, setBookingSearch] = useState('')
   const [bookingStatusFilter, setBookingStatusFilter] = useState('all')
   const [bookingServiceTypeFilter, setBookingServiceTypeFilter] = useState('all')
   const [bookingFiltersOpen, setBookingFiltersOpen] = useState(false)
+  const [bookingDateFrom, setBookingDateFrom] = useState('')
+  const [bookingDateTo, setBookingDateTo] = useState('')
   const [detailBookingId, setDetailBookingId] = useState(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [recurringVisitsPage, setRecurringVisitsPage] = useState(1)
 
   const loadRecurringBookings = async (hostAdminIdParam) => {
     if (!hostAdminIdParam) {
@@ -212,7 +240,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
 
     let bookingsQuery = supabase
       .from('bookings')
-      .select('id,customer_id,service_type,location,latitude,longitude,description,notes,requested_staff_name,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
+      .select('id,customer_id,service_type,location,latitude,longitude,description,notes,requested_staff_name,scheduled_date,scheduled_time,status,created_at,assigned_staff_id,recommendation_reason,source,guest_name,guest_contact,department_id,recurring_booking_id,customer:profiles!bookings_customer_id_fkey(full_name,email,phone),staff_profiles(staff_name),departments(name)')
       .eq('host_admin_id', hostAdminIdResolved)
       .order('created_at', { ascending: false })
     bookingsQuery = sourceScope === 'tasks'
@@ -295,7 +323,8 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [bookingSearch, bookingStatusFilter, bookingServiceTypeFilter, timeFilter, sourceFilter])
+    setRecurringVisitsPage(1)
+  }, [bookingSearch, bookingStatusFilter, bookingServiceTypeFilter, timeFilter, sourceFilter, bookingDateFrom, bookingDateTo])
 
   const showNotification = (message) => {
     setNotification(message)
@@ -388,6 +417,40 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
     await loadBookings()
   }
 
+  // Shared by handleReviewRecurring (right after approval) and the "Build & Review Staff" button
+  // on an already-active recurring booking (see the read-only Recurring Bookings list below) — both
+  // need the exact same "hit the route, open the drawer if it found visits" behavior. Returns a
+  // short human-readable notice so each call site can fold it into its own toast message.
+  const triggerRecurringScheduleBuild = async (recurringId, serviceTypeFallback) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch('/api/manager/build-recurring-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ recurring_booking_id: recurringId }),
+      })
+      const result = await response.json().catch(() => null)
+      if (response.ok && result?.generated && result.proposal?.length) {
+        setRecurringProposal({ serviceType: result.service_type || serviceTypeFallback, rows: result.proposal })
+        return { ok: true, notice: ' Review its visits on the right.' }
+      }
+      if (response.ok && result?.generated === false) {
+        return { ok: true, notice: ` ${result.message || ''}` }
+      }
+      return { ok: false, notice: result?.error ? ` ${result.error}` : '' }
+    } catch {
+      return { ok: false, notice: '' }
+    }
+  }
+
+  const handleBuildScheduleForActive = async (recurring) => {
+    setRecurringActionId(recurring.id)
+    const { notice } = await triggerRecurringScheduleBuild(recurring.id, recurring.service_type)
+    setRecurringActionId(null)
+    if (notice.trim()) showNotification(notice.trim())
+    await loadBookings()
+  }
+
   const handleReviewRecurring = async (id, decision, rejectionReason) => {
     const status = decision === 'Approved' ? 'active' : 'rejected'
     const user = await getActiveManager()
@@ -425,24 +488,17 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
       })
     }
 
-    // Build this week's visits (and their AI recommendations) immediately on approval, instead of
-    // leaving the manager to wait for the daily cron to reach this business's cutoff — see
-    // app/api/manager/build-recurring-schedule/route.js. Best-effort: a failure here (e.g. network
-    // blip) still leaves the recurring booking approved; the cron picks it up on its next run.
-    let scheduleMessage = ''
+    // Build this recurring booking's first batch of visits (and their AI recommendations)
+    // immediately on approval, instead of leaving the manager to wait for the daily cron to reach
+    // this business's cutoff — see app/api/manager/build-recurring-schedule/route.js. The result is
+    // shown in a review drawer (see handleApproveAllRecommended below) rather than just a toast, so
+    // the manager can act on it right away. Best-effort: a failure here still leaves the recurring
+    // booking approved; the cron picks it up on its next run — or the manager can retry via the
+    // "Build & Review Staff" button on the Recurring Bookings list (handleBuildScheduleForActive).
+    let scheduleNotice = ''
     if (!error && reviewed && status === 'active') {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const response = await fetch('/api/manager/build-recurring-schedule', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ recurring_booking_id: id }),
-        })
-        const result = await response.json().catch(() => null)
-        if (response.ok && result?.generated) scheduleMessage = " This week's visits are ready for review below."
-      } catch {
-        // ignored — best-effort, see comment above
-      }
+      const result = await triggerRecurringScheduleBuild(id, reviewed.service_type)
+      scheduleNotice = result.notice
     }
 
     setRecurringActionId(null)
@@ -451,10 +507,33 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
     showNotification(error
       ? error.message
       : reviewed
-        ? `Recurring booking ${status === 'active' ? 'approved' : 'rejected'}.${scheduleMessage}`
+        ? `Recurring booking ${status === 'active' ? 'approved' : 'rejected'}.${scheduleNotice}`
         : 'This request is no longer pending.')
     await loadRecurringBookings(hostAdminId)
-    if (scheduleMessage) await loadBookings()
+    if (scheduleNotice) await loadBookings()
+  }
+
+  // Bulk-approves every visit in the open recurring proposal drawer that got a fresh staff
+  // recommendation, reusing handleReview per booking so the workload increment / staff
+  // notification / audit log all stay identical to approving a booking one at a time. Excludes
+  // already_assigned rows (visits a previous approval already confirmed — re-running handleReview
+  // on those would just no-op against its `.eq('status','pending')` guard) and rows with no
+  // recommendation at all (no suitable staff found — approving those would confirm a booking with
+  // no one assigned; they still need a manual pick, either from the main table or by reassigning).
+  const handleApproveAllRecommended = async () => {
+    if (!recurringProposal) return
+    const idsToApprove = recurringProposal.rows.filter(row => !row.already_assigned && row.recommended_staff_id).map(row => row.booking_id)
+    if (idsToApprove.length === 0) {
+      setRecurringProposal(null)
+      return
+    }
+    setApprovingProposal(true)
+    for (const bookingId of idsToApprove) {
+      await handleReview(bookingId, 'Approved')
+    }
+    setApprovingProposal(false)
+    setRecurringProposal(null)
+    showNotification(`Approved ${idsToApprove.length} visit${idsToApprove.length === 1 ? '' : 's'}.`)
   }
 
   const performAssignment = async (booking, staffId, action) => {
@@ -590,6 +669,8 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
     && matchesTimeFilter(booking, timeFilter)
     && (bookingStatusFilter === 'all' || booking.status === bookingStatusFilter)
     && (bookingServiceTypeFilter === 'all' || booking.service_type === bookingServiceTypeFilter)
+    && (!bookingDateFrom || (booking.scheduled_date && booking.scheduled_date >= bookingDateFrom))
+    && (!bookingDateTo || (booking.scheduled_date && booking.scheduled_date <= bookingDateTo))
     && matchesBookingSearch(booking, bookingSearch)
   )
   const bookingServiceTypes = Array.from(new Set(bookings.map(b => b.service_type).filter(Boolean))).sort()
@@ -597,15 +678,131 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
   const statusFilters = getStatusFilters(sourceScope)
   const timeFilterCounts = Object.fromEntries(TIME_FILTERS.map(tab => [tab.value, bookings.filter(b => matchesTimeFilter(b, tab.value)).length]))
   const sourceFilterCounts = Object.fromEntries(sourceFilters.map(tab => [tab.value, bookings.filter(b => matchesSourceFilter(b, tab.value)).length]))
-  const totalPages = Math.max(1, Math.ceil(visibleBookings.length / BOOKINGS_PAGE_SIZE))
+  // Recurring-generated visits are kept out of the main table entirely — they're a different kind
+  // of thing (a slot that already has a parent recurring booking, reviewable in bulk via that
+  // booking's "Build & Review Staff" drawer) from a one-off booking a manager reviews individually,
+  // and listing them side by side in one flat table made it hard to tell which was which.
+  const oneTimeVisible = visibleBookings.filter(booking => !booking.recurring_booking_id)
+  const recurringVisible = visibleBookings.filter(booking => booking.recurring_booking_id)
+
+  const totalPages = Math.max(1, Math.ceil(oneTimeVisible.length / BOOKINGS_PAGE_SIZE))
   const safePage = Math.min(currentPage, totalPages)
-  const pageBookings = visibleBookings.slice((safePage - 1) * BOOKINGS_PAGE_SIZE, safePage * BOOKINGS_PAGE_SIZE)
+  const pageBookings = oneTimeVisible.slice((safePage - 1) * BOOKINGS_PAGE_SIZE, safePage * BOOKINGS_PAGE_SIZE)
+
+  const recurringTotalPages = Math.max(1, Math.ceil(recurringVisible.length / BOOKINGS_PAGE_SIZE))
+  const recurringSafePage = Math.min(recurringVisitsPage, recurringTotalPages)
+  const recurringPageBookings = recurringVisible.slice((recurringSafePage - 1) * BOOKINGS_PAGE_SIZE, recurringSafePage * BOOKINGS_PAGE_SIZE)
   const pendingRecurring = recurringBookings.filter(r => r.status === 'pending')
   const activeOrPastRecurring = recurringBookings.filter(r => r.status !== 'pending')
+
+  // recurring_bookings.status only ever tracks the *definition's* own approval (pending/active/
+  // rejected/cancelled) — it stays "active" forever once approved, even after every visit has been
+  // completed. The card badge should instead reflect where the actual generated visits are at,
+  // using the same status vocabulary/colors as the Bookings table. Built from `bookings` (already
+  // loaded, no extra query) rather than recurringVisible, since that's filtered by the page's
+  // search/status/date filters and would give a misleading count.
+  const recurringVisitCounts = new Map()
+  for (const booking of bookings) {
+    if (!booking.recurring_booking_id) continue
+    const counts = recurringVisitCounts.get(booking.recurring_booking_id) || {}
+    counts[booking.status] = (counts[booking.status] || 0) + 1
+    recurringVisitCounts.set(booking.recurring_booking_id, counts)
+  }
+
+  const getRecurringDisplayStatus = (recurring) => {
+    if (recurring.status !== 'active') {
+      return { key: recurring.status, label: recurringStatusLabel[recurring.status] || statusLabel(recurring.status), color: recurringStatusColor[recurring.status] || 'bg-gray-100 text-gray-500' }
+    }
+    const counts = recurringVisitCounts.get(recurring.id)
+    const total = counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : 0
+    if (total === 0) return { key: 'active', label: 'Active', color: recurringStatusColor.active }
+    if (counts.pending > 0) return { key: 'pending', label: statusLabel('pending'), color: statusColor.pending }
+    if (counts.in_progress > 0) return { key: 'in_progress', label: statusLabel('in_progress'), color: statusColor.in_progress }
+    if (counts.completed === total) return { key: 'completed', label: statusLabel('completed'), color: statusColor.completed }
+    return { key: 'approved', label: statusLabel('approved'), color: statusColor.approved }
+  }
+
+  // The two visit tables below already respect the page's Status/Service/Search filters (via
+  // visibleBookings) — the recurring booking cards need the same treatment, keyed off the derived
+  // display status above rather than recurring_bookings.status, otherwise a card stays visible
+  // (e.g. showing "Approved") while the manager has the Pending tab selected, which looks like the
+  // filter silently isn't working. Time and Source filters are skipped here: both are about a
+  // single visit's date/AI-match state, which doesn't have a sensible one-to-one mapping onto a
+  // recurring booking spanning many visits over a date range.
+  const recurringCardsVisible = activeOrPastRecurring.filter(recurring =>
+    (bookingStatusFilter === 'all' || getRecurringDisplayStatus(recurring).key === bookingStatusFilter)
+    && (bookingServiceTypeFilter === 'all' || recurring.service_type === bookingServiceTypeFilter)
+    && matchesBookingSearch(recurring, bookingSearch)
+  )
   const pageTitle = sourceScope === 'tasks' ? 'Tasks' : 'Bookings for Review'
   const pageSubtitle = sourceScope === 'tasks'
     ? 'Tasks created directly by managers and departments, outside customer bookings. AI recommends the best-matched staff — approve to confirm, or override the pick below.'
     : 'AI recommends the best-matched staff for each booking. Approve to confirm, or override the pick below.'
+
+  // Shared row markup for both the One-time Bookings and Recurring Visits tables (see visibleBookings
+  // split above) — same columns, same actions, just a different source list and page.
+  const renderBookingRow = (booking, { showServiceIcon = true } = {}) => {
+    const scheduleBadge = getScheduleBadge(booking)
+    const ServiceIcon = serviceIcon(booking.service_type)
+    const customerLabel = booking.source === 'manager'
+      ? `${booking.guest_name || 'Walk-in'}`
+      : booking.source === 'department'
+        ? (booking.departments?.name ? `${booking.departments.name} dept.` : 'Department')
+        : (booking.customer?.full_name || booking.customer?.email || 'Customer')
+    return (
+      <tr key={booking.id} className="transition hover:bg-gray-50">
+        <td className="px-3 py-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            {showServiceIcon && (
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-100 text-accent-600">
+                <ServiceIcon className="h-3.5 w-3.5" />
+              </span>
+            )}
+            <span className="truncate font-semibold text-gray-900">{booking.service_type}</span>
+          </div>
+        </td>
+        <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{customerLabel}</span></td>
+        <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{booking.location}</span></td>
+        {sourceScope === 'tasks' && (
+          <td className="px-3 py-2.5">
+            <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${getSourceMeta(booking.source).badge}`}>
+              {getSourceMeta(booking.source).label}
+            </span>
+          </td>
+        )}
+        <td className="px-3 py-2.5">
+          {booking.staff_profiles?.staff_name ? (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarColor(booking.staff_profiles.staff_name)}`}>
+                {booking.staff_profiles.staff_name.split(' ').map(part => part[0]).join('').slice(0, 2)}
+              </span>
+              <span className="truncate text-gray-700">{booking.staff_profiles.staff_name}</span>
+            </div>
+          ) : (
+            <span className="text-gray-400">Unassigned</span>
+          )}
+        </td>
+        <td className={`px-3 py-2.5 truncate ${dateToneColor[scheduleBadge.tone].split(' ').filter(c => c.startsWith('text-')).join(' ') || 'text-gray-600'}`}>
+          {scheduleBadge.label}
+        </td>
+        <td className="px-3 py-2.5">
+          <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
+            {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}
+          </span>
+        </td>
+        <td className="px-3 py-2.5 text-right">
+          <button
+            type="button"
+            onClick={() => setDetailBookingId(booking.id)}
+            aria-label="View booking"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-50"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
+        </td>
+      </tr>
+    )
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -648,30 +845,39 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
             <Filter className="w-4 h-4" /> Filters <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
           </button>
           {bookingFiltersOpen && (
-            <div className="absolute right-0 mt-1 w-52 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
-              <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">When</p>
-              {TIME_FILTERS.map(tab => (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => { setTimeFilter(tab.value); setBookingFiltersOpen(false) }}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 ${timeFilter === tab.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
-                >
-                  {tab.label} <span className="text-xs text-gray-400">{timeFilterCounts[tab.value]}</span>
-                </button>
-              ))}
-              <p className="border-t px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Source</p>
-              {sourceFilters.map(tab => (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => { setSourceFilter(tab.value); setBookingFiltersOpen(false) }}
-                  className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 ${sourceFilter === tab.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
-                >
-                  {tab.label} <span className="text-xs text-gray-400">{sourceFilterCounts[tab.value]}</span>
-                </button>
-              ))}
-              <p className="border-t px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Service Type</p>
+            <div className="absolute right-0 mt-1 w-64 bg-white border rounded-lg shadow-lg z-10 overflow-hidden">
+              {/* When/Source dropped for the customer scope (this page): "When" duplicated the new
+                  Scheduled date range below, and "Source" only ever offered All/AI Recommended here
+                  (customer bookings are always AI-matched), so both were mostly showing "0" counts
+                  and adding noise. Tasks scope still uses both — its Source options (Manager
+                  Created/Department Requests/AI Recommended) are meaningfully different per row. */}
+              {sourceScope === 'tasks' && (
+                <>
+                  <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">When</p>
+                  {TIME_FILTERS.map(tab => (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => { setTimeFilter(tab.value); setBookingFiltersOpen(false) }}
+                      className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 ${timeFilter === tab.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      {tab.label} <span className="text-xs text-gray-400">{timeFilterCounts[tab.value]}</span>
+                    </button>
+                  ))}
+                  <p className="border-t px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Source</p>
+                  {sourceFilters.map(tab => (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => { setSourceFilter(tab.value); setBookingFiltersOpen(false) }}
+                      className={`flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 ${sourceFilter === tab.value ? 'text-accent-600 font-medium' : 'text-gray-700'}`}
+                    >
+                      {tab.label} <span className="text-xs text-gray-400">{sourceFilterCounts[tab.value]}</span>
+                    </button>
+                  ))}
+                </>
+              )}
+              <p className={`${sourceScope === 'tasks' ? 'border-t ' : ''}px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400`}>Service Type</p>
               <button
                 type="button"
                 onClick={() => { setBookingServiceTypeFilter('all'); setBookingFiltersOpen(false) }}
@@ -689,6 +895,24 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
                   {type}
                 </button>
               ))}
+              <div className="border-t px-3 pt-2 pb-3">
+                <p className="pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Scheduled date</p>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">From</label>
+                    <input type="date" value={bookingDateFrom} onChange={e => setBookingDateFrom(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent-500" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-gray-400 mb-1">To</label>
+                    <input type="date" value={bookingDateTo} onChange={e => setBookingDateTo(e.target.value)} className="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent-500" />
+                  </div>
+                </div>
+                {(bookingDateFrom || bookingDateTo) && (
+                  <button type="button" onClick={() => { setBookingDateFrom(''); setBookingDateTo('') }} className="mt-2 text-xs font-medium text-accent-600 hover:underline">
+                    Clear dates
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -773,40 +997,71 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
       )}
 
       {sourceScope === 'customer' && activeOrPastRecurring.length > 0 && (
-        <div className="mb-6 bg-white rounded-xl shadow-sm border overflow-hidden">
-          <div className="p-4 border-b bg-gray-50 flex items-center gap-2">
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
             <Repeat className="w-4 h-4 text-gray-500" />
-            <h2 className="font-semibold text-gray-800">Recurring Bookings ({activeOrPastRecurring.length})</h2>
+            <h2 className="font-semibold text-gray-800">Recurring Bookings ({recurringCardsVisible.length})</h2>
           </div>
-          <div className="divide-y divide-gray-50">
-            {activeOrPastRecurring.map(recurring => (
-              <div key={recurring.id} className="p-4">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-gray-900">{recurring.service_type}</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${recurringStatusColor[recurring.status] || 'bg-gray-100 text-gray-500'}`}>
-                    {recurringStatusLabel[recurring.status] || statusLabel(recurring.status)}
-                  </span>
+          {recurringCardsVisible.length === 0 && (
+            <div className="rounded-xl border border-gray-100 bg-white p-8 text-center text-gray-400">No recurring bookings match these filters.</div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {recurringCardsVisible.map(recurring => {
+              const theme = getRecurringTheme(recurring.service_type)
+              const customerName = recurring.customer?.full_name || recurring.customer?.email || 'Customer'
+              const displayStatus = getRecurringDisplayStatus(recurring)
+              const visitCounts = recurringVisitCounts.get(recurring.id)
+              const hasVisitsAwaitingReview = (visitCounts?.pending || 0) > 0
+              const hasAnyVisit = !!visitCounts && Object.values(visitCounts).reduce((sum, n) => sum + n, 0) > 0
+              const buttonLabel = hasAnyVisit && !hasVisitsAwaitingReview ? 'Reassign Staff' : 'Review Staff'
+              return (
+                <div key={recurring.id} className="flex h-full flex-col rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="truncate font-semibold text-gray-900 min-w-0">{recurring.service_type}</h3>
+                    <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${displayStatus.color}`}>
+                      {displayStatus.label}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-1.5 text-sm text-gray-500">
+                    <p className="flex items-start gap-1.5"><MapPin className="h-4 w-4 shrink-0 mt-0.5" /><span>{recurring.location}</span></p>
+                    <p className="flex items-center gap-1.5"><Phone className="h-4 w-4 shrink-0" />{customerName}{recurring.customer?.phone ? ` · ${recurring.customer.phone}` : ''}</p>
+                  </div>
+
+                  <div className={`mt-3 space-y-0.5 text-sm font-medium ${theme.accent}`}>
+                    <p className="flex items-center gap-1.5"><Calendar className="h-4 w-4 shrink-0" />{recurring.start_date} – {recurring.end_date}</p>
+                    <p className="pl-[22px]">
+                      {formatDaysOfWeek(recurring.days_of_week)}{recurring.scheduled_time ? ` · ${formatTime(recurring.scheduled_time)}` : ''} · {recurring.staff_count || 1} cleaner{(recurring.staff_count || 1) === 1 ? '' : 's'}/visit
+                    </p>
+                  </div>
+
+                  {recurring.description && (
+                    <p className="mt-3 text-sm text-gray-600"><span className="font-medium text-gray-700">Description:</span> {recurring.description}</p>
+                  )}
+                  {recurring.status === 'rejected' && recurring.rejection_reason && (
+                    <p className="mt-3 text-xs text-red-600">Reason: {recurring.rejection_reason}</p>
+                  )}
+
+                  {recurring.status === 'active' && (
+                    <button
+                      type="button"
+                      onClick={() => handleBuildScheduleForActive(recurring)}
+                      disabled={recurringActionId === recurring.id}
+                      className={`mt-4 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition disabled:opacity-50 ${theme.btn}`}
+                    >
+                      {recurringActionId === recurring.id ? 'Checking...' : buttonLabel} <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
-                <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{recurring.location}</p>
-                <p className="text-xs text-gray-400 mt-2">
-                  {recurring.customer?.full_name || recurring.customer?.email || 'Customer'}{recurring.customer?.phone ? ` · ${recurring.customer.phone}` : ''}
-                </p>
-                <p className="text-sm text-gray-600 mt-2 flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
-                  {recurring.start_date} to {recurring.end_date} · {formatDaysOfWeek(recurring.days_of_week)}{recurring.scheduled_time ? ` · ${formatTime(recurring.scheduled_time)}` : ''} · {recurring.staff_count || 1} cleaner{(recurring.staff_count || 1) === 1 ? '' : 's'}/visit
-                </p>
-                {recurring.description && (
-                  <p className="text-sm text-gray-600 mt-2"><span className="font-medium text-gray-700">Description:</span> {recurring.description}</p>
-                )}
-                {recurring.status === 'rejected' && recurring.rejection_reason && (
-                  <p className="text-xs text-red-600 mt-2">Reason: {recurring.rejection_reason}</p>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
 
+      {sourceScope === 'customer' && recurringVisible.length > 0 && (
+        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">One-time Bookings</h2>
+      )}
       <div>
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
           <div className="overflow-x-auto">
@@ -834,78 +1089,16 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {pageBookings.map(booking => {
-                  const scheduleBadge = getScheduleBadge(booking)
-                  const ServiceIcon = serviceIcon(booking.service_type)
-                  const customerLabel = booking.source === 'manager'
-                    ? `${booking.guest_name || 'Walk-in'}`
-                    : booking.source === 'department'
-                      ? (booking.departments?.name ? `${booking.departments.name} dept.` : 'Department')
-                      : (booking.customer?.full_name || booking.customer?.email || 'Customer')
-                  return (
-                    <tr
-                      key={booking.id}
-                      className="transition hover:bg-gray-50"
-                    >
-                      <td className="px-3 py-2.5">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent-100 text-accent-600">
-                            <ServiceIcon className="h-3.5 w-3.5" />
-                          </span>
-                          <span className="truncate font-semibold text-gray-900">{booking.service_type}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{customerLabel}</span></td>
-                      <td className="px-3 py-2.5 text-gray-600"><span className="block truncate">{booking.location}</span></td>
-                      {sourceScope === 'tasks' && (
-                        <td className="px-3 py-2.5">
-                          <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${getSourceMeta(booking.source).badge}`}>
-                            {getSourceMeta(booking.source).label}
-                          </span>
-                        </td>
-                      )}
-                      <td className="px-3 py-2.5">
-                        {booking.staff_profiles?.staff_name ? (
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${avatarColor(booking.staff_profiles.staff_name)}`}>
-                              {booking.staff_profiles.staff_name.split(' ').map(part => part[0]).join('').slice(0, 2)}
-                            </span>
-                            <span className="truncate text-gray-700">{booking.staff_profiles.staff_name}</span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">Unassigned</span>
-                        )}
-                      </td>
-                      <td className={`px-3 py-2.5 truncate ${dateToneColor[scheduleBadge.tone].split(' ').filter(c => c.startsWith('text-')).join(' ') || 'text-gray-600'}`}>
-                        {scheduleBadge.label}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <span className={`inline-flex text-xs px-2 py-1 rounded-full font-medium ${statusColor[booking.status] || 'bg-gray-100 text-gray-600'}`}>
-                          {assigningBookingId === booking.id ? 'Assigning...' : statusLabel(booking.status)}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setDetailBookingId(booking.id)}
-                          aria-label="View booking"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition hover:bg-gray-50"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {pageBookings.map(booking => renderBookingRow(booking))}
               </tbody>
             </table>
           </div>
-          {visibleBookings.length === 0 && (
+          {oneTimeVisible.length === 0 && (
             <div className="p-8 text-center text-gray-400">
               {bookings.length === 0 ? 'No bookings found.' : 'No bookings match these filters.'}
             </div>
           )}
-          {visibleBookings.length > 0 && (
+          {oneTimeVisible.length > 0 && (
             <div className="flex items-center justify-between border-t px-4 py-3">
               <span className="text-xs text-gray-500">Page {safePage} of {totalPages}</span>
               <div className="flex gap-2">
@@ -931,6 +1124,62 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
         </div>
       </div>
 
+      {sourceScope === 'customer' && recurringVisible.length > 0 && (
+        <div className="mt-6">
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Recurring Visits</h2>
+          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[13%]" />
+                  <col className="w-[11%]" />
+                  <col className="w-[10%]" />
+                </colgroup>
+                <thead>
+                  <tr className="border-b bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <th className="px-3 py-2.5">Service</th>
+                    <th className="px-3 py-2.5">Customer</th>
+                    <th className="px-3 py-2.5">Location</th>
+                    <th className="px-3 py-2.5">Assignee</th>
+                    <th className="px-3 py-2.5">Date</th>
+                    <th className="px-3 py-2.5">Status</th>
+                    <th className="px-3 py-2.5"><span className="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {recurringPageBookings.map(booking => renderBookingRow(booking, { showServiceIcon: false }))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <span className="text-xs text-gray-500">Page {recurringSafePage} of {recurringTotalPages}</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRecurringVisitsPage(p => Math.max(1, p - 1))}
+                  disabled={recurringSafePage <= 1}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecurringVisitsPage(p => Math.min(recurringTotalPages, p + 1))}
+                  disabled={recurringSafePage >= recurringTotalPages}
+                  className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {detailBookingId && (() => {
         const booking = bookings.find(b => b.id === detailBookingId)
         if (!booking) return null
@@ -939,7 +1188,7 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
         return (
           <>
             <div className="fixed inset-0 z-40 bg-gray-900/40" onClick={closeDrawer} />
-            <div className="fixed right-0 top-0 bottom-0 z-50 flex w-full max-w-[420px] flex-col bg-white shadow-lg">
+            <div className="fixed right-0 top-0 bottom-0 z-[60] flex w-full max-w-[420px] flex-col bg-white shadow-lg">
               <div className="flex items-center justify-between border-b p-5">
                 <h4 className="font-semibold text-gray-900">{sourceScope === 'tasks' ? 'Task detail' : 'Booking detail'}</h4>
                 <button type="button" onClick={closeDrawer} aria-label="Close" className="text-gray-400 hover:text-gray-600">
@@ -1115,6 +1364,82 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
                   </button>
                 </div>
               )}
+            </div>
+          </>
+        )
+      })()}
+
+      {recurringProposal && (() => {
+        const needsApprovalCount = recurringProposal.rows.filter(row => !row.already_assigned && row.recommended_staff_id).length
+        const unmatchedCount = recurringProposal.rows.filter(row => !row.already_assigned && !row.recommended_staff_id).length
+        const alreadyScheduledCount = recurringProposal.rows.filter(row => row.already_assigned).length
+        const nothingLeftToApprove = needsApprovalCount === 0
+        return (
+          <>
+            <div className="fixed inset-0 z-40 bg-gray-900/40" onClick={() => setRecurringProposal(null)} />
+            <div className="fixed right-0 top-0 bottom-0 z-[60] flex w-full max-w-[420px] flex-col bg-white shadow-lg">
+              <div className="flex items-center justify-between border-b p-5">
+                <div>
+                  <h4 className="font-semibold text-gray-900 flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-purple-600" /> AI Recommendations</h4>
+                  <p className="text-xs text-gray-500 mt-0.5">{recurringProposal.serviceType} · {recurringProposal.rows.length} upcoming visit{recurringProposal.rows.length === 1 ? '' : 's'}</p>
+                </div>
+                <button type="button" onClick={() => setRecurringProposal(null)} aria-label="Close" className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                {recurringProposal.rows.map(row => (
+                  <div key={row.booking_id} className="rounded-lg border border-gray-100 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-gray-800">{new Date(`${row.scheduled_date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{row.scheduled_time ? ` · ${formatTime(row.scheduled_time)}` : ''}</p>
+                      {row.already_assigned && (
+                        <button
+                          type="button"
+                          onClick={() => { setDetailBookingId(row.booking_id); setRecurringProposal(null) }}
+                          className="shrink-0 text-xs font-medium text-accent-600 hover:underline"
+                        >
+                          Reassign
+                        </button>
+                      )}
+                    </div>
+                    {row.recommended_staff_name ? (
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-accent-700">
+                        <UserCheck className="w-3.5 h-3.5 shrink-0" /> {row.recommended_staff_name}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-amber-600">No suitable staff found — needs manual assignment</p>
+                    )}
+                    {row.reason && <p className="mt-0.5 text-xs text-gray-400">{row.reason}</p>}
+                  </div>
+                ))}
+              </div>
+              <div className="border-t p-5 space-y-2">
+                {unmatchedCount > 0 && (
+                  <p className="text-xs text-amber-600">{unmatchedCount} visit{unmatchedCount === 1 ? '' : 's'} need manual assignment in the table below.</p>
+                )}
+                {nothingLeftToApprove && alreadyScheduledCount > 0 && (
+                  <p className="text-xs text-gray-500">All {alreadyScheduledCount} visit{alreadyScheduledCount === 1 ? '' : 's'} already {alreadyScheduledCount === 1 ? 'has' : 'have'} staff assigned. Click &ldquo;Reassign&rdquo; on a visit above to change it.</p>
+                )}
+                <div className="flex gap-2">
+                  {!nothingLeftToApprove && (
+                    <button
+                      type="button"
+                      onClick={handleApproveAllRecommended}
+                      disabled={approvingProposal}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600 disabled:opacity-50"
+                    >
+                      <CheckCircle className="w-4 h-4" /> {approvingProposal ? 'Approving...' : `Approve All (${needsApprovalCount})`}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setRecurringProposal(null)}
+                    className={`rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 ${nothingLeftToApprove ? 'flex-1' : ''}`}
+                  >
+                    {nothingLeftToApprove ? 'Close' : 'Later'}
+                  </button>
+                </div>
+              </div>
             </div>
           </>
         )

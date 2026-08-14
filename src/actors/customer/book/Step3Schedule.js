@@ -49,18 +49,19 @@ export default function Step3Schedule({
   }
 
   const finishTime = form.scheduledTime ? addHoursToTime(form.scheduledTime, form.estimatedHours) : null
-  // The company's service_rates entry is an hourly rate (shown as "$X/hr" in Step 2), so the
-  // estimated total scales with the chosen duration. For a recurring booking that's still just the
-  // per-visit rate — the customer picks a whole period + days of week, which can expand to many
-  // visits, so the running total needs to multiply by how many visits that period/days combination
-  // actually produces (same expansion logic used server-side once the booking is approved).
+  // The company's service_rates entry is an hourly rate per cleaner (shown as "$X/hr" in Step 2),
+  // so the estimated total scales with duration, and — for a recurring booking — with how many
+  // cleaners are needed per visit (each one bills its own hours) and how many visits the chosen
+  // period/days combination actually produces (same expansion logic used server-side once the
+  // booking is approved).
   const hourlyRate = selectedCompany?.price ?? null
   const visitCount = bookingMode === 'recurring'
     ? (form.startDate && form.endDate && form.daysOfWeek.length
       ? expandRecurrenceDates({ start_date: form.startDate, end_date: form.endDate, days_of_week: form.daysOfWeek }).length
       : 0)
     : 1
-  const pricePerVisit = hourlyRate != null ? hourlyRate * Number(form.estimatedHours || 0) : null
+  const staffCount = bookingMode === 'recurring' ? Math.max(1, Number(form.staffCount) || 1) : 1
+  const pricePerVisit = hourlyRate != null ? hourlyRate * Number(form.estimatedHours || 0) * staffCount : null
   const price = pricePerVisit != null && visitCount > 0 ? pricePerVisit * visitCount : null
 
   return (
@@ -222,7 +223,7 @@ export default function Step3Schedule({
             <p className="text-xs text-gray-400">
               {price != null
                 ? bookingMode === 'recurring'
-                  ? `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours × ${visitCount} visits — final price confirmed after site assessment`
+                  ? `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours × ${staffCount} cleaner${staffCount === 1 ? '' : 's'} × ${visitCount} visits — final price confirmed after site assessment`
                   : `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours — final price confirmed after site assessment`
                 : bookingMode === 'recurring' && hourlyRate != null
                   ? 'Choose a period and days of week to see the total'

@@ -24,18 +24,16 @@ function maxIsoDate(a, b) {
   return a > b ? a : b
 }
 
-function minIsoDate(a, b) {
-  return a < b ? a : b
-}
-
 // Called right after a manager approves a recurring booking request (see
-// BookingsReviewPanel.js#handleReviewRecurring) so its first upcoming visits — and their AI staff
-// recommendations — show up immediately in Bookings for Review, instead of only appearing once the
-// daily cron next reaches this business's weekly cutoff (which could be days away). Deliberately
-// only builds today-through-7-days-out (same default window used by the AI Scheduling Agent's
-// propose_weekly_schedule, see app/api/agent/route.js#defaultDateRange), not the whole recurring
-// period — visits still get generated incrementally, one week at a time, matching the existing
-// architecture (see lib/recurringBookings.js#generateWeeklyVisits).
+// BookingsReviewPanel.js#handleReviewRecurring), or on demand via the "Build & Review Staff"
+// button on an already-active one, so its visits — and their AI staff recommendations — show up
+// immediately in a review drawer the manager can bulk-approve from, instead of only trickling in
+// as the daily cron reaches this business's weekly cutoff each week. Covers the recurring
+// booking's *entire remaining period* (clamped to today if it already started), not just the next
+// week — the manager approved the whole period in one shot, so reviewing it should show the whole
+// thing in one shot too. generateWeeklyVisits (lib/recurringBookings.js) is idempotent and caps at
+// MAX_GENERATED_DATES, so calling this repeatedly (e.g. re-clicking "Build & Review Staff" later)
+// is safe and just tops up whatever's missing.
 export async function POST(request) {
   try {
     const { recurring_booking_id } = await request.json()
@@ -49,7 +47,7 @@ export async function POST(request) {
     }
 
     const recurringRows = await fetchSupabaseRows('recurring_bookings', [
-      ['select', 'id,host_admin_id,status,start_date,end_date'],
+      ['select', 'id,host_admin_id,status,service_type,start_date,end_date'],
       ['id', `eq.${recurring_booking_id}`],
       ['limit', '1'],
     ])
@@ -62,17 +60,25 @@ export async function POST(request) {
     }
 
     const today = new Date().toISOString().slice(0, 10)
-    const weekOut = new Date()
-    weekOut.setDate(weekOut.getDate() + 7)
     const start_date = maxIsoDate(today, recurring.start_date)
-    const end_date = minIsoDate(weekOut.toISOString().slice(0, 10), recurring.end_date)
+    const end_date = recurring.end_date
 
     if (start_date > end_date) {
-      return NextResponse.json({ generated: false, message: 'This recurring booking does not have any visits in the next 7 days yet.' })
+      return NextResponse.json({ generated: false, message: 'This recurring booking does not have any visits scheduled yet.' })
     }
 
-    const proposal = await buildScheduleProposal(managerProfile.host_admin_id, { start_date, end_date })
-    return NextResponse.json({ generated: true, proposal, range: { start_date, end_date } })
+    // buildScheduleProposal returns every pending/approved booking for the business in this date
+    // range, not just this recurring booking's — narrow it down before handing it back, since the
+    // manager's review drawer (and its "Approve All") must only ever touch visits belonging to the
+    // recurring booking they just approved.
+    const fullProposal = await buildScheduleProposal(managerProfile.host_admin_id, { start_date, end_date })
+    const proposal = fullProposal.filter((row) => row.recurring_booking_id === recurring_booking_id)
+    return NextResponse.json({
+      generated: true,
+      proposal,
+      range: { start_date, end_date },
+      service_type: recurring.service_type,
+    })
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
