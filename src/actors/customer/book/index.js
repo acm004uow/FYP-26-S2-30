@@ -190,7 +190,14 @@ export default function CustomerBooking() {
 
     setSubmitting(true)
     setError('')
-    const { data: createdBooking, error: insertError } = await supabase.from('bookings').insert({
+
+    // A one-time booking needing multiple cleaners is created as that many separate `bookings`
+    // rows — same one-row-per-staff-slot model already used for recurring visits (see
+    // generateWeeklyVisits in lib/recurringBookings.js) — rather than one row with a staff_count
+    // column, since the rest of the app (recommendation, assignment, manager review) already
+    // assumes exactly one assigned_staff_id per booking row.
+    const cleanersNeeded = Math.max(1, Number(form.staffCount) || 1)
+    const baseRow = {
       customer_id: user?.id,
       host_admin_id: selectedCompany.id,
       service_type: form.serviceType,
@@ -205,10 +212,15 @@ export default function CustomerBooking() {
       urgency: form.priority,
       // selectedCompany.price is the company's hourly rate for this service; the stored booking
       // price is the computed total (rate x estimated hours), matching what Step 3's summary shows.
+      // It's per row/cleaner, not multiplied by cleanersNeeded, so N rows sum to the total shown there.
       price: selectedCompany.price != null ? selectedCompany.price * Number(form.estimatedHours || 0) : null,
       requested_staff_name: requestedStaff?.staff_name || null,
       status: 'pending',
-    }).select('id').single()
+    }
+
+    const { data: createdBookings, error: insertError } = await supabase.from('bookings')
+      .insert(Array.from({ length: cleanersNeeded }, () => ({ ...baseRow })))
+      .select('id')
 
     if (insertError) {
       setError(insertError.message)
@@ -218,7 +230,8 @@ export default function CustomerBooking() {
 
     await supabase.from('audit_logs').insert({ user_id: user?.id, action: 'create_booking', details: form.serviceType })
 
-    if (createdBooking?.id) {
+    let topMatch = null
+    if (createdBookings?.length) {
       const [{ data: staffRows }, { data: systemParams }] = await Promise.all([
         supabase
           .from('staff_profiles')
@@ -229,25 +242,32 @@ export default function CustomerBooking() {
         supabase.from('system_parameters').select('*').eq('id', 1).single(),
       ])
 
-      const recommendations = generateRecommendations(
-        staffRows || [],
-        {
-          location: form.composedLocation,
-          latitude: coordinates?.latitude ?? null,
-          longitude: coordinates?.longitude ?? null,
-          estimated_hours: form.estimatedHours,
-          requested_text: `${requestedStaff?.staff_name || ''} ${form.description || ''} ${form.additionalRequirements || ''}`,
-        },
-        systemParams || {}
-      )
-      const topMatch = recommendations[0]
-
-      if (topMatch) {
+      // Excludes whoever the previous slot already picked, so N cleaners for the same date get N
+      // distinct people instead of the same top match repeated — same pattern as the per-day slot
+      // dedup in lib/scheduleProposal.js#buildScheduleProposal.
+      const usedStaffIds = new Set()
+      for (const created of createdBookings) {
+        const recommendations = generateRecommendations(
+          staffRows || [],
+          {
+            location: form.composedLocation,
+            latitude: coordinates?.latitude ?? null,
+            longitude: coordinates?.longitude ?? null,
+            estimated_hours: form.estimatedHours,
+            requested_text: `${requestedStaff?.staff_name || ''} ${form.description || ''} ${form.additionalRequirements || ''}`,
+          },
+          systemParams || {},
+          usedStaffIds
+        )
+        const match = recommendations[0]
+        if (!match) continue
+        if (!topMatch) topMatch = match
+        usedStaffIds.add(match.staff_id)
         await supabase.from('bookings').update({
-          assigned_staff_id: topMatch.staff_id,
-          recommendation_reason: topMatch.reason,
+          assigned_staff_id: match.staff_id,
+          recommendation_reason: match.reason,
           updated_at: new Date().toISOString(),
-        }).eq('id', createdBooking.id)
+        }).eq('id', created.id)
       }
 
       const { data: customerProfile } = await supabase.from('profiles').select('full_name,email').eq('id', user?.id).single()
@@ -258,7 +278,7 @@ export default function CustomerBooking() {
       const managerNotifications = (managers || []).map(manager => ({
         user_id: manager.id,
         title: 'New booking request',
-        message: `${customerName} booked ${form.serviceType} at ${form.composedLocation}.${requestedStaff ? ` Customer requested ${requestedStaff.staff_name}.` : ''}${topMatch ? ` AI recommends ${topMatch.staff_name} for this booking.` : ''}`,
+        message: `${customerName} booked ${form.serviceType} at ${form.composedLocation}${cleanersNeeded > 1 ? ` (${cleanersNeeded} cleaners)` : ''}.${requestedStaff ? ` Customer requested ${requestedStaff.staff_name}.` : ''}${topMatch ? ` AI recommends ${topMatch.staff_name} for this booking.` : ''}`,
       }))
       if (managerNotifications.length) await supabase.from('notifications').insert(managerNotifications)
     }

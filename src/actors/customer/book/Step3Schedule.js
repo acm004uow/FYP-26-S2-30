@@ -50,17 +50,17 @@ export default function Step3Schedule({
 
   const finishTime = form.scheduledTime ? addHoursToTime(form.scheduledTime, form.estimatedHours) : null
   // The company's service_rates entry is an hourly rate per cleaner (shown as "$X/hr" in Step 2),
-  // so the estimated total scales with duration, and — for a recurring booking — with how many
-  // cleaners are needed per visit (each one bills its own hours) and how many visits the chosen
-  // period/days combination actually produces (same expansion logic used server-side once the
-  // booking is approved).
+  // so the estimated total scales with duration, with how many cleaners are needed (each one bills
+  // its own hours), and — for a recurring booking — with how many visits the chosen period/days
+  // combination actually produces (same expansion logic used server-side once the booking is
+  // approved).
   const hourlyRate = selectedCompany?.price ?? null
   const visitCount = bookingMode === 'recurring'
     ? (form.startDate && form.endDate && form.daysOfWeek.length
       ? expandRecurrenceDates({ start_date: form.startDate, end_date: form.endDate, days_of_week: form.daysOfWeek }).length
       : 0)
     : 1
-  const staffCount = bookingMode === 'recurring' ? Math.max(1, Number(form.staffCount) || 1) : 1
+  const staffCount = Math.max(1, Number(form.staffCount) || 1)
   const pricePerVisit = hourlyRate != null ? hourlyRate * Number(form.estimatedHours || 0) * staffCount : null
   const price = pricePerVisit != null && visitCount > 0 ? pricePerVisit * visitCount : null
 
@@ -134,19 +134,19 @@ export default function Step3Schedule({
                 </div>
               </div>
               <p className="text-xs text-accent-600">Recurring bookings can only start from {minDate} onward.</p>
-
-              <div className="pt-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Users className="w-4 h-4" /> Cleaners needed per visit *</label>
-                <input
-                  type="number" min="1" max="20" step="1"
-                  value={form.staffCount}
-                  onChange={e => patchForm({ staffCount: e.target.value })}
-                  className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent-500"
-                />
-                <p className="mt-1 text-xs text-gray-400">How many cleaners should show up per visit — independent of how long each visit takes. E.g. a special event might need 1 hour but several cleaners at once.</p>
-              </div>
             </div>
           )}
+
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Users className="w-4 h-4" /> Cleaners needed{bookingMode === 'recurring' ? ' per visit' : ''} *</label>
+            <input
+              type="number" min="1" max="20" step="1"
+              value={form.staffCount}
+              onChange={e => patchForm({ staffCount: e.target.value })}
+              className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent-500"
+            />
+            <p className="mt-1 text-xs text-gray-400">How many cleaners should show up — independent of how long the job takes. E.g. a special event might need 1 hour but several cleaners at once.</p>
+          </div>
 
           <div className="mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Time slot *</label>
@@ -212,7 +212,7 @@ export default function Step3Schedule({
           <Row label="Address" value={form.composedLocation || 'Enter a postal code'} />
           <Row label="When" value={bookingMode === 'recurring' ? (form.startDate ? `${form.startDate} - ${form.endDate || '…'}` : 'Choose a period') : (form.scheduledDate || 'Choose a date')} />
           <Row label="Duration" value={`${form.estimatedHours} hours${finishTime ? ` (until ${finishTime})` : ''}`} />
-          {bookingMode === 'recurring' && <Row label="Cleaners per visit" value={form.staffCount || 1} />}
+          <Row label={bookingMode === 'recurring' ? 'Cleaners per visit' : 'Cleaners needed'} value={staffCount} />
           {bookingMode === 'recurring' && <Row label="Total visits" value={visitCount > 0 ? visitCount : '—'} />}
           <Row label="Priority" value={PRIORITY_OPTIONS.find(p => p.value === form.priority)?.label} />
         </dl>
@@ -224,7 +224,7 @@ export default function Step3Schedule({
               {price != null
                 ? bookingMode === 'recurring'
                   ? `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours × ${staffCount} cleaner${staffCount === 1 ? '' : 's'} × ${visitCount} visits — final price confirmed after site assessment`
-                  : `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours — final price confirmed after site assessment`
+                  : `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours × ${staffCount} cleaner${staffCount === 1 ? '' : 's'} — final price confirmed after site assessment`
                 : bookingMode === 'recurring' && hourlyRate != null
                   ? 'Choose a period and days of week to see the total'
                   : 'Priced after site assessment'}

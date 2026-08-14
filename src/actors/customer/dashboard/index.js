@@ -3,7 +3,7 @@ import TimeInput from '../../../components/TimeInput'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle, ArrowUpDown, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft,
-  ChevronRight, Circle, Edit3, Filter, HelpCircle, ImagePlus, Lightbulb, Repeat, Search,
+  ChevronRight, Circle, Edit3, Filter, HelpCircle, ImagePlus, Lightbulb, MapPin, Repeat, Search,
   Trash2, X, XCircle,
 } from 'lucide-react'
 import { useRouter } from 'next/router'
@@ -52,6 +52,21 @@ const RECURRING_STATUS_STYLES = {
 }
 const RECURRING_STATUS_LABELS = { pending: 'Pending review', active: 'Active', rejected: 'Declined', cancelled: 'Cancelled' }
 
+// Same keyword-matched theme as the manager's Recurring Bookings cards
+// (src/actors/manager/bookings/BookingsReviewPanel.js#RECURRING_CARD_THEMES) — service_type is
+// free text from this same booking form, so the same keywords apply.
+const RECURRING_CARD_ACCENTS = [
+  { keywords: ['office'], accent: 'text-orange-600' },
+  { keywords: ['deep'], accent: 'text-blue-500' },
+  { keywords: ['move out', 'move-out', 'moveout'], accent: 'text-purple-600' },
+  { keywords: ['carpet'], accent: 'text-teal-600' },
+  { keywords: ['move in', 'move-in', 'movein', 'home'], accent: 'text-green-600' },
+]
+function getRecurringAccent(serviceType) {
+  const lower = String(serviceType || '').toLowerCase()
+  return (RECURRING_CARD_ACCENTS.find(theme => theme.keywords.some(keyword => lower.includes(keyword))) || { accent: 'text-gray-600' }).accent
+}
+
 export default function CustomerDashboard() {
   const router = useRouter()
   const { user } = useAuthUser()
@@ -70,6 +85,7 @@ export default function CustomerDashboard() {
   const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [showSortMenu, setShowSortMenu] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
+  const [recurringVisitsPage, setRecurringVisitsPage] = useState(1)
   const [feedbackDrafts, setFeedbackDrafts] = useState({})
   const [savingFeedbackId, setSavingFeedbackId] = useState(null)
   const filterRef = useRef(null)
@@ -105,13 +121,14 @@ export default function CustomerDashboard() {
     requestedStaffName: booking.requested_staff_name || null,
     price: booking.price,
     feedback: booking.booking_feedback?.[0] || null,
+    recurringBookingId: booking.recurring_booking_id || null,
   })
 
   const loadBookings = async () => {
     if (!user) return
     const { data } = await supabase
       .from('bookings')
-      .select('id,reference_no,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,updated_at,checked_in_at,checked_out_at,cancelled_at,rejection_reason,host_admin_id,assigned_staff_id,requested_staff_name,price,staff_profiles(staff_name,phone),company:profiles!bookings_host_admin_id_fkey(business_name,phone),booking_feedback(id,rating,comment,image_url)')
+      .select('id,reference_no,service_type,description,location,scheduled_date,scheduled_time,estimated_hours,notes,status,created_at,updated_at,checked_in_at,checked_out_at,cancelled_at,rejection_reason,host_admin_id,assigned_staff_id,requested_staff_name,price,recurring_booking_id,staff_profiles(staff_name,phone),company:profiles!bookings_host_admin_id_fkey(business_name,phone),booking_feedback(id,rating,comment,image_url)')
       .eq('customer_id', user.id)
       .order('created_at', { ascending: false })
 
@@ -202,6 +219,7 @@ export default function CustomerDashboard() {
 
   useEffect(() => {
     setCurrentPage(1)
+    setRecurringVisitsPage(1)
   }, [activePill, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
 
   const LATE_CANCEL_WINDOW_HOURS = 24
@@ -380,15 +398,52 @@ export default function CustomerDashboard() {
     return [...list].sort((a, b) => sortOrder === 'newest' ? b.createdAtMs - a.createdAtMs : a.createdAtMs - b.createdAtMs)
   }, [bookings, activePill, search, filterServices, filterDateFrom, filterDateTo, sortOrder])
 
-  const totalPages = Math.max(1, Math.ceil(visibleBookings.length / PAGE_SIZE))
-  const pageBookings = visibleBookings.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  // Recurring-generated visits are split out of the main table, same reasoning and pattern as the
+  // manager's Bookings for Review page (src/actors/manager/bookings/BookingsReviewPanel.js) — they
+  // belong to a recurring series shown in its own card above, and mixing them with one-time
+  // bookings in a single flat table made it hard to tell which was which.
+  const oneTimeVisible = visibleBookings.filter(b => !b.recurringBookingId)
+  const recurringVisitsVisible = visibleBookings.filter(b => b.recurringBookingId)
 
-  const selectedBooking = bookings.find(b => b.id === selectedBookingId) || pageBookings[0] || null
+  const totalPages = Math.max(1, Math.ceil(oneTimeVisible.length / PAGE_SIZE))
+  const pageBookings = oneTimeVisible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  const recurringVisitsTotalPages = Math.max(1, Math.ceil(recurringVisitsVisible.length / PAGE_SIZE))
+  const recurringVisitsPageBookings = recurringVisitsVisible.slice((recurringVisitsPage - 1) * PAGE_SIZE, recurringVisitsPage * PAGE_SIZE)
+
+  const selectedBooking = bookings.find(b => b.id === selectedBookingId) || pageBookings[0] || recurringVisitsPageBookings[0] || null
 
   const activeFilterCount = filterServices.length + (filterDateFrom ? 1 : 0) + (filterDateTo ? 1 : 0)
 
   const toggleServiceFilter = (serviceType) => {
     setFilterServices(prev => prev.includes(serviceType) ? prev.filter(s => s !== serviceType) : [...prev, serviceType])
+  }
+
+  // Shared row markup for both the One-time Bookings and Recurring Visits tables below.
+  const renderBookingRow = (booking) => {
+    const rating = companyRatings.get(booking.hostAdminId)
+    const isConfirmedAssignment = ['approved', 'in_progress', 'completed'].includes(booking.rawStatus)
+    return (
+      <tr
+        key={booking.id}
+        onClick={() => setSelectedBookingId(booking.id)}
+        className={`border-b last:border-b-0 cursor-pointer hover:bg-gray-50 ${selectedBooking?.id === booking.id ? 'bg-accent-100/40' : ''}`}
+      >
+        <td className="px-4 py-3 font-mono text-xs text-gray-500">{booking.reference}</td>
+        <td className="px-4 py-3 font-medium text-gray-800">{booking.serviceType}</td>
+        <td className="px-4 py-3 text-gray-600">
+          {booking.companyName}
+          {rating && <span className="ml-1.5 text-xs text-gray-400">· {rating.average.toFixed(1)}/5</span>}
+        </td>
+        <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+          {booking.scheduledDate ? `${booking.scheduledDate.slice(5).replace('-', ' ').split(' ').reverse().join(' ')}${booking.scheduledTime ? `, ${booking.scheduledTime}` : ''}` : '—'}
+        </td>
+        <td className="px-4 py-3 text-gray-600">{isConfirmedAssignment ? booking.assignedStaff : 'Awaiting assignment'}</td>
+        <td className="px-4 py-3">
+          <span className={`text-xs px-2 py-1 rounded-full ${STATUS_STYLES[booking.status] || 'bg-gray-100 text-gray-500'}`}>{booking.status}</span>
+        </td>
+      </tr>
+    )
   }
 
   return (
@@ -406,40 +461,47 @@ export default function CustomerDashboard() {
         )}
 
         {recurringBookings.length > 0 && (
-          <div className="mb-6 bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden">
-            <div className="p-4 border-b bg-purple-50 flex items-center gap-2">
-              <Repeat className="w-4 h-4 text-purple-600" />
-              <h2 className="font-semibold text-purple-900">My Recurring Bookings ({recurringBookings.length})</h2>
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Repeat className="w-4 h-4 text-gray-500" />
+              <h2 className="font-semibold text-gray-800">My Recurring Bookings ({recurringBookings.length})</h2>
             </div>
-            <div className="divide-y divide-gray-50">
-              {recurringBookings.map(recurring => (
-                <div key={recurring.id} className="p-4 flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-gray-900">{recurring.service_type}</h3>
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${RECURRING_STATUS_STYLES[recurring.status] || 'bg-gray-100 text-gray-500'}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+              {recurringBookings.map(recurring => {
+                const accent = getRecurringAccent(recurring.service_type)
+                return (
+                  <div key={recurring.id} className="flex h-full flex-col rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="truncate font-semibold text-gray-900 min-w-0">{recurring.service_type}</h3>
+                      <span className={`shrink-0 text-xs px-2 py-1 rounded-full font-medium ${RECURRING_STATUS_STYLES[recurring.status] || 'bg-gray-100 text-gray-500'}`}>
                         {RECURRING_STATUS_LABELS[recurring.status] || titleCase(recurring.status)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">{recurring.company?.business_name || 'Unknown company'} &middot; {recurring.location}</p>
-                    <p className="text-sm text-gray-600 mt-2 flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      {recurring.start_date} to {recurring.end_date} &middot; {formatDaysOfWeek(recurring.days_of_week)}{recurring.scheduled_time ? ` · ${recurring.scheduled_time}` : ''}
+
+                    <p className="mt-3 flex items-start gap-1.5 text-sm text-gray-500">
+                      <MapPin className="h-4 w-4 shrink-0 mt-0.5" /><span>{recurring.company?.business_name || 'Unknown company'} · {recurring.location}</span>
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">{recurring.staff_count || 1} cleaner{(recurring.staff_count || 1) === 1 ? '' : 's'} per visit &middot; {recurring.estimated_hours} hours</p>
-                    {recurring.description && <p className="text-sm text-gray-600 mt-2">{recurring.description}</p>}
+
+                    <div className={`mt-3 space-y-0.5 text-sm font-medium ${accent}`}>
+                      <p className="flex items-center gap-1.5"><Calendar className="h-4 w-4 shrink-0" />{recurring.start_date} – {recurring.end_date}</p>
+                      <p className="pl-[22px]">
+                        {formatDaysOfWeek(recurring.days_of_week)}{recurring.scheduled_time ? ` · ${recurring.scheduled_time}` : ''} · {recurring.staff_count || 1} cleaner{(recurring.staff_count || 1) === 1 ? '' : 's'}/visit · {recurring.estimated_hours} hours
+                      </p>
+                    </div>
+
+                    {recurring.description && <p className="mt-3 text-sm text-gray-600">{recurring.description}</p>}
                     {recurring.status === 'rejected' && recurring.rejection_reason && (
-                      <p className="text-xs text-red-600 mt-2">Reason: {recurring.rejection_reason}</p>
+                      <p className="mt-3 text-xs text-red-600">Reason: {recurring.rejection_reason}</p>
                     )}
                     {recurring.status === 'pending' && (
-                      <p className="text-xs text-amber-600 mt-2">A manager will review this request. Individual visits will appear below once approved and scheduled.</p>
+                      <p className="mt-3 text-xs text-amber-600">A manager will review this request. Individual visits will appear below once approved and scheduled.</p>
                     )}
                     {recurring.status === 'active' && (
-                      <p className="text-xs text-green-600 mt-2">Approved — visits are added to the schedule week by week and will appear in the table below.</p>
+                      <p className="mt-3 text-xs text-green-600">Approved — visits are added to the schedule week by week and will appear below.</p>
                     )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         )}
@@ -528,6 +590,9 @@ export default function CustomerDashboard() {
           </div>
         </div>
 
+        {recurringVisitsVisible.length > 0 && (
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">One-time Bookings</h2>
+        )}
         <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-6">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -545,36 +610,12 @@ export default function CustomerDashboard() {
                 {pageBookings.length === 0 && (
                   <tr><td colSpan={6} className="p-8 text-center text-gray-400">No bookings found.</td></tr>
                 )}
-                {pageBookings.map(booking => {
-                  const rating = companyRatings.get(booking.hostAdminId)
-                  const isConfirmedAssignment = ['approved', 'in_progress', 'completed'].includes(booking.rawStatus)
-                  return (
-                    <tr
-                      key={booking.id}
-                      onClick={() => setSelectedBookingId(booking.id)}
-                      className={`border-b last:border-b-0 cursor-pointer hover:bg-gray-50 ${selectedBooking?.id === booking.id ? 'bg-accent-100/40' : ''}`}
-                    >
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{booking.reference}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{booking.serviceType}</td>
-                      <td className="px-4 py-3 text-gray-600">
-                        {booking.companyName}
-                        {rating && <span className="ml-1.5 text-xs text-gray-400">· {rating.average.toFixed(1)}/5</span>}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
-                        {booking.scheduledDate ? `${booking.scheduledDate.slice(5).replace('-', ' ').split(' ').reverse().join(' ')}${booking.scheduledTime ? `, ${booking.scheduledTime}` : ''}` : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600">{isConfirmedAssignment ? booking.assignedStaff : 'Awaiting assignment'}</td>
-                      <td className="px-4 py-3">
-                        <span className={`text-xs px-2 py-1 rounded-full ${STATUS_STYLES[booking.status] || 'bg-gray-100 text-gray-500'}`}>{booking.status}</span>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {pageBookings.map(booking => renderBookingRow(booking))}
               </tbody>
             </table>
           </div>
 
-          {visibleBookings.length > PAGE_SIZE && (
+          {oneTimeVisible.length > PAGE_SIZE && (
             <div className="flex items-center justify-center gap-1 p-4 border-t">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -600,6 +641,57 @@ export default function CustomerDashboard() {
             </div>
           )}
         </div>
+
+        {recurringVisitsVisible.length > 0 && (
+          <>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Recurring Visits</h2>
+            <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-6">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b text-left text-xs font-semibold uppercase text-gray-500">
+                      <th className="px-4 py-3">Reference</th>
+                      <th className="px-4 py-3">Service</th>
+                      <th className="px-4 py-3">Company</th>
+                      <th className="px-4 py-3">Scheduled</th>
+                      <th className="px-4 py-3">Cleaner</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recurringVisitsPageBookings.map(booking => renderBookingRow(booking))}
+                  </tbody>
+                </table>
+              </div>
+
+              {recurringVisitsVisible.length > PAGE_SIZE && (
+                <div className="flex items-center justify-center gap-1 p-4 border-t">
+                  <button
+                    onClick={() => setRecurringVisitsPage(p => Math.max(1, p - 1))}
+                    disabled={recurringVisitsPage === 1}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-40 hover:bg-gray-50"
+                    aria-label="Previous page"
+                  ><ChevronLeft className="w-4 h-4" /></button>
+                  {Array.from({ length: recurringVisitsTotalPages }, (_, i) => i + 1).map(pageNum => (
+                    <button
+                      key={pageNum}
+                      onClick={() => setRecurringVisitsPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium ${recurringVisitsPage === pageNum ? 'bg-accent text-white' : 'text-gray-600 hover:bg-gray-50 border border-gray-200'}`}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setRecurringVisitsPage(p => Math.min(recurringVisitsTotalPages, p + 1))}
+                    disabled={recurringVisitsPage === recurringVisitsTotalPages}
+                    className="p-1.5 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-40 hover:bg-gray-50"
+                    aria-label="Next page"
+                  ><ChevronRight className="w-4 h-4" /></button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
 
         {selectedBooking && (
           <BookingDetailPanel
