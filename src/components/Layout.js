@@ -117,7 +117,7 @@ export default function Layout({ children, role = 'manager', sidebarExtra = null
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
-  const [businessName, setBusinessName] = useState('Smart Task Allocation')
+  const [businessName, setBusinessName] = useState('Swee')
   const [profileInfo, setProfileInfo] = useState(null)
   const [userId, setUserId] = useState(null)
   const [editingProfile, setEditingProfile] = useState(false)

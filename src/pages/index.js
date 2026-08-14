@@ -355,8 +355,8 @@ export default function MarketingHome() {
                 <LayoutDashboard className="h-5 w-5" />
               </span>
               <span className="min-w-0">
-                <span className="block text-sm font-bold leading-tight">Smart Task Allocation</span>
-                <span className="block text-[11px] font-medium text-slate-500">For agile SME operations</span>
+                <span className="block text-sm font-bold leading-tight">Swee</span>
+                
               </span>
             </Link>
 

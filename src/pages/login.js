@@ -282,7 +282,7 @@ export default function LoginPage() {
           <div className="w-9 h-9 bg-accent rounded-md flex items-center justify-center mx-auto mb-4">
             <LayoutDashboard className="w-5 h-5 text-white" />
           </div>
-          <h1 className="text-lg font-bold text-white">Smart Task Allocation</h1>
+          <h1 className="text-lg font-bold text-white">Swee</h1>
           <p className="text-gray-300 text-sm mt-1">Sign in to your account</p>
         </div>
 

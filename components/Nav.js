@@ -91,7 +91,7 @@ export default function Nav({ role = "manager" }) {
       <nav className={`nav nav-${role}`}>
         <Link className="brand" href={`/${role === "manager" ? "manager" : role === "system_admin" ? "admin" : role === "department_staff" ? "department" : "staff"}/dashboard`}>
           <span className="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
-          <span><strong>Smart Task Allocation</strong><small>{roleTitles[role] || "User"}</small></span>
+          <span><strong>Swee</strong><small>{roleTitles[role] || "User"}</small></span>
         </Link>
         <div className="nav-links">
           {(links[role] || []).map(([label, href, icon]) => (
