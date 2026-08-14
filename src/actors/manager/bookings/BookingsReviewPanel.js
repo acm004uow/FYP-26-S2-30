@@ -74,6 +74,14 @@ const statusColor = {
   rejected: 'bg-red-100 text-red-700',
 }
 
+const recurringStatusColor = {
+  pending: 'bg-yellow-100 text-yellow-700',
+  active: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+  cancelled: 'bg-gray-100 text-gray-500',
+}
+const recurringStatusLabel = { pending: 'Pending', active: 'Active', rejected: 'Rejected', cancelled: 'Cancelled' }
+
 // Tasks never loads pending/rejected rows (see loadBookings) — a manager/department booking only
 // becomes a task once approved — so those tabs are dropped there rather than always reading empty.
 function getStatusFilters(scope) {
@@ -171,9 +179,8 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
     }
     const { data } = await supabase
       .from('recurring_bookings')
-      .select('id,customer_id,service_type,location,description,days_of_week,scheduled_time,estimated_hours,start_date,end_date,status,created_at,customer:profiles!recurring_bookings_customer_id_fkey(full_name,email,phone)')
+      .select('id,customer_id,service_type,location,description,days_of_week,scheduled_time,estimated_hours,staff_count,start_date,end_date,status,rejection_reason,created_at,customer:profiles!recurring_bookings_customer_id_fkey(full_name,email,phone)')
       .eq('host_admin_id', hostAdminIdParam)
-      .eq('status', 'pending')
       .order('created_at', { ascending: false })
     setRecurringBookings(data || [])
   }
@@ -418,15 +425,36 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
       })
     }
 
+    // Build this week's visits (and their AI recommendations) immediately on approval, instead of
+    // leaving the manager to wait for the daily cron to reach this business's cutoff — see
+    // app/api/manager/build-recurring-schedule/route.js. Best-effort: a failure here (e.g. network
+    // blip) still leaves the recurring booking approved; the cron picks it up on its next run.
+    let scheduleMessage = ''
+    if (!error && reviewed && status === 'active') {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const response = await fetch('/api/manager/build-recurring-schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ recurring_booking_id: id }),
+        })
+        const result = await response.json().catch(() => null)
+        if (response.ok && result?.generated) scheduleMessage = " This week's visits are ready for review below."
+      } catch {
+        // ignored — best-effort, see comment above
+      }
+    }
+
     setRecurringActionId(null)
     setRecurringRejecting(null)
     setRecurringRejectReason('')
     showNotification(error
       ? error.message
       : reviewed
-        ? `Recurring booking ${status === 'active' ? 'approved' : 'rejected'}.`
+        ? `Recurring booking ${status === 'active' ? 'approved' : 'rejected'}.${scheduleMessage}`
         : 'This request is no longer pending.')
     await loadRecurringBookings(hostAdminId)
+    if (scheduleMessage) await loadBookings()
   }
 
   const performAssignment = async (booking, staffId, action) => {
@@ -572,6 +600,8 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
   const totalPages = Math.max(1, Math.ceil(visibleBookings.length / BOOKINGS_PAGE_SIZE))
   const safePage = Math.min(currentPage, totalPages)
   const pageBookings = visibleBookings.slice((safePage - 1) * BOOKINGS_PAGE_SIZE, safePage * BOOKINGS_PAGE_SIZE)
+  const pendingRecurring = recurringBookings.filter(r => r.status === 'pending')
+  const activeOrPastRecurring = recurringBookings.filter(r => r.status !== 'pending')
   const pageTitle = sourceScope === 'tasks' ? 'Tasks' : 'Bookings for Review'
   const pageSubtitle = sourceScope === 'tasks'
     ? 'Tasks created directly by managers and departments, outside customer bookings. AI recommends the best-matched staff — approve to confirm, or override the pick below.'
@@ -666,14 +696,14 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
 
       {notification && <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2"><Bell className="w-4 h-4" />{notification}</div>}
 
-      {recurringBookings.length > 0 && (
+      {pendingRecurring.length > 0 && (
         <div className="mb-6 bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden">
           <div className="p-4 border-b bg-purple-50 flex items-center gap-2">
             <Repeat className="w-4 h-4 text-purple-600" />
-            <h2 className="font-semibold text-purple-900">Recurring Booking Requests ({recurringBookings.length})</h2>
+            <h2 className="font-semibold text-purple-900">Recurring Booking Requests ({pendingRecurring.length})</h2>
           </div>
           <div className="divide-y divide-gray-50">
-            {recurringBookings.map(recurring => (
+            {pendingRecurring.map(recurring => (
               <div key={recurring.id} className="p-4">
                 <div className="min-w-0">
                   <h3 className="font-semibold text-gray-900">{recurring.service_type}</h3>
@@ -735,6 +765,41 @@ export default function BookingsReviewPanel({ sourceScope = 'customer' }) {
                       <XCircle className="w-4 h-4" /> Reject
                     </button>
                   </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {sourceScope === 'customer' && activeOrPastRecurring.length > 0 && (
+        <div className="mb-6 bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="p-4 border-b bg-gray-50 flex items-center gap-2">
+            <Repeat className="w-4 h-4 text-gray-500" />
+            <h2 className="font-semibold text-gray-800">Recurring Bookings ({activeOrPastRecurring.length})</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {activeOrPastRecurring.map(recurring => (
+              <div key={recurring.id} className="p-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-gray-900">{recurring.service_type}</h3>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${recurringStatusColor[recurring.status] || 'bg-gray-100 text-gray-500'}`}>
+                    {recurringStatusLabel[recurring.status] || statusLabel(recurring.status)}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-500 flex items-center gap-1 mt-1"><MapPin className="w-4 h-4" />{recurring.location}</p>
+                <p className="text-xs text-gray-400 mt-2">
+                  {recurring.customer?.full_name || recurring.customer?.email || 'Customer'}{recurring.customer?.phone ? ` · ${recurring.customer.phone}` : ''}
+                </p>
+                <p className="text-sm text-gray-600 mt-2 flex items-center gap-1">
+                  <Calendar className="w-4 h-4" />
+                  {recurring.start_date} to {recurring.end_date} · {formatDaysOfWeek(recurring.days_of_week)}{recurring.scheduled_time ? ` · ${formatTime(recurring.scheduled_time)}` : ''} · {recurring.staff_count || 1} cleaner{(recurring.staff_count || 1) === 1 ? '' : 's'}/visit
+                </p>
+                {recurring.description && (
+                  <p className="text-sm text-gray-600 mt-2"><span className="font-medium text-gray-700">Description:</span> {recurring.description}</p>
+                )}
+                {recurring.status === 'rejected' && recurring.rejection_reason && (
+                  <p className="text-xs text-red-600 mt-2">Reason: {recurring.rejection_reason}</p>
                 )}
               </div>
             ))}

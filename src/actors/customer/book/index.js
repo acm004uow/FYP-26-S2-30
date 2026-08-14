@@ -17,7 +17,7 @@ import Step3Schedule from './Step3Schedule'
 const INITIAL_FORM = {
   serviceType: '', priority: 'normal', description: '', additionalRequirements: '',
   scheduledDate: '', scheduledTime: '', estimatedHours: 1,
-  startDate: '', endDate: '', daysOfWeek: [],
+  startDate: '', endDate: '', daysOfWeek: [], staffCount: 1,
   postalCode: '', composedLocation: '',
 }
 
@@ -141,6 +141,7 @@ export default function CustomerBooking() {
           days_of_week: form.daysOfWeek,
           scheduled_time: form.scheduledTime || null,
           estimated_hours: form.estimatedHours || 1,
+          staff_count: form.staffCount || 1,
           start_date: form.startDate,
           end_date: form.endDate,
         })

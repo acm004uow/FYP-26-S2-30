@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Calendar, ChevronDown, Info, Repeat } from 'lucide-react'
+import { Calendar, ChevronDown, Info, Repeat, Users } from 'lucide-react'
 import AddressFields from '../../../components/AddressFields'
+import { expandRecurrenceDates } from '../../../../lib/recurringBookings'
 
 const TIME_SLOTS = ['09:00', '11:00', '13:00', '15:00', '17:00']
 const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8]
@@ -49,9 +50,18 @@ export default function Step3Schedule({
 
   const finishTime = form.scheduledTime ? addHoursToTime(form.scheduledTime, form.estimatedHours) : null
   // The company's service_rates entry is an hourly rate (shown as "$X/hr" in Step 2), so the
-  // estimated total scales with the chosen duration.
+  // estimated total scales with the chosen duration. For a recurring booking that's still just the
+  // per-visit rate — the customer picks a whole period + days of week, which can expand to many
+  // visits, so the running total needs to multiply by how many visits that period/days combination
+  // actually produces (same expansion logic used server-side once the booking is approved).
   const hourlyRate = selectedCompany?.price ?? null
-  const price = hourlyRate != null ? hourlyRate * Number(form.estimatedHours || 0) : null
+  const visitCount = bookingMode === 'recurring'
+    ? (form.startDate && form.endDate && form.daysOfWeek.length
+      ? expandRecurrenceDates({ start_date: form.startDate, end_date: form.endDate, days_of_week: form.daysOfWeek }).length
+      : 0)
+    : 1
+  const pricePerVisit = hourlyRate != null ? hourlyRate * Number(form.estimatedHours || 0) : null
+  const price = pricePerVisit != null && visitCount > 0 ? pricePerVisit * visitCount : null
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 items-start">
@@ -123,6 +133,17 @@ export default function Step3Schedule({
                 </div>
               </div>
               <p className="text-xs text-accent-600">Recurring bookings can only start from {minDate} onward.</p>
+
+              <div className="pt-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1"><Users className="w-4 h-4" /> Cleaners needed per visit *</label>
+                <input
+                  type="number" min="1" max="20" step="1"
+                  value={form.staffCount}
+                  onChange={e => patchForm({ staffCount: e.target.value })}
+                  className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 focus:outline-none focus:ring-2 focus:ring-accent-500"
+                />
+                <p className="mt-1 text-xs text-gray-400">How many cleaners should show up per visit — independent of how long each visit takes. E.g. a special event might need 1 hour but several cleaners at once.</p>
+              </div>
             </div>
           )}
 
@@ -190,6 +211,8 @@ export default function Step3Schedule({
           <Row label="Address" value={form.composedLocation || 'Enter a postal code'} />
           <Row label="When" value={bookingMode === 'recurring' ? (form.startDate ? `${form.startDate} - ${form.endDate || '…'}` : 'Choose a period') : (form.scheduledDate || 'Choose a date')} />
           <Row label="Duration" value={`${form.estimatedHours} hours${finishTime ? ` (until ${finishTime})` : ''}`} />
+          {bookingMode === 'recurring' && <Row label="Cleaners per visit" value={form.staffCount || 1} />}
+          {bookingMode === 'recurring' && <Row label="Total visits" value={visitCount > 0 ? visitCount : '—'} />}
           <Row label="Priority" value={PRIORITY_OPTIONS.find(p => p.value === form.priority)?.label} />
         </dl>
 
@@ -197,7 +220,13 @@ export default function Step3Schedule({
           <div>
             <p className="text-sm font-semibold text-gray-700">Estimated total</p>
             <p className="text-xs text-gray-400">
-              {price != null ? `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours — final price confirmed after site assessment` : 'Priced after site assessment'}
+              {price != null
+                ? bookingMode === 'recurring'
+                  ? `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours × ${visitCount} visits — final price confirmed after site assessment`
+                  : `$${hourlyRate.toFixed(2)}/hr × ${form.estimatedHours} hours — final price confirmed after site assessment`
+                : bookingMode === 'recurring' && hourlyRate != null
+                  ? 'Choose a period and days of week to see the total'
+                  : 'Priced after site assessment'}
             </p>
           </div>
           <p className="text-xl font-bold text-gray-900">{price != null ? `$${price.toFixed(2)}` : '—'}</p>

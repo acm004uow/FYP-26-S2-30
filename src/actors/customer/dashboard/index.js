@@ -2,8 +2,8 @@ import Layout from '../../../components/Layout'
 import TimeInput from '../../../components/TimeInput'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  AlertTriangle, ArrowUpDown, Bell, CheckCircle2, ChevronDown, ChevronLeft,
-  ChevronRight, Circle, Edit3, Filter, HelpCircle, ImagePlus, Lightbulb, Search,
+  AlertTriangle, ArrowUpDown, Bell, Calendar, CheckCircle2, ChevronDown, ChevronLeft,
+  ChevronRight, Circle, Edit3, Filter, HelpCircle, ImagePlus, Lightbulb, Repeat, Search,
   Trash2, X, XCircle,
 } from 'lucide-react'
 import { useRouter } from 'next/router'
@@ -41,10 +41,22 @@ const STATUS_PILLS = [
   { key: 'cancelled', label: 'cancelled', matches: ['cancelled', 'rejected'] },
 ]
 
+const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const formatDaysOfWeek = (days) => (days || []).slice().sort((a, b) => a - b).map(d => DAY_ABBR[d]).join(', ')
+
+const RECURRING_STATUS_STYLES = {
+  pending: 'bg-yellow-100 text-yellow-700',
+  active: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-700',
+  cancelled: 'bg-gray-100 text-gray-500',
+}
+const RECURRING_STATUS_LABELS = { pending: 'Pending review', active: 'Active', rejected: 'Declined', cancelled: 'Cancelled' }
+
 export default function CustomerDashboard() {
   const router = useRouter()
   const { user } = useAuthUser()
   const [bookings, setBookings] = useState([])
+  const [recurringBookings, setRecurringBookings] = useState([])
   const [search, setSearch] = useState('')
   const [notification, setNotification] = useState(null)
   const [editBooking, setEditBooking] = useState(null)
@@ -115,10 +127,22 @@ export default function CustomerDashboard() {
 
   const [companyRatings, setCompanyRatings] = useState(new Map())
 
+  const loadRecurringBookings = async () => {
+    if (!user) return
+    const { data } = await supabase
+      .from('recurring_bookings')
+      .select('id,service_type,location,description,days_of_week,scheduled_time,estimated_hours,staff_count,start_date,end_date,status,rejection_reason,created_at,company:profiles!recurring_bookings_host_admin_id_fkey(business_name,phone)')
+      .eq('customer_id', user.id)
+      .order('created_at', { ascending: false })
+    setRecurringBookings(data || [])
+  }
+
   useEffect(() => {
     let channel = null
+    let recurringChannel = null
 
     loadBookings()
+    loadRecurringBookings()
 
     async function subscribeToUpdates() {
       if (!user) return
@@ -139,12 +163,30 @@ export default function CustomerDashboard() {
           }
         )
         .subscribe()
+
+      recurringChannel = supabase
+        .channel(`customer-recurring-updates-${user.id}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'recurring_bookings', filter: `customer_id=eq.${user.id}` },
+          (payload) => {
+            const oldStatus = payload.old?.status
+            const nextStatus = payload.new?.status
+            if (oldStatus !== nextStatus && ['active', 'rejected'].includes(nextStatus)) {
+              setNotification(`Your recurring ${payload.new.service_type || 'booking'} request is now ${RECURRING_STATUS_LABELS[nextStatus] || titleCase(nextStatus)}.`)
+              setTimeout(() => setNotification(null), 4000)
+            }
+            loadRecurringBookings()
+          }
+        )
+        .subscribe()
     }
 
     subscribeToUpdates()
 
     return () => {
       if (channel) supabase.removeChannel(channel)
+      if (recurringChannel) supabase.removeChannel(recurringChannel)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
@@ -360,6 +402,45 @@ export default function CustomerDashboard() {
         {notification && (
           <div className="mb-4 p-3 bg-accent-100 text-accent-800 rounded-lg flex items-center gap-2 border-l-4 border-accent">
             <Bell className="w-4 h-4" /> {notification}
+          </div>
+        )}
+
+        {recurringBookings.length > 0 && (
+          <div className="mb-6 bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden">
+            <div className="p-4 border-b bg-purple-50 flex items-center gap-2">
+              <Repeat className="w-4 h-4 text-purple-600" />
+              <h2 className="font-semibold text-purple-900">My Recurring Bookings ({recurringBookings.length})</h2>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {recurringBookings.map(recurring => (
+                <div key={recurring.id} className="p-4 flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900">{recurring.service_type}</h3>
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${RECURRING_STATUS_STYLES[recurring.status] || 'bg-gray-100 text-gray-500'}`}>
+                        {RECURRING_STATUS_LABELS[recurring.status] || titleCase(recurring.status)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">{recurring.company?.business_name || 'Unknown company'} &middot; {recurring.location}</p>
+                    <p className="text-sm text-gray-600 mt-2 flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      {recurring.start_date} to {recurring.end_date} &middot; {formatDaysOfWeek(recurring.days_of_week)}{recurring.scheduled_time ? ` · ${recurring.scheduled_time}` : ''}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">{recurring.staff_count || 1} cleaner{(recurring.staff_count || 1) === 1 ? '' : 's'} per visit &middot; {recurring.estimated_hours} hours</p>
+                    {recurring.description && <p className="text-sm text-gray-600 mt-2">{recurring.description}</p>}
+                    {recurring.status === 'rejected' && recurring.rejection_reason && (
+                      <p className="text-xs text-red-600 mt-2">Reason: {recurring.rejection_reason}</p>
+                    )}
+                    {recurring.status === 'pending' && (
+                      <p className="text-xs text-amber-600 mt-2">A manager will review this request. Individual visits will appear below once approved and scheduled.</p>
+                    )}
+                    {recurring.status === 'active' && (
+                      <p className="text-xs text-green-600 mt-2">Approved — visits are added to the schedule week by week and will appear in the table below.</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
