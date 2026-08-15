@@ -217,4 +217,4 @@ Example prompts:
 | Current workload | 10 |
 | Performance rating ≥ 4 | 10 |
 
-Weights and thresholds are configurable per business via the Admin → Global Parameters panel. Customer name requests and recurring-booking continuity each add a +1000 priority boost to override the algorithmic ranking when appropriate.
+Weights and thresholds are configurable per business via the Admin → Global Parameters panel. Customer name requests and recurring-booking continuity each add a +1000 priority boost to override the algorithmic ranking when a.
