@@ -484,58 +484,16 @@ export default function MarketingHome() {
             </div>
 
             <div className="relative">
-              <div className="absolute -right-4 -top-4 hidden h-24 w-24 rounded-2xl bg-accent-100 lg:block" />
-              <div className="absolute -bottom-5 left-8 hidden h-24 w-24 rounded-2xl bg-emerald-100 lg:block" />
-              <div key={hero.dashboardTitle} className="hero-card-in relative rounded-3xl border border-white/10 bg-accent2 shadow-2xl shadow-slate-300/60">
-                <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
-                  <div>
-                    <p className="text-sm font-bold text-white">Manager dashboard</p>
-                    <h2 className="font-mono text-xs font-bold text-slate-500">{hero.dashboardTitle}</h2>
-                  </div>
-                  <span className="rounded-lg bg-emerald-400/10 px-3 py-2 font-mono text-xs font-bold text-emerald-300">• {hero.status}</span>
-                </div>
-
-                <div className="grid gap-4 p-5 lg:grid-cols-[1.2fr_0.8fr]">
-                  <div className="space-y-3">
-                    {hero.tasks.map(([title, detail, priority, tone]) => (
-                      <div key={title} className="rounded-xl border border-white/10 bg-white/5 p-4 shadow-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="font-extrabold text-white">{title}</h3>
-                            <p className="mt-1 flex items-center gap-2 font-mono text-xs font-semibold text-slate-500">
-                              <MapPin className="h-4 w-4" />
-                              {detail}
-                            </p>
-                          </div>
-                          <span className={`shrink-0 rounded-lg px-2 py-1 text-xs font-black ${tone}`}>{priority}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="rounded-2xl border border-accent-400/20 bg-accent-600 p-4 text-white shadow-xl shadow-black/30">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="font-mono text-xs font-black uppercase text-accent-100">Best match</h3>
-                      <Sparkles className="h-5 w-5 text-accent-100" />
-                    </div>
-                    <div className="rounded-2xl bg-white/10 p-4">
-                      <p className="text-sm font-bold text-accent-100">{hero.recommendation.label}</p>
-                      <p className="mt-1 text-2xl font-black">{hero.recommendation.name}</p>
-                      <div className="mt-4 space-y-3 text-sm">
-                        {hero.recommendation.rows.map(([label, value, tone]) => (
-                          <div key={label} className="flex items-center justify-between">
-                            <span>{label}</span>
-                            <span className={`font-bold ${tone}`}>{value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <button className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/15 text-sm font-black text-white shadow-sm transition hover:bg-white/20">
-                      Approve assignment
-                      <CheckCircle2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
+              <div className="relative overflow-hidden rounded-3xl shadow-2xl shadow-slate-300/60">
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <video
+                  src="/Swee-marketing.mp4"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="w-full rounded-3xl object-cover"
+                />
               </div>
             </div>
           </div>
